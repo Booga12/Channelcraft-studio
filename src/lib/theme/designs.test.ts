@@ -9,6 +9,7 @@ import { appliedSystemLayout, designChanges } from './presets';
 import { SYSTEM_LAYOUTS, systemLayout } from './systemLayouts';
 import { DESIGNS, designAssets, type DesignContext } from './designs';
 import { parse, print } from '../xml/cst';
+import { renderText } from './expr';
 import type { Environment } from './context';
 
 const env: Environment = {
@@ -57,6 +58,11 @@ describe('designs on the starter theme (in memory)', () => {
         expect(sys.has('systemcarousel')).toBe(true);
       }
       expect(sys.get('ccs_systemname')!.props.get('text')!.value).toBe('{system:fullName}');
+      // Written the way RetroBat reads it: {random:...} art (not firstfile), the count as text, PNG backgrounds.
+      expect(sys.get('ccs_systemart')!.props.get('path')!.value).toMatch(/^\{random:(fanart|image)\}$/);
+      expect(renderText(sys.get('ccs_systemcount')!.props.get('text')!.value, { binding: (n) => (n === 'system:total' ? 2 : undefined), exists: () => false })).toBe('2 games');
+      expect(sys.get('ccs_background')!.props.get('path')!.value).toMatch(/background\.png$/);
+      expect(p.entry!.src).not.toContain('{system:random');
       // Theme.xml stays a well-formed, lossless document.
       expect(print(parse(p.entry!.src))).toBe(p.entry!.src);
     });

@@ -4,7 +4,7 @@
 
   let { design }: { design: Design } = $props();
 
-  const bg = $derived(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(designAssets(design)['background.svg'])}`);
+  const bg = $derived(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(designAssets(design)['background.png'])}`);
   const p = $derived(design.palette);
   const c = (h: string, a = 1) => `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
 

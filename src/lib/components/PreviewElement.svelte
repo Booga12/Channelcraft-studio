@@ -77,10 +77,16 @@
   const asset = (k: string) => (ed.project ? resolveAssetWithFallbacks(el, k, res, ed.project, env) : null);
   /** A path written as a data expression, e.g. firstfile({game:boxart}, {game:image}). */
   const exprAsset = (k: string): string | null => {
-    const v = val(k);
-    if (!v || !/[{(]/.test(v)) return null;
-    const r = renderText(v, exprEnv).trim();
-    return r && !r.includes('{') && /^[A-Za-z]:[\\/]|^\\\\/.test(r) ? r : null;
+    // Each <path> in the winning definition is a fallback, tried in order, as RetroBat does.
+    const h = el.history.get(k) ?? [];
+    const last = h[h.length - 1];
+    const values = last ? h.filter((d) => d.node.parent === last.node.parent).map((d) => d.value) : [val(k)];
+    for (const v of values) {
+      if (!v || !/[{(]/.test(v)) continue;
+      const r = renderText(v, exprEnv).trim();
+      if (r && !r.includes('{') && /^[A-Za-z]:[\\/]|^\\\\/.test(r)) return r;
+    }
+    return null;
   };
   const nativeMedia = (): string | null => {
     const keys = NATIVE_MEDIA[el.name];
@@ -99,7 +105,8 @@
 
   const imgPath = $derived(el.type === 'image' || el.type === 'video' ? (asset('path') ?? exprAsset('path') ?? nativeMedia() ?? asset('default')) : null);
   /** A real game video to play in video elements. */
-  const videoPath = $derived(el.type === 'video' && env.game ? (exprAsset('path') ?? env.game.media.video ?? null) : null);
+  // Only RetroBat's own game video plays without a path; any other video needs one, as in RetroBat.
+  const videoPath = $derived(el.type === 'video' && env.game ? (exprAsset('path') ?? (el.name === 'md_video' ? env.game.media.video : null) ?? null) : null);
   $effect(() => {
     imgPath;
     natural = null;

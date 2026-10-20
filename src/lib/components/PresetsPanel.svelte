@@ -51,7 +51,7 @@
   const bgCache = new Map<string, string>();
   function bgOf(d: Design) {
     let u = bgCache.get(d.id);
-    if (!u) bgCache.set(d.id, (u = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(designAssets(d)['background.svg'])}")`));
+    if (!u) bgCache.set(d.id, (u = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(designAssets(d)['background.png'])}")`));
     return u;
   }
   const hexA = (h: string, a: number) => `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;

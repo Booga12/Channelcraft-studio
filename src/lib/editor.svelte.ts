@@ -1,6 +1,7 @@
 import { load, type Store } from '@tauri-apps/plugin-store';
 import { ask, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { api, registerVirtualFile, tauriFs, type RootInfo, type ThemeInfo } from './api';
+import { svgToPngBase64 } from './raster';
 import { join, relative, dirname, pathKey } from './path';
 import { parseGamelist, type GameInfo } from './theme/games';
 import { screenSize, type Environment, type PreviewSettings } from './theme/context';
@@ -760,7 +761,9 @@ class Editor {
       const abs = join(p.dir, relDir, file);
       registerVirtualFile(abs, svg);
       try {
-        await api.writeText(abs, svg, false);
+        // A .png given as SVG source is drawn to a real PNG first.
+        if (file.toLowerCase().endsWith('.png')) await api.writeBinary(abs, await svgToPngBase64(svg));
+        else await api.writeText(abs, svg, false);
       } catch {
         wrote = false;
       }

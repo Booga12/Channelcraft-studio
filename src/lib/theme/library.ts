@@ -305,7 +305,20 @@ export const LIBRARY: LibraryItem[] = [
     type: 'image',
     name: 'systemrandomart',
     native: false,
-    body: ART('firstfile({system:random:image}, {system:random:thumbnail})', '0.5 0.2', '0.5 0.3', 15),
+    // RetroBat's random-game bindings; a second <path> is the fallback.
+    body: ART('{random:image}</path>\n<path>{random:thumbnail}', '0.5 0.2', '0.5 0.3', 15),
+  },
+  {
+    id: 'systemrandomvideo',
+    label: 'Random game video',
+    help: 'A video from a random game of the selected console. Shows nothing for consoles without videos.',
+    icon: 'video',
+    category: 'System',
+    screens: 'system',
+    type: 'video',
+    name: 'systemrandomvideo',
+    native: false,
+    body: '<pos>0.25 0.42</pos>\n<origin>0.5 0.5</origin>\n<maxSize>0.4 0.4</maxSize>\n<path>{random}</path>\n<delay>0.4</delay>\n<showSnapshotNoVideo>false</showSnapshotNoVideo>\n<zIndex>24</zIndex>',
   },
 
   // ---- any screen ----

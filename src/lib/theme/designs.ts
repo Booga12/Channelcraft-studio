@@ -435,7 +435,9 @@ export function designAssets(d: Design): Record<string, string> {
     `<defs><linearGradient id="l" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${hex(p.bg)}"/><stop offset="0.45" stop-color="${hex(p.bg)}" stop-opacity="0.85"/><stop offset="0.75" stop-color="${hex(p.bg)}" stop-opacity="0.15"/><stop offset="1" stop-color="${hex(p.bg)}" stop-opacity="0"/></linearGradient><linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0.55" stop-color="${hex(p.bg)}" stop-opacity="0"/><stop offset="1" stop-color="${hex(p.bg)}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#l)"/><rect width="${W}" height="${H}" fill="url(#b)"/>`,
   );
 
-  const out: Record<string, string> = { 'background.svg': bg, 'panel.svg': panel, 'fade.svg': fade };
+  // RetroBat's SVG renderer can't draw patterns and blends gradients differently, so full-screen
+  // art is written as PNG (given here as SVG source; the editor rasterizes it when writing).
+  const out: Record<string, string> = { 'background.png': bg, 'panel.svg': panel, 'fade.png': fade };
   if (d.scanlines) out['scanlines.svg'] = svg(4, 4, `<rect width="4" height="2" fill="#000" fill-opacity="0.35"/>`);
   if (d.radius >= 20) out['bezel.svg'] = svg(W, H, `<rect x="18" y="18" width="${W - 36}" height="${H - 36}" rx="80" fill="none" stroke="#000" stroke-width="40" stroke-opacity="0.55"/>`);
   return out;
@@ -487,7 +489,7 @@ function panel(d: Design, c: DesignContext, name: string, pos: string, size: str
 function common(d: Design, c: DesignContext, view: string): DesignEl[] {
   const p = d.palette;
   const out: DesignEl[] = [
-    { type: 'image', name: 'ccs_background', props: { pos: '0 0', size: '1 1', path: `${c.art}/background.svg`, zIndex: '0' } },
+    { type: 'image', name: 'ccs_background', props: { pos: '0 0', size: '1 1', path: `${c.art}/background.png`, zIndex: '0' } },
     { type: 'helpsystem', name: 'help', props: { pos: '0.02 0.955', textColor: col(p.dim), iconColor: col(p.dim), ...(c.font ? { fontPath: c.font } : {}) } },
     text(d, c, 'ccs_clock', { pos: '0.97 0.035', origin: '1 0', fontSize: '0.032' }, { dim: true }),
   ];
@@ -566,7 +568,7 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
     case 'cinema':
       els.push(
         fanart('FF'),
-        { type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.svg`, zIndex: '2' } },
+        { type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.png`, zIndex: '2' } },
         systemLogo('0.97 0.09', '1 0', '0.16 0.06'),
         systemLogoText('0.97 0.09', '1 0', '0.16 0.06'),
         marquee('0.05 0.09', '0.36 0.15'),
@@ -641,7 +643,7 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
       pos,
       origin: '0.5 0.5',
       maxSize: max,
-      path: c.consoles ? [`${c.consoles}/\${system.theme}.png`, `${c.consoles}/\${system.theme}.svg`] : 'firstfile({system:random:thumbnail}, {system:random:image})',
+      path: c.consoles ? [`${c.consoles}/\${system.theme}.png`, `${c.consoles}/\${system.theme}.svg`] : ['{random:thumbnail}', '{random:image}'],
       zIndex: '20',
     },
     anim: d.anims?.console,
@@ -661,8 +663,9 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
     return el;
   };
 
-  els.push({ type: 'image', name: 'ccs_systemart', props: { pos: '0 0', size: '1 1', path: 'firstfile({system:random:fanart}, {system:random:image})', color: `FFFFFF${l.art ?? '2E'}`, zIndex: '1' } });
-  if (l.fade) els.push({ type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.svg`, zIndex: '2' } });
+  // A random game's art behind everything, filling the screen (RetroBat's {random:...} bindings).
+  els.push({ type: 'image', name: 'ccs_systemart', props: { pos: '0.5 0.5', origin: '0.5 0.5', minSize: '1 1', path: ['{random:fanart}', '{random:image}'], color: `FFFFFF${l.art ?? '2E'}`, zIndex: '1' } });
+  if (l.fade) els.push({ type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.png`, zIndex: '2' } });
   if (l.band) els.push(panel(d, c, 'ccs_band', l.band[0], l.band[1], 10));
 
   if (l.grid) {
@@ -688,7 +691,7 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
     ...logoStyle,
     spot(l.name, 'ccs_systemname', '{system:fullName}', 'title', '0.052'),
     spot(l.maker, 'ccs_systemmaker', '{system:manufacturer} + "  ·  " + {system:releaseYear}', 'dim', '0.026'),
-    spot(l.count, 'ccs_systemcount', '{system:total} + " games"', 'accent', '0.024'),
+    spot(l.count, 'ccs_systemcount', "'' + {system:total} + ' games'", 'accent', '0.024'),
     consoleArt(l.console[0], l.console[1]),
     // The design shows the game count itself.
     { type: 'text', name: 'systemInfo', props: { visible: 'false' } },

@@ -145,8 +145,15 @@ export function bindingValue(name: string, env: Environment, subsets: Map<string
       return subsets.get(key) ?? '';
     case 'lang':
       return s.lang;
-    case 'random':
-      return 0;
+    case 'random': {
+      // In the system view, {random} is a random game's video and {random:image} etc. its art;
+      // the preview borrows the current game's.
+      const m = env.game?.media;
+      if (!m) return key ? '' : 0;
+      const k = key.toLowerCase();
+      if (!k) return m.video ?? '';
+      return m[k] ?? (k === 'fanart' || k === 'thumbnail' ? m.image : undefined) ?? '';
+    }
   }
   return undefined;
 }
