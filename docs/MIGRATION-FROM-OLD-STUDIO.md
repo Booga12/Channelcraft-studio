@@ -149,6 +149,17 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
 - Browser preview check: the window lists your real consoles and games (for example 8 GameCube games with a video and a cover). Copying itself only works in the app.
 - Not verified: RetroBat showing the pair natively.
 
+## Stage 4 — done (2026-10-20)
+
+- **File → Check game media…** reads each console's gamelist.xml (from its es_systems path) and reports:
+  - games with no video, no cover art or no description
+  - files a game names that aren't on disk (picture, video, manual and other tags)
+  - games listed twice
+- It only reads. Hidden games are skipped, non-gamelist files ignored, and findings capped at 10,000.
+- It shows progress and can be stopped. You can filter by kind and console, and save a CSV (UTF-8 with BOM for Excel) wherever you choose.
+- Your library: 134 games on 14 consoles in about 0.5 s. 32 findings (16 no video, 9 no cover, 7 no description), no broken paths.
+- A file being there doesn't prove its video plays in RetroBat; the window says so.
+
 ## Verification status (honest)
 
 - Done:

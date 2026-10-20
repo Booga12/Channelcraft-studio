@@ -86,6 +86,7 @@
         { label: 'Export as zip…', action: () => ed.exportZip() },
         { label: 'Make preview.png from this screen', action: () => ed.makePreviewImage() },
         { separator: true },
+        { label: 'Check game media…', action: () => (ed.showMediaCheck = true) },
         { label: 'Restore a backup…', action: () => (ed.showRestore = true) },
         { label: 'Reload from disk', action: reload },
         { separator: true },

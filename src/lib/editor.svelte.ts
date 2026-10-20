@@ -859,6 +859,7 @@ class Editor {
   // ---- featured games: one real game's video and cover together on the system screen ----
 
   showFeatured = $state(false);
+  showMediaCheck = $state(false);
 
   /** The featured-game choices and pairs saved in this theme. */
   get featured(): FeaturedState {

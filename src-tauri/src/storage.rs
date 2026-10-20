@@ -787,6 +787,18 @@ pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: Stri
     Ok(dest.to_string_lossy().into_owned())
 }
 
+/// Saves a report (CSV) where the user chose in the save dialog. Only .csv files, never inside a
+/// RetroBat themes folder by accident of a typo: the extension is required.
+#[tauri::command(async)]
+pub fn write_report(path: String, text: String) -> CmdResult<()> {
+    let p = PathBuf::from(&path);
+    if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("csv")) {
+        return Err("Reports are saved as .csv files.".into());
+    }
+    // A UTF-8 BOM lets Excel show accents and symbols correctly.
+    write_atomic(&p, &with_bom(&text, true))
+}
+
 // ---- game media copied into a theme --------------------------------------------------------
 
 /// Which of these files exist (game media named in gamelists often doesn't).
