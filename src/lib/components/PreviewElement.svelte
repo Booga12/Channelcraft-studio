@@ -169,7 +169,8 @@
       if (el.name === 'md_lastplayed') return !g.lastplayed ? 'never' : val('displayRelative') === 'false' ? formatDate(g.lastplayed, val('format')) : relativeDate(g.lastplayed);
       return g.releasedate ? formatDate(g.releasedate, val('format')) : 'unknown';
     }
-    if (el.type === 'clock') return formatDate('20261019T201500', val('format') ?? '%H:%M');
+    // RetroBat ignores a theme's clock format: its ClockMode12 setting decides.
+    if (el.type === 'clock') return formatDate('20261019T201500', ed.root?.es?.clock12 ? '%I:%M %p' : '%H:%M');
     return el.name;
   }
 

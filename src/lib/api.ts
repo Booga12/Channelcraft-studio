@@ -6,6 +6,8 @@ export interface RootInfo {
   esHome: string;
   resourcesDir: string;
   activeTheme: string | null;
+  /** RetroBat settings that change how themes look (from es_settings.cfg). */
+  es: { clock12: boolean; drawClock: boolean; transitionStyle: string; powerSaver: string };
 }
 
 export interface ThemeInfo {

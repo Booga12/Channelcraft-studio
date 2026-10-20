@@ -9,6 +9,7 @@
   import PairInput from './PairInput.svelte';
   import AssetInput from './AssetInput.svelte';
   import { humanize, propHelp, propLabel } from '$lib/friendly';
+  import { supportsProperty } from '$lib/theme/retrobatProfile';
 
   let { el, spec, def }: { el: ResolvedElement; spec: PropSpec; def: PropDef } = $props();
 
@@ -21,6 +22,8 @@
   const line = $derived(lineOf(def.file.src, def.node.start));
 
   let editAnyway = $state(false);
+  /** RetroBat's parser skips this property on this element type. */
+  const ignored = $derived(supportsProperty(el.type, spec.name) === false);
 
   function set(v: string) {
     ed.setProp(el.name, spec.name, v);
@@ -50,6 +53,7 @@
       {#if def.conditional}<span class="badge" title="This value only applies under a condition">if</span>{/if}
       {#if history.length > 1}<span class="badge" title="Set {history.length} times for this element; this is the value that wins">×{history.length}</span>{/if}
     {/if}
+    {#if ignored}<span class="badge warn" title="RetroBat doesn't read “{spec.name}” on a {el.type}, so it has no effect there. It's safe to remove.">RetroBat ignores this</span>{/if}
     <span class="spacer"></span>
     {#if !ed.simple}
       <button class="src ghost small mono" title="Show in source: {def.file.rel} line {line}" onclick={() => ed.showInSource(def.file, def.node.start)}>{def.file.rel.split('/').pop()}:{line}</button>
@@ -198,5 +202,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .badge.warn {
+    color: var(--warn);
+    border-color: var(--warn);
   }
 </style>

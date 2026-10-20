@@ -108,12 +108,17 @@ export function formatDate(iso: string, fmt?: string): string {
   const m = iso.slice(4, 6);
   const d = iso.slice(6, 8);
   if (!fmt) return `${m}/${d}/${y}`;
+  const time = /T(\d\d)(\d\d)(\d\d)/.exec(iso);
+  const hh = time?.[1] ?? '00';
+  const h12 = String(((Number(hh) + 11) % 12) + 1).padStart(2, '0');
   return fmt
     .replace(/%Y/g, y)
     .replace(/%y/g, y.slice(2))
     .replace(/%m/g, m)
     .replace(/%d/g, d)
-    .replace(/%H/g, '20')
-    .replace(/%M/g, '15')
-    .replace(/%S/g, '00');
+    .replace(/%H/g, hh)
+    .replace(/%I/g, h12)
+    .replace(/%p/g, Number(hh) < 12 ? 'AM' : 'PM')
+    .replace(/%M/g, time?.[2] ?? '00')
+    .replace(/%S/g, time?.[3] ?? '00');
 }

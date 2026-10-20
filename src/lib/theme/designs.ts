@@ -493,8 +493,8 @@ function common(d: Design, c: DesignContext, view: string): DesignEl[] {
     { type: 'helpsystem', name: 'help', props: { pos: '0.02 0.955', textColor: col(p.dim), iconColor: col(p.dim), ...(c.font ? { fontPath: c.font } : {}) } },
     text(d, c, 'ccs_clock', { pos: '0.97 0.035', origin: '1 0', fontSize: '0.032' }, { dim: true }),
   ];
+  // RetroBat's clock has no format: 12 or 24 hours comes from its own ClockMode12 setting.
   out[2].type = 'clock';
-  out[2].props.format = '%H:%M';
   if (d.scanlines) out.push({ type: 'image', name: 'ccs_scanlines', props: { pos: '0 0', size: '1 1', path: `${c.art}/scanlines.svg`, tile: 'true', zIndex: '90' } });
   if (d.radius >= 20 && d.id === 'crt') out.push({ type: 'image', name: 'ccs_bezel', props: { pos: '0 0', size: '1 1', path: `${c.art}/bezel.svg`, zIndex: '91' } });
   void view;

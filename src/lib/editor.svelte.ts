@@ -12,7 +12,7 @@ import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
 import { ANIMATIONS, storyboardXml } from './theme/animations';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
-import { patchInsertChild, patchRemoveNode, patchReplaceSpan, patchSetAttr } from './xml/cst';
+import { attr, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr } from './xml/cst';
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
@@ -1011,6 +1011,22 @@ Reload the theme to see those changes?${lose}`, {
     } catch (e) {
       this.notify(`Couldn't capture the screen: ${e}`, 'error');
     }
+  }
+
+  /** The theme's own screen transition (`<theme defaultTransition="...">`), or "" for RetroBat's. */
+  get themeTransition(): string {
+    this.rev;
+    const root = this.project?.entry?.doc.root;
+    return (root && attr(root, 'defaultTransition')) || '';
+  }
+
+  /** Sets the transition RetroBat uses between screens when its Transition Style is Auto. */
+  setThemeTransition(value: string) {
+    const entry = this.project?.entry;
+    const root = entry?.doc.root;
+    if (!entry || !root || value === this.themeTransition) return;
+    const patch = value ? patchSetAttr(entry.doc, root, 'defaultTransition', value) : patchRemoveAttr(entry.doc, root, 'defaultTransition');
+    if (patch) this.commit('screen transition', [{ file: entry, patch }]);
   }
 
   /** Sets every colour of a palette that this theme has a variable for. Returns how many were set. */

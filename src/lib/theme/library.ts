@@ -325,14 +325,14 @@ export const LIBRARY: LibraryItem[] = [
   {
     id: 'clock',
     label: 'Clock',
-    help: 'The current time.',
+    help: 'The current time. RetroBat shows it in 12 or 24 hours, and hides it, using its own clock settings.',
     icon: 'clock',
     category: 'Screen',
     screens: 'any',
     type: 'clock',
     name: 'clock',
     native: false,
-    body: '<pos>0.96 0.04</pos>\n<origin>1 0</origin>\n<fontSize>0.035</fontSize>\n<color>FFFFFFFF</color>\n<format>%H:%M</format>\n<zIndex>50</zIndex>',
+    body: '<pos>0.96 0.04</pos>\n<origin>1 0</origin>\n<fontSize>0.035</fontSize>\n<color>FFFFFFFF</color>\n<zIndex>50</zIndex>',
   },
   {
     id: 'help',

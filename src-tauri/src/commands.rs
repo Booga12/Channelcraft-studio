@@ -85,6 +85,41 @@ pub struct RootInfo {
     es_home: String,
     resources_dir: String,
     active_theme: Option<String>,
+    es: EsSettings,
+}
+
+/// RetroBat settings that change how a theme looks, read from es_settings.cfg (RetroBat's own
+/// defaults when a setting isn't there).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EsSettings {
+    /// Clock in 12 hours with AM/PM (ClockMode12).
+    clock12: bool,
+    /// The clock is shown at all (DrawClock); the theme can't override it.
+    draw_clock: bool,
+    /// "auto" lets the theme choose its screen transition; anything else overrides the theme.
+    transition_style: String,
+    /// "instant" turns every transition off.
+    power_saver: String,
+}
+
+fn es_value(cfg: &str, name: &str) -> Option<String> {
+    let key = format!("name=\"{name}\"");
+    let line = cfg.lines().find(|l| l.contains(&key))?;
+    let start = line.find("value=\"")? + 7;
+    let end = line[start..].find('"')? + start;
+    Some(unescape_attr(&line[start..end]))
+}
+
+fn es_settings(root: &Path) -> EsSettings {
+    let cfg = fs::read_to_string(es_home(root).join("es_settings.cfg")).unwrap_or_default();
+    let flag = |name: &str, default: bool| es_value(&cfg, name).map(|v| v == "true").unwrap_or(default);
+    EsSettings {
+        clock12: flag("ClockMode12", false),
+        draw_clock: flag("DrawClock", true),
+        transition_style: es_value(&cfg, "TransitionStyle").filter(|v| !v.is_empty()).unwrap_or_else(|| "auto".into()),
+        power_saver: es_value(&cfg, "PowerSaverMode").unwrap_or_else(|| "disabled".into()),
+    }
 }
 
 #[derive(Serialize)]
@@ -141,11 +176,7 @@ fn read_text_file(path: &Path) -> CmdResult<TextFile> {
 }
 
 pub(crate) fn active_theme(root: &Path) -> Option<String> {
-    let cfg = fs::read_to_string(es_home(root).join("es_settings.cfg")).ok()?;
-    let line = cfg.lines().find(|l| l.contains("name=\"ThemeSet\""))?;
-    let start = line.find("value=\"")? + 7;
-    let end = line[start..].find('"')? + start;
-    Some(unescape_attr(&line[start..end]))
+    es_value(&fs::read_to_string(es_home(root).join("es_settings.cfg")).ok()?, "ThemeSet")
 }
 
 fn unescape_attr(s: &str) -> String {
@@ -163,6 +194,7 @@ fn root_info(root: &Path) -> RootInfo {
         es_home: es_home(root).to_string_lossy().into_owned(),
         resources_dir: root.join("emulationstation").join("resources").to_string_lossy().into_owned(),
         active_theme: active_theme(root),
+        es: es_settings(root),
     }
 }
 
@@ -564,6 +596,17 @@ mod tests {
         assert!(valid_theme_name("a/b").is_err());
         assert!(valid_theme_name("..").is_err());
         assert!(valid_theme_name(" ").is_err());
+    }
+
+    #[test]
+    fn reads_es_settings_values() {
+        let cfg = "<config>
+	<bool name=\"ClockMode12\" value=\"true\" />
+	<string name=\"ThemeSet\" value=\"Booga&apos;s\" />
+</config>";
+        assert_eq!(es_value(cfg, "ClockMode12").as_deref(), Some("true"));
+        assert_eq!(es_value(cfg, "ThemeSet").as_deref(), Some("Booga's"));
+        assert_eq!(es_value(cfg, "DrawClock"), None);
     }
 
     #[test]

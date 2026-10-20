@@ -159,4 +159,16 @@ describe('editor operations (starter theme, in memory)', () => {
     expect(calls.findIndex((c) => c.cmd === 'backup_theme')).toBeLessThan(calls.findIndex((c) => c.cmd === 'save_files'));
     expect(ed.dirtyCount).toBe(0);
   });
+
+  it('sets and clears the theme screen transition on theme.xml, undoably', () => {
+    expect(ed.themeTransition).toBe('');
+    ed.setThemeTransition('slide');
+    expect(ed.project!.entry!.src).toMatch(/<theme[^>]*defaultTransition="slide"/);
+    expect(ed.themeTransition).toBe('slide');
+    ed.setThemeTransition('');
+    expect(ed.project!.entry!.src).toBe(original);
+    ed.setThemeTransition('fade');
+    ed.undo(true);
+    expect(ed.project!.entry!.src).toBe(original);
+  });
 });
