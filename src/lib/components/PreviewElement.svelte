@@ -236,9 +236,32 @@
     const layout = parsePair(val('autoLayout')) ?? [4, 3];
     const cols = Math.max(1, Math.round(layout[0]));
     const rowsN = Math.max(1, Math.round(layout[1]));
-    const tile = res.views.get(view)?.elements.get('default');
-    const sel = res.views.get(view)?.elements.get('selected');
-    return { cols, rows: rowsN, tile, sel };
+    const els = res.views.get(view)?.elements;
+    const tile = els?.get('default');
+    const sel = els?.get('selected');
+    const margin = parsePair(val('margin')) ?? [0.01, 0.02];
+    const zoom = parseFloat(val('autoLayoutSelectedZoom') ?? '1') || 1;
+    // With centerSelection the selected tile sits in the middle; otherwise it's the first one.
+    const selIndex = val('centerSelection') === 'true' ? Math.floor((cols * rowsN) / 2) : 0;
+    const radius = (t: typeof tile) => (parsePair(t?.props.get('backgroundCornerSize')?.value)?.[0] ?? 12) * 0.9;
+    const logoAlpha = (name: string, d: number) => {
+      const c = els?.get(name)?.props.get('color')?.value;
+      return c && c.length === 8 ? parseInt(c.slice(6), 16) / 255 : d;
+    };
+    return {
+      cols,
+      rows: rowsN,
+      tile,
+      sel,
+      gapX: margin[0] * W,
+      gapY: margin[1] * H,
+      zoom,
+      selIndex,
+      radius: radius(tile),
+      selRadius: radius(sel),
+      logoAlpha: logoAlpha('gridtile.image', 1),
+      selLogoAlpha: logoAlpha('gridtile.image:selected', 1),
+    };
   });
 
   const ninepatch = $derived(el.type === 'ninepatch' ? asset('path') : null);
@@ -359,13 +382,27 @@
     {@const systemGrid = view === 'system'}
     {@const list = carousel.systems}
     {@const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name))}
-    <div class="grid" style:grid-template-columns="repeat({grid.cols}, minmax(0, 1fr))" style:grid-template-rows="repeat({grid.rows}, minmax(0, 1fr))">
+    <div
+      class="grid"
+      style:grid-template-columns="repeat({grid.cols}, minmax(0, 1fr))"
+      style:grid-template-rows="repeat({grid.rows}, minmax(0, 1fr))"
+      style:column-gap="{grid.gapX}px"
+      style:row-gap="{grid.gapY}px"
+    >
       {#each Array(grid.cols * grid.rows) as _, i}
-        {@const sys = list[(cur + i) % Math.max(1, list.length)]}
+        {@const on = i === grid.selIndex}
+        {@const sys = list[(cur + i - grid.selIndex + list.length * 10) % Math.max(1, list.length)]}
         {@const logo = systemGrid && sys ? logoFor(sys) : null}
-        <div class="tile" class:on={i === 0} style:background={cssColor((i === 0 ? grid.sel : grid.tile)?.props.get('backgroundColor')?.value, i === 0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.12)')}>
+        <div
+          class="tile"
+          class:on
+          style:background={cssColor((on ? grid.sel : grid.tile)?.props.get('backgroundColor')?.value, on ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.12)')}
+          style:border-radius="{on ? grid.selRadius : grid.radius}px"
+          style:transform={on && grid.zoom !== 1 ? `scale(${grid.zoom})` : undefined}
+          style:z-index={on ? 2 : 1}
+        >
           {#if logo}
-            <img src={fileUrl(logo)} alt="" draggable="false" />
+            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} />
           {:else}
             <span>{systemGrid ? (sys?.fullName ?? '') : (env.gameNames ?? MOCK_GAMES)[i % (env.gameNames ?? MOCK_GAMES).length]}</span>
           {/if}

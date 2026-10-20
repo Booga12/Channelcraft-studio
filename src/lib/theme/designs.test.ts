@@ -19,7 +19,7 @@ const env: Environment = {
 const ctx = (id: string, logos = false): DesignContext => ({ art: `./_inc/ccs/${id}`, font: './_inc/fonts/x.ttf', titleFont: null, logos: logos ? './_inc/systems/logos' : null, consoles: null });
 
 const GAME_DATA = ['md_image', 'ccs_boxart', 'md_marquee', 'ccs_fanart', 'ccs_title', 'md_description', 'md_rating', 'md_releasedate', 'md_genre', 'md_developer', 'md_players', 'ccs_favorite', 'gamelist', 'logo', 'help', 'ccs_clock'];
-const SYSTEM_DATA = ['systemcarousel', 'ccs_console', 'ccs_systemname', 'ccs_systemmaker', 'ccs_systemcount', 'ccs_systemart', 'help'];
+const SYSTEM_DATA = ['ccs_console', 'ccs_systemname', 'ccs_systemmaker', 'ccs_systemcount', 'ccs_systemart', 'help'];
 
 describe('designs on the starter theme (in memory)', () => {
   for (const d of DESIGNS) {
@@ -47,6 +47,14 @@ describe('designs on the starter theme (in memory)', () => {
       }
       const sys = r.views.get('system')!.elements;
       for (const n of SYSTEM_DATA) expect(sys.has(n), `system has ${n}`).toBe(true);
+      // Consoles are shown either as a carousel or as a grid of tiles.
+      if (['grid', 'tile-row', 'big-tiles'].includes(d.system)) {
+        expect(sys.get('imagegrid')!.props.get('autoLayout')).toBeTruthy();
+        expect(sys.get('selected')!.type).toBe('gridtile');
+        expect(sys.get('default')!.props.get('backgroundImage')!.value).toContain(`ccs/${d.id}/panel.svg`);
+      } else {
+        expect(sys.has('systemcarousel')).toBe(true);
+      }
       expect(sys.get('ccs_systemname')!.props.get('text')!.value).toBe('{system:fullName}');
       // Theme.xml stays a well-formed, lossless document.
       expect(print(parse(p.entry!.src))).toBe(p.entry!.src);

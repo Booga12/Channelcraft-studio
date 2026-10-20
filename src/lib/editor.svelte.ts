@@ -735,12 +735,34 @@ class Editor {
   }
 
   /** Writes a layout preset into its own block at the end of theme.xml (replacing an earlier one). */
-  applyLayout(preset: LayoutPreset, views: string[]) {
+  async applyLayout(preset: LayoutPreset, views: string[]) {
     const p = this.project;
+    if (!p) return;
+    if (preset.assets) await this.writeArt('_inc/ccs/common', preset.assets);
     const res = this.res;
-    if (!p || !res) return;
+    if (!res) return;
     this.commit(`layout “${preset.label}”`, layoutChanges(p, res, preset, views));
     this.selected = null;
+  }
+
+  /** Writes generated SVG artwork into the theme (and shows it straight away). Returns false if it couldn't be written. */
+  async writeArt(relDir: string, files: Record<string, string>): Promise<boolean> {
+    const p = this.project;
+    if (!p) return false;
+    await this.ensureBackup();
+    let wrote = true;
+    for (const [file, svg] of Object.entries(files)) {
+      const abs = join(p.dir, relDir, file);
+      registerVirtualFile(abs, svg);
+      try {
+        await api.writeText(abs, svg, false);
+      } catch {
+        wrote = false;
+      }
+    }
+    p.setAssets([...p.assets.filter((a) => !Object.keys(files).some((f) => a.rel === `${relDir}/${f}`)), ...Object.keys(files).map((f) => ({ rel: `${relDir}/${f}`, kind: 'image' as const, size: 0 }))]);
+    this.rev++;
+    return wrote;
   }
 
   /** Applies the choices from the New theme dialog to a freshly created theme and saves it. */

@@ -27,6 +27,8 @@ export interface LayoutPreset {
   /** Mini picture of the layout, in screen fractions. */
   diagram: Rect[];
   elements: Record<string, Props>;
+  /** Shared artwork (SVG) the preset needs, written to _inc/ccs/common/. */
+  assets?: Record<string, string>;
 }
 
 export interface Palette {
@@ -56,6 +58,12 @@ export const NATIVE_TYPES: Record<string, string> = {
   md_name: 'text',
   systemcarousel: 'carousel',
   systemInfo: 'text',
+  imagegrid: 'imagegrid',
+  default: 'gridtile',
+  selected: 'gridtile',
+  gridtile: 'text',
+  'gridtile.image': 'image',
+  'gridtile.image:selected': 'image',
 };
 
 const DETAIL_FIELDS = ['developer', 'publisher', 'genre', 'players', 'lastplayed', 'playcount'];
@@ -101,6 +109,9 @@ function mirror(layout: Record<string, Props>): Record<string, Props> {
 function round(n: number) {
   return String(Math.round(n * 1000) / 1000);
 }
+
+/** White rounded tile, tinted by each grid tile's background colour. */
+export const TILE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect x="1" y="1" width="94" height="94" rx="22" fill="#ffffff"/></svg>\n';
 
 export const LAYOUTS: LayoutPreset[] = [
   {
@@ -252,7 +263,100 @@ export const LAYOUTS: LayoutPreset[] = [
       systemInfo: { pos: '0.4 0.9', size: '0.55 0.05', alignment: 'left' },
     },
   },
+  {
+    id: 'wheel-left',
+    label: 'Wheel on the left',
+    description: 'The arcade-cabinet wheel, down the left side instead.',
+    kind: 'system',
+    diagram: [
+      { x: 0, y: 0, w: 0.4, h: 1, role: 'carousel' },
+      { x: 0.56, y: 0.88, w: 0.4, h: 0.05, role: 'info' },
+    ],
+    elements: {
+      systemcarousel: { type: 'vertical_wheel', pos: '0 0', size: '0.4 1', logoSize: '0.3 0.13', maxLogoCount: '5', logoRotationOrigin: '-3 0.5' },
+      systemInfo: { pos: '0.46 0.88', size: '0.5 0.05', alignment: 'right' },
+    },
+  },
+  {
+    id: 'cover-flow',
+    label: 'Cover flow',
+    description: 'Five big logos in a row, the selected one zoomed and the others faded.',
+    kind: 'system',
+    diagram: [
+      { x: 0, y: 0.32, w: 1, h: 0.36, role: 'carousel' },
+      { x: 0.3, y: 0.72, w: 0.4, h: 0.05, role: 'info' },
+    ],
+    elements: {
+      systemcarousel: { type: 'horizontal', pos: '0 0.32', size: '1 0.36', logoSize: '0.2 0.2', maxLogoCount: '5', logoScale: '1.5', minLogoOpacity: '0.3', color: '00000000' },
+      systemInfo: { pos: '0 0.72', size: '1 0.05', alignment: 'center' },
+    },
+  },
+  {
+    id: 'channel-grid',
+    label: 'Channel grid',
+    description: 'Consoles as a 4 × 3 grid of rounded tiles, like a classic console home screen.',
+    kind: 'system',
+    diagram: [
+      ...grid(0.075, 0.06, 0.85, 0.56, 4, 3),
+      { x: 0.3, y: 0.7, w: 0.4, h: 0.05, role: 'info' },
+    ],
+    elements: gridElements({ pos: '0.075 0.06', size: '0.85 0.56', autoLayout: '4 3', margin: '0.014 0.028', scrollDirection: 'vertical', centerSelection: 'false' }, '0 0.7', 'center'),
+    assets: { 'tile.svg': TILE_SVG },
+  },
+  {
+    id: 'grid-wall',
+    label: 'Grid wall',
+    description: 'Lots of small tiles filling the screen, to see many consoles at once.',
+    kind: 'system',
+    diagram: [...grid(0.04, 0.05, 0.92, 0.8, 6, 4), { x: 0.3, y: 0.9, w: 0.4, h: 0.04, role: 'info' }],
+    elements: gridElements({ pos: '0.04 0.05', size: '0.92 0.8', autoLayout: '6 4', margin: '0.008 0.014', scrollDirection: 'vertical', centerSelection: 'false' }, '0 0.89', 'center'),
+    assets: { 'tile.svg': TILE_SVG },
+  },
+  {
+    id: 'tile-row',
+    label: 'Dashboard row',
+    description: 'A row of tiles across the top, like a modern console dashboard, with room for big artwork below.',
+    kind: 'system',
+    diagram: [...grid(0.04, 0.1, 0.92, 0.2, 7, 1), { x: 0.05, y: 0.62, w: 0.4, h: 0.07, role: 'logo' }, { x: 0.05, y: 0.72, w: 0.3, h: 0.04, role: 'info' }],
+    elements: gridElements({ pos: '0.04 0.1', size: '0.92 0.2', autoLayout: '7 1', margin: '0.01 0', scrollDirection: 'horizontal', centerSelection: 'false' }, '0.05 0.72', 'left'),
+    assets: { 'tile.svg': TILE_SVG },
+  },
+  {
+    id: 'big-tiles',
+    label: 'Big tiles',
+    description: 'Five large tiles across the middle, the selected one in the centre. A modern handheld-console feel.',
+    kind: 'system',
+    diagram: [...grid(0.04, 0.3, 0.92, 0.36, 5, 1), { x: 0.3, y: 0.72, w: 0.4, h: 0.05, role: 'info' }],
+    elements: gridElements({ pos: '0.04 0.3', size: '0.92 0.36', autoLayout: '5 1', margin: '0.016 0', scrollDirection: 'horizontal', centerSelection: 'true', autoLayoutSelectedZoom: '1.12' }, '0 0.72', 'center'),
+    assets: { 'tile.svg': TILE_SVG },
+  },
 ];
+
+
+/** Diagram cells for a grid. */
+function grid(x: number, y: number, w: number, h: number, cols: number, rows: number): Rect[] {
+  const out: Rect[] = [];
+  const gw = w / cols;
+  const gh = h / rows;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out.push({ x: x + c * gw + gw * 0.06, y: y + r * gh + gh * 0.08, w: gw * 0.88, h: gh * 0.84, role: r === 0 && c === 0 ? 'carousel' : 'art' });
+  return out;
+}
+
+/**
+ * Elements for a system grid in the way RetroBat themes write it: an imagegrid, tile styles
+ * for normal and selected tiles, logo colours, and the info line.
+ */
+function gridElements(gridProps: Props, infoPos: string, infoAlign: string): Record<string, Props> {
+  return {
+    imagegrid: { ...gridProps, autoLayoutSelectedZoom: gridProps.autoLayoutSelectedZoom ?? '1.06', animateSelection: 'true', padding: '0.012 0.012 0.012 0.012', scrollLoop: 'false', scrollbarColor: '00000000', zIndex: '30' },
+    default: { backgroundImage: './_inc/ccs/common/tile.svg', backgroundCornerSize: '22 22', backgroundColor: 'FFFFFF22', imageColor: 'FFFFFFFF', padding: '24 24 24 24', selectionMode: 'full', imageSizeMode: 'maxSize' },
+    selected: { backgroundImage: './_inc/ccs/common/tile.svg', backgroundCornerSize: '22 22', backgroundColor: 'FFFFFFF2', imageColor: 'FFFFFFFF', padding: '24 24 24 24' },
+    gridtile: { visible: 'false', size: '0 0' },
+    'gridtile.image': { color: 'FFFFFFAA' },
+    'gridtile.image:selected': { color: 'FFFFFFFF' },
+    systemInfo: { pos: infoPos, size: '0.9 0.05', alignment: infoAlign, visible: 'true' },
+  };
+}
 
 export const PALETTES: Palette[] = [
   { id: 'midnight', label: 'Midnight', colors: { bgColor: '15171CFF', panelColor: 'FFFFFF14', textColor: 'F2F4F8FF', dimTextColor: 'A0A7B4FF', accentColor: '4C8DFFFF', selectedTextColor: 'FFFFFFFF' } },

@@ -31,7 +31,7 @@ export interface Design {
   /** Corner radius of panels in pixels; 0 for square, pixel corners for the pixel look. */
   radius: number;
   game: 'list-right' | 'cinema' | 'cover' | 'centered';
-  system: 'carousel-mid' | 'wheel-right' | 'bottom' | 'left';
+  system: 'carousel-mid' | 'wheel-right' | 'bottom' | 'left' | 'grid' | 'tile-row' | 'big-tiles';
   glow?: boolean;
   scanlines?: boolean;
   uppercase?: boolean;
@@ -111,7 +111,7 @@ export const DESIGNS: Design[] = [
     background: 'stripes',
     radius: 28,
     game: 'list-right',
-    system: 'carousel-mid',
+    system: 'grid',
     anims: { art: 'float', console: 'float' },
   },
   {
@@ -124,7 +124,7 @@ export const DESIGNS: Design[] = [
     background: 'waves',
     radius: 6,
     game: 'centered',
-    system: 'carousel-mid',
+    system: 'tile-row',
     anims: { title: 'fade-in' },
   },
   {
@@ -203,8 +203,35 @@ export const DESIGNS: Design[] = [
     background: 'glass',
     radius: 22,
     game: 'cover',
-    system: 'wheel-right',
+    system: 'big-tiles',
     anims: { art: 'float', title: 'fade-in', console: 'float' },
+  },
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    description: 'A modern console dashboard: a row of tiles on top, big artwork and the console name below.',
+    tags: ['modern', 'console menu', 'dark'],
+    palette: P('0D1117', '1B2433', 'FFFFFF1A', 'F5F7FA', 'A3ADBD', '3B82F6', 'FFFFFF'),
+    font: 'spacegrotesk',
+    background: 'gradient',
+    radius: 14,
+    game: 'cinema',
+    system: 'tile-row',
+    anims: { title: 'fade-in', console: 'rise' },
+  },
+  {
+    id: 'channel-wall',
+    label: 'Channel Wall',
+    description: 'A bright, bubbly grid of console tiles with a playful font. Great for kids and family setups.',
+    tags: ['light', 'console menu', 'friendly', 'grid'],
+    palette: P('EAF6FF', 'D3ECFF', 'FFFFFFF2', '1F2A44', '5A6B85', 'FF7A59', 'FFFFFF'),
+    font: 'fredoka',
+    titleFont: 'lilita',
+    background: 'dots',
+    radius: 30,
+    game: 'centered',
+    system: 'grid',
+    anims: { art: 'pop', console: 'float' },
   },
 ];
 
@@ -535,7 +562,57 @@ function systemScreen(d: Design, c: DesignContext): DesignEl[] {
   const count = (pos: string, size: string, align: string) => text(d, c, 'ccs_systemcount', { pos, size, alignment: align, fontSize: '0.024', text: '{system:total} + " games"', color: col(p.accent), zIndex: '45' });
   const hideInfo: DesignEl = { type: 'text', name: 'systemInfo', props: { visible: 'false' } };
 
+  /** A system grid: tiles in the design's colours, logos washed out until selected. */
+  const systemGrid = (props: Record<string, string>): DesignEl[] => {
+    const corner = Math.max(8, d.radius);
+    return [
+      { type: 'imagegrid', name: 'imagegrid', props: { autoLayoutSelectedZoom: '1.06', animateSelection: 'true', padding: '0.012 0.012 0.012 0.012', scrollLoop: 'false', scrollbarColor: '00000000', zIndex: '30', ...props } },
+      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: col(p.surface.length === 8 && parseInt(p.surface.slice(6), 16) < 0x30 ? `${p.text}22` : p.surface), imageColor: 'FFFFFFFF', padding: '24 24 24 24', selectionMode: 'full', imageSizeMode: 'maxSize' } },
+      { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: col(p.accent), imageColor: 'FFFFFFFF', padding: '24 24 24 24' } },
+      { type: 'text', name: 'gridtile', props: { visible: 'false', size: '0 0' } },
+      { type: 'image', name: 'gridtile.image', props: { color: 'FFFFFFAA' } },
+      { type: 'image', name: 'gridtile.image:selected', props: { color: 'FFFFFFFF' } },
+    ];
+  };
+
   switch (d.system) {
+    case 'grid':
+      els.push(
+        randomArt,
+        ...systemGrid({ pos: '0.075 0.08', size: '0.85 0.56', autoLayout: '4 3', margin: '0.014 0.028', scrollDirection: 'vertical', centerSelection: 'false' }),
+        ...logoStyle,
+        name('0.075 0.69', '0.6 0.07', 'left'),
+        maker('0.075 0.76', '0.6 0.04', 'left'),
+        count('0.075 0.8', '0.6 0.04', 'left'),
+        consoleArt('0.84 0.78', '0.22 0.24'),
+        hideInfo,
+      );
+      break;
+    case 'tile-row':
+      els.push(
+        { ...randomArt, props: { ...randomArt.props, color: 'FFFFFFB3' } },
+        { type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.svg`, zIndex: '2' } },
+        ...systemGrid({ pos: '0.04 0.1', size: '0.92 0.2', autoLayout: '7 1', margin: '0.01 0', scrollDirection: 'horizontal', centerSelection: 'false' }),
+        ...logoStyle,
+        name('0.05 0.6', '0.66 0.08', 'left', '0.052'),
+        maker('0.05 0.68', '0.6 0.04', 'left'),
+        count('0.05 0.725', '0.6 0.04', 'left'),
+        consoleArt('0.78 0.64', '0.34 0.42'),
+        hideInfo,
+      );
+      break;
+    case 'big-tiles':
+      els.push(
+        randomArt,
+        ...systemGrid({ pos: '0.04 0.3', size: '0.92 0.36', autoLayout: '5 1', margin: '0.016 0', scrollDirection: 'horizontal', centerSelection: 'true', autoLayoutSelectedZoom: '1.12' }),
+        ...logoStyle,
+        name('0.1 0.1', '0.8 0.08', 'center', '0.06'),
+        maker('0.1 0.19', '0.8 0.04', 'center'),
+        count('0.1 0.72', '0.8 0.04', 'center'),
+        consoleArt('0.5 0.84', '0.2 0.16'),
+        hideInfo,
+      );
+      break;
     case 'wheel-right':
       els.push(randomArt, panel(d, c, 'ccs_wheelpanel', '0.6 0', '0.4 1', 10), carousel('vertical_wheel', '0.6 0', '0.4 1', '0.28 0.13', '5'), ...logoStyle, consoleArt('0.3 0.42', '0.44 0.46'), name('0.05 0.76', '0.5 0.07', 'left'), maker('0.05 0.83', '0.5 0.04', 'left'), count('0.05 0.875', '0.5 0.04', 'left'), hideInfo);
       break;

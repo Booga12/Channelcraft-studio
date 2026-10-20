@@ -36,6 +36,28 @@ describe('starter theme with presets (in memory)', () => {
   });
 });
 
+describe('system grid layouts (in memory)', () => {
+  it('write an imagegrid with tile styles RetroBat understands', async () => {
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    for (const id of ['channel-grid', 'grid-wall', 'tile-row', 'big-tiles', 'cover-flow', 'wheel-left']) {
+      const l = LAYOUTS.find((x) => x.id === id)!;
+      applyChanges(p, layoutChanges(p, resolveTheme(p, env), l, ['system']));
+      const sys = resolveTheme(p, env).views.get('system')!.elements;
+      if (l.assets) {
+        expect(sys.get('imagegrid')!.type).toBe('imagegrid');
+        expect(sys.get('default')!.type).toBe('gridtile');
+        expect(sys.get('selected')!.props.get('backgroundImage')!.value).toBe('./_inc/ccs/common/tile.svg');
+        expect(sys.get('gridtile.image:selected')!.props.get('color')!.value).toBe('FFFFFFFF');
+      } else {
+        expect(sys.get('systemcarousel')!.props.get('maxLogoCount')).toBeTruthy();
+      }
+      expect(appliedLayout(p, 'system')).toBe(id);
+    }
+    // Swapping layouts kept a single block.
+    expect(p.entry!.src.split('ChannelCraft layout preset (system)').length).toBe(2);
+  });
+});
+
 describe('library', () => {
   it('offers game items on game screens and system items on the system screen', () => {
     const game = itemsFor('detailed').map((i) => i.id);
