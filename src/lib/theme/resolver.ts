@@ -109,19 +109,24 @@ export function hasConditions(el: XElement): boolean {
   return el.attrs.some((a) => COND_ATTRS.has(a.name) || (a.name.startsWith('if') && !NON_COND_ATTRS.has(a.name)));
 }
 
-export function resolveTheme(project: ThemeProject, env: Environment): Resolution {
+/**
+ * Resolves a theme from `entryRel` (default: the project's current entry file). RetroBat reads the
+ * loading screen from splash.xml and the game launch screen from gamesplash.xml, separately from
+ * theme.xml (es-core/src/Splash.cpp).
+ */
+export function resolveTheme(project: ThemeProject, env: Environment, entryRel?: string): Resolution {
   // ES knows every theme option's value before it reads the views, so `ifSubset` can refer to
   // options declared further down. A first pass collects the defaults for the second.
-  const first = resolvePass(project, env);
+  const first = resolvePass(project, env, entryRel);
   const subsets = { ...env.settings.subsets };
   for (const info of first.subsets) if (subsets[info.name] === undefined) subsets[info.name] = info.selected;
-  const res = resolvePass(project, { ...env, settings: { ...env.settings, subsets } });
+  const res = resolvePass(project, { ...env, settings: { ...env.settings, subsets } }, entryRel);
   // Report what the theme would pick on its own, not the seeded values.
   for (const info of res.subsets) info.isDefault = env.settings.subsets[info.name] === undefined;
   return res;
 }
 
-function resolvePass(project: ThemeProject, env: Environment): Resolution {
+function resolvePass(project: ThemeProject, env: Environment, entryRel?: string): Resolution {
   const s = env.settings;
   const out: Resolution = {
     views: new Map(),
@@ -408,7 +413,7 @@ function resolvePass(project: ThemeProject, env: Environment): Resolution {
     stack.pop();
   };
 
-  const entry = project.entry;
+  const entry = entryRel ? project.fileAt(entryRel) : project.entry;
   if (entry) processFile(entry);
   for (const info of out.subsets) info.selected = subsetSel.get(info.name) ?? info.selected;
   return out;

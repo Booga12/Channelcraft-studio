@@ -122,3 +122,23 @@ export function formatDate(iso: string, fmt?: string): string {
     .replace(/%M/g, time?.[2] ?? '00')
     .replace(/%S/g, time?.[3] ?? '00');
 }
+
+// RetroBat stretches an SVG to an element's exact size, while a browser keeps the SVG's own
+// proportions inside the box. A copy with preserveAspectRatio="none" behaves like RetroBat.
+const stretched = new Map<string, string | null>();
+export const svgState = $state({ loaded: 0 });
+
+/** A stretchable copy of an SVG (as a data URL), or null while it loads or if it can't be read. */
+export function stretchedSvg(url: string): string | null {
+  if (stretched.has(url)) return stretched.get(url) ?? null;
+  stretched.set(url, null);
+  fetch(url)
+    .then((r) => (r.ok ? r.text() : Promise.reject(r.status)))
+    .then((text) => {
+      const fixed = text.replace(/<svg\b([^>]*)>/i, (m, attrs: string) => `<svg${attrs.replace(/\spreserveAspectRatio="[^"]*"/i, '')} preserveAspectRatio="none">`);
+      stretched.set(url, `data:image/svg+xml;charset=utf-8,${encodeURIComponent(fixed)}`);
+      svgState.loaded++;
+    })
+    .catch(() => {});
+  return null;
+}

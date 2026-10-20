@@ -23,18 +23,31 @@
     splash: 'sparkle',
   };
 
-  function pick(v: string) {
-    ed.view = v;
-    ed.selected = null;
+  const FILE_LABEL: Record<string, { label: string; help: string }> = {
+    'splash.xml': { label: 'Loading screen', help: 'splash.xml: what RetroBat shows while it starts up.' },
+    'gamesplash.xml': { label: 'Game launch screen', help: 'gamesplash.xml: what RetroBat shows while a game starts.' },
+  };
+  const hasSplashFile = $derived(ed.screens.some((t) => t.file === 'splash.xml'));
+  function label(t: { view: string; file: string }) {
+    if (FILE_LABEL[t.file]) return FILE_LABEL[t.file].label;
+    // RetroBat reads its loading screen from splash.xml, not from theme.xml's splash view.
+    if (t.view === 'splash') return 'Splash (theme.xml)';
+    return viewLabel(t.view, ed.res?.views.get(t.view)?.displayName);
+  }
+  function help(t: { view: string; file: string }) {
+    if (FILE_LABEL[t.file]) return FILE_LABEL[t.file].help;
+    if (t.view === 'splash') return `RetroBat 8 reads its loading screen from splash.xml${hasSplashFile ? ' (the Loading screen tab)' : ''}, not from this view in theme.xml.`;
+    return viewHelp(t.view) ?? t.view;
   }
 </script>
 
 <div class="tabs" role="tablist" aria-label="Screens">
   <div class="strip">
-    {#each ed.viewNames as v (v)}
-      <button class="tab" role="tab" aria-selected={ed.view === v} class:on={ed.view === v} onclick={() => pick(v)} title={viewHelp(v) ?? v}>
-        <Icon name={ICON[v] ?? 'file'} size={13} />
-        <span>{viewLabel(v, ed.res?.views.get(v)?.displayName)}</span>
+    {#each ed.screens as t (t.id)}
+      {@const on = ed.view === t.view && ed.screenFile === t.file}
+      <button class="tab" role="tab" aria-selected={on} class:on onclick={() => ed.showScreen(t)} title={help(t)}>
+        <Icon name={ICON[t.view] ?? 'file'} size={13} />
+        <span>{label(t)}</span>
       </button>
     {/each}
   </div>

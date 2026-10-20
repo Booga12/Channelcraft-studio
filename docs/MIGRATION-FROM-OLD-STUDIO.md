@@ -104,7 +104,39 @@ Code: `src-tauri/src/storage.rs` (new), `src/lib/components/RestoreDialog.svelte
   - The real window (Tauri) hasn't been tried by hand: restore with RetroBat running, the focus reload, the second-window lock.
   - Disk-full and power-loss behaviour beyond the simulated half-done states.
 
+## Stage 2 — done (2026-10-20)
+
+Facts come from RetroBat's own source (RetroBat-Official/emulationstation, master at `08305947`), not from guesses.
+
+- **Property profile.** `src/lib/theme/retrobat-profile.json` is the element/property table from `es-core/src/ThemeData.cpp` (38 element types, 485 properties, plus inheritance such as clock → text).
+  - The property panel marks properties RetroBat skips with "RetroBat ignores this".
+  - A test applies every design, with every system layout, plus every plain layout, the starter and every Add-panel item, and fails on any property RetroBat would skip. The only one found was the clock's `format`, which is now removed.
+- **Clock.** RetroBat has no clock `format`. Its own `ClockMode12` setting picks 12 or 24 hours, and `DrawClock` shows or hides the clock (`ClockComponent.cpp`). The preview reads both from es_settings.cfg; your RetroBat is set to 12 hours.
+- **Screen transitions.** `<theme defaultTransition>` (fade / slide / instant) is used only when RetroBat's Transition Style is Auto, and the Instant power saver overrides it (`ViewController.cpp`).
+  - The Options panel sets it in theme.xml.
+  - It warns when RetroBat's own settings would override it.
+- **ROM folders.** These are read from each system's es_systems.cfg `<path>` (`~` means the emulationstation folder). Folders on other drives are allowed for the preview.
+- **Game data.** Hidden games are skipped, and `../` and `~/` media paths are understood. `gametime` stays in seconds.
+  - Stars fill to the exact rating (0.7 = 3.5 stars), as RetroBat draws them.
+  - The "Sample game" label explains that its details are made up.
+- **Loading screens.**
+  - RetroBat reads `splash.xml` (start-up) and `gamesplash.xml` (game launch) on their own; they replace its built-in ones. They now appear as **Loading screen** and **Game launch screen** tabs, and edits go into those files.
+  - Following `Splash.cpp`, only extras plus the built-in `background`, `label` and `progressbar` / `progressbar:active` are drawn. Other elements are listed as "RetroBat won't draw here".
+  - The drawing order is fixed: extras below zIndex 5, then the background, extras 5–10, the bar, the label, then extras 10 and up.
+  - The built-in parts start from RetroBat's placement: the background is centred, the label sits at 78 % height, and the bar uses its grey and red defaults unless themed.
+  - theme.xml's own `splash` view is labelled as not used for the loading screen.
+- **SVG stretching.** RetroBat stretches an SVG to an element's exact size; the preview now does too. v5's thin splash accent line drew as a dot before.
+- **Splash "dark rectangle" (still open).**
+  - Current v5 / Booga's wiiTheme splash.xml has no setting that explains it: the background is hidden, and every extra has an explicit origin.
+  - One way RetroBat produces exactly that picture: a splash `background` with `pos` but no `origin` keeps RetroBat's centring, so a dark full-screen picture at `pos 0 0` covers the top-left quarter.
+  - The preview now shows that case as RetroBat would. Checking it in RetroBat is still needed.
+- Tests: 79 frontend tests (profile, splash order and defaults from v5 read-only, splash editing goes to splash.xml, gamelist parsing, transition setting) and 16 Rust tests (adds ROM-folder resolution and es_settings reading).
+
 ## Verification status (honest)
 
-- Done: read the old source, its docs and git state; compared it with this app's code; confirmed the zip matches the folder; checked the RetroBat version.
-- Not done: no code changed; the old app was not built or run; nothing tested in RetroBat for this plan.
+- Done:
+  - Read the old source, its docs and git state; compared it with this app's code; confirmed the zip matches the folder; checked the RetroBat version.
+  - Stages 1 and 2, with automated tests and browser-preview checks (read-only).
+- Not done:
+  - Nothing from these stages has been tried in RetroBat itself.
+  - The native app window hasn't been tested by hand for the new safety features.

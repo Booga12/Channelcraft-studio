@@ -49,7 +49,13 @@
       { group: 'Commands', label: ed.simple ? 'Switch to Advanced mode' : 'Switch to Simple mode', icon: 'sliders', run: () => ed.setMode(ed.simple ? 'advanced' : 'simple') },
     ];
     for (const el of ed.currentView?.elements.values() ?? []) out.push({ group: 'Elements on this screen', label: elementLabel(el.name), hint: el.name, icon: TYPE_ICONS[el.type] ?? 'file', run: () => ed.select(el.name) });
-    for (const v of ed.viewNames) out.push({ group: 'Screens', label: viewLabel(v, ed.res?.views.get(v)?.displayName), icon: 'monitor', run: () => ((ed.view = v), (ed.selected = null)) });
+    for (const t of ed.screens)
+      out.push({
+        group: 'Screens',
+        label: t.file === 'splash.xml' ? 'Loading screen' : t.file === 'gamesplash.xml' ? 'Game launch screen' : viewLabel(t.view, ed.themeRes?.views.get(t.view)?.displayName),
+        icon: 'monitor',
+        run: () => ed.showScreen(t),
+      });
     for (const i of itemsFor(ed.view)) out.push({ group: 'Add', label: `Add ${i.label.toLowerCase()}`, hint: i.help, icon: i.icon, run: () => ed.addLibraryItem(i) });
     for (const d of DESIGNS) out.push({ group: 'Designs', label: `Design: ${d.label}`, hint: d.description, icon: 'sparkle', run: () => (ed.showPanel('presets'), ed.applyDesign(d)) });
     for (const l of layoutsFor(ed.view)) out.push({ group: 'Layouts', label: `Layout: ${l.label}`, hint: l.description, icon: 'grid', run: () => ed.applyLayout(l, [ed.view]) });

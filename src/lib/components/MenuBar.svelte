@@ -156,7 +156,11 @@
       label: 'View',
       items: [
         { heading: 'Screen' },
-        ...ed.viewNames.map((v) => ({ label: viewLabel(v, ed.res?.views.get(v)?.displayName), checked: ed.view === v, action: () => ((ed.view = v), (ed.selected = null)) })),
+        ...ed.screens.map((t) => ({
+          label: t.file === 'splash.xml' ? 'Loading screen' : t.file === 'gamesplash.xml' ? 'Game launch screen' : viewLabel(t.view, ed.themeRes?.views.get(t.view)?.displayName),
+          checked: ed.view === t.view && ed.screenFile === t.file,
+          action: () => ed.showScreen(t),
+        })),
         { separator: true },
         { heading: 'TV shape' },
         ...RATIOS.map((r) => ({ label: r.label, checked: ed.settings.ratio === r.v, action: () => (ed.settings.ratio = r.v) })),

@@ -20,6 +20,9 @@ import { designChanges, LAYOUTS, layoutChanges, type LayoutPreset, type Palette 
 import { DESIGNS, designAssets, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
 
+/** RetroBat's loading screen files, read on their own (not through theme.xml). */
+export const SPLASH_FILES = ['splash.xml', 'gamesplash.xml'] as const;
+
 interface HistoryEntry {
   label: string;
   applied: Applied[];
@@ -70,6 +73,19 @@ class Editor {
   rev = $state(0);
   settings = $state<PreviewSettings>({ ...DEFAULT_SETTINGS });
   view = $state('system');
+
+  #screenFile = $state('theme.xml');
+  /**
+   * The file the current screen comes from: theme.xml, or RetroBat's own loading screen files
+   * (splash.xml while it starts, gamesplash.xml when a game launches), which it reads separately.
+   */
+  get screenFile() {
+    return this.#screenFile;
+  }
+  set screenFile(f: string) {
+    this.#screenFile = f;
+    if (this.project) this.project.entryRel = f;
+  }
   /** Selected element names; the last one is the primary selection shown in Properties. */
   selection = $state<string[]>([]);
   get selected(): string | null {
@@ -185,7 +201,17 @@ class Editor {
     const p = this.project;
     if (!p) return null;
     const settings = $state.snapshot(this.settings) as PreviewSettings;
-    return resolveTheme(p, { settings, esHome: this.root?.esHome ?? '', resourcesDir: this.root?.resourcesDir ?? '', game: this.currentGame });
+    return resolveTheme(p, { settings, esHome: this.root?.esHome ?? '', resourcesDir: this.root?.resourcesDir ?? '', game: this.currentGame }, this.screenFile);
+  });
+
+  /** theme.xml's resolution, also while a loading screen file is being edited. */
+  themeRes = $derived.by<Resolution | null>(() => {
+    if (this.screenFile === 'theme.xml') return this.res;
+    this.rev;
+    const p = this.project;
+    if (!p) return null;
+    const settings = $state.snapshot(this.settings) as PreviewSettings;
+    return resolveTheme(p, { settings, esHome: this.root?.esHome ?? '', resourcesDir: this.root?.resourcesDir ?? '', game: this.currentGame }, 'theme.xml');
   });
 
   /** Loads the list of systems with scraped games, and the current system's games. */
@@ -232,7 +258,7 @@ class Editor {
   });
 
   viewNames = $derived.by(() => {
-    const r = this.res;
+    const r = this.themeRes;
     if (!r) return [];
     const names = [...r.views.keys()];
     return names.sort((a, b) => {
@@ -243,6 +269,20 @@ class Editor {
   });
 
   currentView = $derived(this.res?.views.get(this.view) ?? null);
+
+  /** Document tabs: theme.xml's screens, then RetroBat's loading screens if the theme has them. */
+  screens = $derived.by(() => {
+    this.rev;
+    const tabs: { id: string; view: string; file: string }[] = this.viewNames.map((v) => ({ id: v, view: v, file: 'theme.xml' }));
+    for (const file of SPLASH_FILES) if (this.project?.fileAt(file)) tabs.push({ id: `@${file}`, view: 'splash', file });
+    return tabs;
+  });
+
+  showScreen(tab: { view: string; file: string }) {
+    this.screenFile = tab.file;
+    this.view = tab.view;
+    this.selected = null;
+  }
 
   selectedElement = $derived<ResolvedElement | null>(this.selected ? (this.currentView?.elements.get(this.selected) ?? null) : null);
 
@@ -327,6 +367,7 @@ class Editor {
         this.locked = {};
       }
       this.project = project;
+      this.screenFile = 'theme.xml';
       this.rev++;
       this.lastSave = Date.now();
       await this.offerRecovery(project);
@@ -370,9 +411,7 @@ class Editor {
     this.askedAbout = sig;
     const list = changed.slice(0, 6).join(', ') + (changed.length > 6 ? ` and ${changed.length - 6} more` : '');
     const lose = this.dirtyCount ? ` Your ${this.dirtyCount} unsaved file(s) would be read from disk again, so those edits would be lost.` : '';
-    const reload = await ask(`Another program changed this theme's files: ${list}.
-
-Reload the theme to see those changes?${lose}`, {
+    const reload = await ask(`Another program changed this theme's files: ${list}.\n\nReload the theme to see those changes?${lose}`, {
       title: 'Theme changed outside ChannelCraft',
       kind: 'warning',
       okLabel: 'Reload from disk',
@@ -398,7 +437,7 @@ Reload the theme to see those changes?${lose}`, {
       await api.clearRecovery(this.recoveryKey(dir)).catch(() => {});
       this.backedUp.add(dir);
       ok = true;
-      this.notify(`Backup restored. The version you had before was backed up too (${before.split(/[\/]/).pop()}).`);
+      this.notify(`Backup restored. The version you had before was backed up too (${before.split(/[\\/]/).pop()}).`);
     } catch (e) {
       this.notify(String(e), 'error');
     } finally {
@@ -895,6 +934,8 @@ Reload the theme to see those changes?${lose}`, {
   async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string } = {}) {
     const p = this.project;
     if (!p) return;
+    // Designs style theme.xml's screens, not the loading screens.
+    if (this.screenFile !== 'theme.xml') this.showScreen({ view: this.viewNames.includes('system') ? 'system' : (this.viewNames[0] ?? 'system'), file: 'theme.xml' });
     const artRel = `_inc/ccs/${design.id}`;
     const wrote = await this.writeArt(artRel, designAssets(design));
     const font = await this.ensureFont(design.font);
@@ -1017,13 +1058,13 @@ Reload the theme to see those changes?${lose}`, {
   /** The theme's own screen transition (`<theme defaultTransition="...">`), or "" for RetroBat's. */
   get themeTransition(): string {
     this.rev;
-    const root = this.project?.entry?.doc.root;
+    const root = this.project?.fileAt('theme.xml')?.doc.root;
     return (root && attr(root, 'defaultTransition')) || '';
   }
 
   /** Sets the transition RetroBat uses between screens when its Transition Style is Auto. */
   setThemeTransition(value: string) {
-    const entry = this.project?.entry;
+    const entry = this.project?.fileAt('theme.xml');
     const root = entry?.doc.root;
     if (!entry || !root || value === this.themeTransition) return;
     const patch = value ? patchSetAttr(entry.doc, root, 'defaultTransition', value) : patchRemoveAttr(entry.doc, root, 'defaultTransition');
@@ -1202,9 +1243,7 @@ Reload the theme to see those changes?${lose}`, {
         if (!msg.startsWith('CHANGED_OUTSIDE:')) throw e;
         const changed = JSON.parse(msg.slice('CHANGED_OUTSIDE:'.length)) as string[];
         const overwrite = await ask(
-          `Another program changed ${changed.length === 1 ? 'this file' : 'these files'} since ChannelCraft read ${changed.length === 1 ? 'it' : 'them'}: ${changed.join(', ')}.
-
-Saving now replaces those changes with yours. (A backup of the theme was made when you first saved this session.)`,
+          `Another program changed ${changed.length === 1 ? 'this file' : 'these files'} since ChannelCraft read ${changed.length === 1 ? 'it' : 'them'}: ${changed.join(', ')}.\n\nSaving now replaces those changes with yours. (A backup of the theme was made when you first saved this session.)`,
           { title: 'Files changed outside ChannelCraft', kind: 'warning', okLabel: 'Save mine anyway', cancelLabel: 'Don’t save' },
         );
         if (!overwrite) {

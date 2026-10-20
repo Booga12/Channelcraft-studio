@@ -11,7 +11,9 @@
   import type { SystemInfo } from '$lib/theme/systems';
   import { elementLabel } from '$lib/friendly';
   import { fontState } from '$lib/preview.svelte';
-  import { pathKey } from '$lib/path';
+  import { join, pathKey } from '$lib/path';
+  import { cssColor } from '$lib/theme/schema';
+  import { splashScene } from '$lib/theme/splash';
   import PreviewElement from './PreviewElement.svelte';
   import ContactSheet from './ContactSheet.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
@@ -106,7 +108,12 @@
     return isVisible(e);
   }
 
+  /** RetroBat's loading screens (splash.xml, gamesplash.xml) follow their own drawing rules. */
+  const splash = $derived(ed.screenFile !== 'theme.xml' && ed.project?.entry ? splashScene(ed.currentView, ed.project.entry, join(ed.root?.resourcesDir ?? '', 'splash.svg')) : null);
+  const bar = $derived(splash?.bar);
+
   const drawn = $derived.by(() => {
+    if (splash) return splash.elements.filter((e) => !ed.hidden[e.name]);
     const v = ed.currentView;
     if (!v) return [];
     return [...v.elements.values()]
@@ -513,6 +520,7 @@
               style:width="{dims.width}px"
               style:height="{dims.height}px"
               style:transform="scale({scale})"
+              style:background={splash ? cssColor(splash.backgroundColor, '#000') : undefined}
               style:--s={scale}
               onpointerdown={pointerdown}
               onpointermove={pointermove}
@@ -520,8 +528,24 @@
               onpointercancel={pointerup}
               {oncontextmenu}
             >
-              {#each drawn as el (el.name)}
+              {#if splash && bar}
+                <!-- RetroBat's progress bar, shown 60% full. -->
+                <div
+                  class="splash-bar"
+                  style:left="{bar.x * dims.width}px"
+                  style:top="{bar.y * dims.height}px"
+                  style:width="{bar.w * dims.width}px"
+                  style:height="{bar.h * dims.height}px"
+                  style:border-radius="{Math.max(bar.w * dims.width, bar.h * dims.height) * bar.round}px"
+                  style:z-index={1000 + splash.barIndex}
+                  style:background="linear-gradient(to right, {cssColor(bar.color)}, {cssColor(bar.colorEnd)})"
+                >
+                  <div style:width="60%" style:background="linear-gradient(to right, {cssColor(bar.activeColor)}, {cssColor(bar.activeColorEnd)})"></div>
+                </div>
+              {/if}
+              {#each drawn as el, i (el.name)}
                 <PreviewElement
+                  z={splash ? 1000 + i + (i >= splash.barIndex ? 1 : 0) : undefined}
                   {el}
                   W={dims.width}
                   H={dims.height}
@@ -605,6 +629,11 @@
       </div>
     {:else}
       <span class="faint" title="This console has no scraped games in RetroBat, so made-up sample details are shown. Scrape it in RetroBat to preview your own games.">Sample game (made-up details)</span>
+    {/if}
+    {#if splash?.ignored.length}
+      <span class="warn-note" title="On a loading screen RetroBat only draws its background, label and progress bar, plus elements marked extra=&quot;true&quot;. Not drawn: {splash.ignored.join(', ')}">
+        ⚠ {splash.ignored.length} element{splash.ignored.length === 1 ? '' : 's'} RetroBat won't draw here
+      </span>
     {/if}
     <span class="spacer"></span>
     <div class="group toggles" role="group" aria-label="Canvas options">
@@ -722,6 +751,18 @@
     background: #000;
     user-select: none;
     touch-action: none;
+  }
+  .warn-note {
+    color: var(--warn);
+    font-size: 11.5px;
+  }
+  .splash-bar {
+    position: absolute;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .splash-bar > div {
+    height: 100%;
   }
   .overlay {
     position: absolute;

@@ -171,4 +171,28 @@ describe('editor operations (starter theme, in memory)', () => {
     ed.undo(true);
     expect(ed.project!.entry!.src).toBe(original);
   });
+
+  it('edits the loading screen in splash.xml, leaving theme.xml alone', () => {
+    const p = ed.project!;
+    const splash = p.addFile('splash.xml', `<theme>
+  <formatVersion>7</formatVersion>
+  <view name="splash">
+    <text name="label">
+      <pos>0.5 0.8</pos>
+    </text>
+  </view>
+</theme>
+`);
+    ed.rev++;
+    expect(ed.screens.map((t) => t.id)).toContain('@splash.xml');
+    ed.showScreen({ view: 'splash', file: 'splash.xml' });
+    expect(ed.currentView!.elements.has('label')).toBe(true);
+    ed.setProps('label', { pos: '0.5 0.7' });
+    expect(splash.src).toContain('<pos>0.5 0.7</pos>');
+    expect(p.fileAt('theme.xml')!.src).toBe(original);
+    // Back on a theme.xml screen, edits go to theme.xml again.
+    ed.showScreen({ view: 'detailed', file: 'theme.xml' });
+    expect(ed.currentView!.elements.has('md_image')).toBe(true);
+    expect(p.entry!.rel).toBe('theme.xml');
+  });
 });

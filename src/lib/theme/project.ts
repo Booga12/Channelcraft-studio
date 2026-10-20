@@ -43,8 +43,19 @@ export class ThemeProject {
     this.assetKeys = new Set(entries.map((e) => pathKey(join(this.dir, e.rel))));
   }
 
+  /**
+   * The file the screen being edited starts from: theme.xml, or splash.xml / gamesplash.xml for
+   * RetroBat's loading and game launch screens. New elements and preset blocks go into it.
+   */
+  entryRel = 'theme.xml';
+
   get entry(): ThemeFile | undefined {
-    return this.files.get(pathKey(join(this.dir, 'theme.xml')));
+    return this.fileAt(this.entryRel);
+  }
+
+  /** A theme file by its path relative to the theme folder. */
+  fileAt(rel: string): ThemeFile | undefined {
+    return this.files.get(pathKey(join(this.dir, rel)));
   }
 
   file(abs: string): ThemeFile | undefined {

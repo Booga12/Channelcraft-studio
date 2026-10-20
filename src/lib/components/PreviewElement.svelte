@@ -19,7 +19,7 @@
     if (days < 365) return `${Math.round(days / 30)} months ago`;
     return `${Math.round(days / 365)} years ago`;
   }
-  import { alphaOf, boxOf, familyFor, fontState, formatDate, imageSize, isWhite, opaque } from '$lib/preview.svelte';
+  import { alphaOf, boxOf, familyFor, fontState, formatDate, imageSize, isWhite, opaque, stretchedSvg, svgState } from '$lib/preview.svelte';
   import { zOf } from '$lib/render';
   import { isDataBound } from '$lib/theme/library';
   import { elementLabel } from '$lib/friendly';
@@ -37,6 +37,7 @@
     view,
     locked = false,
     animate = false,
+    z,
   }: {
     el: ResolvedElement;
     W: number;
@@ -51,6 +52,8 @@
     locked?: boolean;
     /** Play the element's storyboard animation as a CSS approximation. */
     animate?: boolean;
+    /** Stacking position when the screen has a fixed drawing order (loading screens). */
+    z?: number;
   } = $props();
 
   /** Where RetroBat's own artwork elements get their pictures from in the game's data. */
@@ -111,6 +114,18 @@
     imgPath;
     natural = null;
   });
+
+  /** With both sides of `size` set, RetroBat stretches the picture (SVGs too) to fill it exactly. */
+  const stretch = $derived.by(() => {
+    const sz = parsePair(val('size'));
+    return !!sz && sz[0] > 0 && sz[1] > 0;
+  });
+  function displayUrl(p: string): string {
+    const u = fileUrl(p);
+    if (!stretch || !/\.svg$/i.test(p)) return u;
+    svgState.loaded;
+    return stretchedSvg(u) ?? u;
+  }
 
   const imgSize = $derived(el.type === 'image' || el.type === 'video' ? imageSize(el, W, H, natural) : null);
 
@@ -194,7 +209,7 @@
 
   const wrapStyle = $derived.by(() => {
     const base = `translate(${-box.ox * 100}%, ${-box.oy * 100}%) rotate(${box.rotation}deg)`;
-    const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
+    const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${z ?? Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
     const anim = animate ? animationCss(el, W, H, base) : null;
     if (anim) s.push(`animation:${anim}`);
     if (outer.w !== null) s.push(`width:${outer.w}px`);
@@ -327,7 +342,7 @@
 <div class="el {el.type}" class:selected class:ghost class:locked data-name={el.name} style={wrapStyle}>
   {#if el.type === 'image'}
     {#if imgPath}
-      {@const url = fileUrl(imgPath)}
+      {@const url = displayUrl(imgPath)}
       {#if val('tile') === 'true'}
         <div class="fill" style="background-image:url(&quot;{url}&quot;);background-repeat:repeat"></div>
       {:else}
