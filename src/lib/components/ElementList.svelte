@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ed } from '$lib/editor.svelte';
   import { ADDABLE_TYPES, ELEMENT_LABELS } from '$lib/theme/schema';
+  import { elementLabel, TYPE_LABELS, typeLabel } from '$lib/friendly';
   import { isVisible, TYPE_ICON, zOf } from '$lib/render';
 
   let filter = $state('');
@@ -11,7 +12,7 @@
     if (!v) return [];
     const q = filter.trim().toLowerCase();
     return [...v.elements.values()]
-      .filter((e) => !q || e.name.toLowerCase().includes(q) || e.type.includes(q) || (ELEMENT_LABELS[e.name] ?? '').toLowerCase().includes(q))
+      .filter((e) => !q || e.name.toLowerCase().includes(q) || e.type.includes(q) || elementLabel(e.name).toLowerCase().includes(q))
       .sort((a, b) => zOf(b) - zOf(a) || a.order - b.order);
   });
 
@@ -25,11 +26,14 @@
   <div class="head">
     <input placeholder="Filter elements…" bind:value={filter} />
     <div class="add">
-      <button class="small" onclick={() => (adding = !adding)} title="Add an element to this view">＋ Add</button>
+      <button class="small" onclick={() => (adding = !adding)} title="Add a picture, text or other element to this screen">＋ Add</button>
       {#if adding}
         <div class="menu" role="menu">
           {#each ADDABLE_TYPES as t}
-            <button class="ghost" role="menuitem" onclick={() => add(t)}><span class="ic">{TYPE_ICON[t] ?? '•'}</span>{t}</button>
+            <button class="ghost item" role="menuitem" onclick={() => add(t)} title={TYPE_LABELS[t]?.help ?? ''}>
+              <span class="ic">{TYPE_ICON[t] ?? '•'}</span>
+              <span class="txt"><span>{typeLabel(t)}</span>{#if ed.simple && TYPE_LABELS[t]?.help}<small class="faint">{TYPE_LABELS[t].help}</small>{/if}</span>
+            </button>
           {/each}
         </div>
       {/if}
@@ -47,15 +51,15 @@
           onclick={() => (ed.hidden[el.name] = !ed.hidden[el.name])}>{ed.hidden[el.name] ? '◌' : '●'}</button
         >
         <button class="row ghost" onclick={() => (ed.selected = el.name)}>
-          <span class="ic" title={el.type}>{TYPE_ICON[el.type] ?? '•'}</span>
+          <span class="ic" title={typeLabel(el.type)}>{TYPE_ICON[el.type] ?? '•'}</span>
           <span class="name">
-            {ELEMENT_LABELS[el.name] ?? el.name}
-            {#if ELEMENT_LABELS[el.name]}<span class="faint mono">{el.name}</span>{/if}
+            {ed.simple ? elementLabel(el.name) : (ELEMENT_LABELS[el.name] ?? el.name)}
+            {#if !ed.simple && ELEMENT_LABELS[el.name]}<span class="faint mono">{el.name}</span>{/if}
           </span>
-          {#if el.conditional}<span class="badge" title="Some definitions only apply under conditions">if</span>{/if}
-          {#if el.unknownConditions}<span class="badge warn" title="A condition couldn't be evaluated; it's shown as if true">?</span>{/if}
+          {#if !ed.simple && el.conditional}<span class="badge" title="Some definitions only apply under conditions">if</span>{/if}
+          {#if !ed.simple && el.unknownConditions}<span class="badge warn" title="A condition couldn't be evaluated; it's shown as if true">?</span>{/if}
           {#if !isVisible(el)}<span class="badge" title="visible is false">hidden</span>{/if}
-          <span class="z faint mono" title="zIndex">{zOf(el)}</span>
+          {#if !ed.simple}<span class="z faint mono" title="zIndex">{zOf(el)}</span>{/if}
         </button>
       </li>
     {/each}
@@ -90,8 +94,21 @@
     min-width: 150px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   }
-  .menu button {
+  .menu {
+    min-width: 240px;
+  }
+  .menu .item {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
     text-align: left;
+  }
+  .txt {
+    display: grid;
+  }
+  .txt small {
+    font-size: 11px;
+    white-space: normal;
   }
   ul {
     list-style: none;

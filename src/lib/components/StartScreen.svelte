@@ -6,6 +6,27 @@
 
   let dialog = $state<{ mode: 'new' | 'duplicate'; source?: ThemeInfo } | null>(null);
   let filter = $state('');
+  let choosing = $state<ThemeInfo | null>(null);
+  let dontAsk = $state(false);
+
+  function openTheme(t: ThemeInfo) {
+    if (ed.askCopy) choosing = t;
+    else ed.openTheme(t.path);
+  }
+
+  function chooseCopy() {
+    const t = choosing!;
+    if (dontAsk) ed.setAskCopy(false);
+    choosing = null;
+    dialog = { mode: 'duplicate', source: t };
+  }
+
+  function chooseOriginal() {
+    const t = choosing!;
+    if (dontAsk) ed.setAskCopy(false);
+    choosing = null;
+    ed.openTheme(t.path);
+  }
 
   const shown = $derived(ed.themes.filter((t) => t.name.toLowerCase().includes(filter.trim().toLowerCase())));
 
@@ -48,6 +69,12 @@
     </section>
   {:else}
     <section class="themes">
+      {#if ed.simple}
+        <div class="intro">
+          <strong>Welcome!</strong>
+          <span class="dim">Pick a theme below and click <em>Edit</em> to change its look, or start fresh with <em>New theme</em>. Your changes only reach RetroBat when you save, and a backup is made first.</span>
+        </div>
+      {/if}
       <div class="bar">
         <h2>Themes <span class="faint">{ed.themes.length}</span></h2>
         <input placeholder="Filter…" bind:value={filter} />
@@ -58,7 +85,7 @@
       <div class="grid">
         {#each shown as t (t.path)}
           <article class="card">
-            <button class="thumb" onclick={() => ed.openTheme(t.path)} title="Open {t.name}" disabled={ed.loading}>
+            <button class="thumb" onclick={() => openTheme(t)} title="Open {t.name}" disabled={ed.loading}>
               {#if t.preview}
                 <img src={fileUrl(t.preview)} alt="" loading="lazy" />
               {:else}
@@ -72,7 +99,7 @@
               <div class="name" title={t.name}>{t.name}</div>
               <div class="actions">
                 <button class="small" onclick={() => (dialog = { mode: 'duplicate', source: t })} title="Copy this theme to a new folder and edit the copy">Duplicate</button>
-                <button class="small primary" onclick={() => ed.openTheme(t.path)} disabled={ed.loading}>Open</button>
+                <button class="small primary" onclick={() => openTheme(t)} disabled={ed.loading}>Edit</button>
               </div>
             </div>
           </article>
@@ -84,6 +111,29 @@
     </section>
   {/if}
 </div>
+
+{#if choosing}
+  <div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && (choosing = null)} onkeydown={(e) => e.key === 'Escape' && (choosing = null)}>
+    <div class="choose" role="dialog" aria-modal="true">
+      <h2>Edit “{choosing.name}”</h2>
+      <p class="dim">Editing a copy keeps the original safe, so you can always switch back to it in RetroBat.</p>
+      <div class="opts">
+        <button class="opt primary" onclick={chooseCopy}>
+          <strong>Make a copy and edit it</strong>
+          <span>Recommended</span>
+        </button>
+        <button class="opt" onclick={chooseOriginal}>
+          <strong>Edit the original</strong>
+          <span>A backup is still made before the first save</span>
+        </button>
+      </div>
+      <div class="foot">
+        <label class="chk"><input type="checkbox" bind:checked={dontAsk} /> Don't ask again</label>
+        <button class="ghost" onclick={() => (choosing = null)}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if dialog}
   <NewThemeDialog mode={dialog.mode} source={dialog.source} oncreated={created} oncancel={() => (dialog = null)} />
@@ -235,5 +285,63 @@
   }
   .loading {
     margin-top: 16px;
+  }
+  .intro {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    background: var(--accent-soft);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+  }
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: grid;
+    place-items: center;
+    z-index: 100;
+  }
+  .choose {
+    width: min(480px, 92vw);
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    padding: 20px 22px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  .choose h2 {
+    margin: 0 0 6px;
+    font-size: 16px;
+  }
+  .opts {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .opt {
+    display: grid;
+    gap: 2px;
+    text-align: left;
+    padding: 10px 14px;
+    white-space: normal;
+  }
+  .opt span {
+    font-size: 12px;
+    opacity: 0.8;
+  }
+  .foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 14px;
+  }
+  .chk {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    color: var(--text-dim);
+    font-size: 12px;
   }
 </style>

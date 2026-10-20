@@ -9,13 +9,22 @@
   import Preview from './Preview.svelte';
   import PropertyPanel from './PropertyPanel.svelte';
   import SourceView from './SourceView.svelte';
+  import Guide from './Guide.svelte';
 
-  const tabs = [
-    { id: 'elements', label: 'Elements' },
-    { id: 'options', label: 'Options' },
-    { id: 'variables', label: 'Variables' },
-    { id: 'files', label: 'Files' },
-  ] as const;
+  const tabs = $derived(
+    ed.simple
+      ? ([
+          { id: 'elements', label: 'Elements', title: 'Everything drawn on this screen' },
+          { id: 'options', label: 'Options', title: 'Choices the theme offers in RetroBat' },
+          { id: 'variables', label: 'Colours', title: 'Colours shared across the theme' },
+        ] as const)
+      : ([
+          { id: 'elements', label: 'Elements', title: 'Everything drawn in this view' },
+          { id: 'options', label: 'Options', title: 'Theme options (subsets)' },
+          { id: 'variables', label: 'Variables', title: 'Theme variables' },
+          { id: 'files', label: 'Files', title: 'XML files in the theme' },
+        ] as const),
+  );
 
   function inField(t: EventTarget | null) {
     const el = t as HTMLElement | null;
@@ -40,6 +49,8 @@
       const [dx, dy] = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key] ?? [0, 0];
       e.preventDefault();
       ed.setProp(ed.selectedElement.name, 'pos', `${fmtNum(pos[0] + dx)} ${fmtNum(pos[1] + dy)}`, { coalesce: `nudge.${ed.selectedElement.name}` });
+    } else if (e.key === 'Escape' && ed.showGuide) {
+      ed.closeGuide();
     } else if (!inField(e.target) && e.key === 'Escape') {
       ed.selected = null;
     }
@@ -53,7 +64,7 @@
   <aside class="left">
     <nav class="tabs">
       {#each tabs as t}
-        <button class="tab" class:on={ed.leftTab === t.id} onclick={() => (ed.leftTab = t.id)}>
+        <button class="tab" class:on={ed.leftTab === t.id} onclick={() => (ed.leftTab = t.id)} title={t.title}>
           {t.label}
           {#if t.id === 'options' && ed.res?.subsets.length}<span class="count">{ed.res.subsets.length}</span>{/if}
         </button>
@@ -83,6 +94,10 @@
     </section>
   {/if}
 </div>
+
+{#if ed.showGuide}
+  <Guide />
+{/if}
 
 <style>
   .editor {

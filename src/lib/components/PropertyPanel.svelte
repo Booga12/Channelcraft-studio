@@ -6,6 +6,7 @@
   import { TYPE_ICON } from '$lib/render';
   import { lineOf } from '$lib/xml/cst';
   import PropRow from './PropRow.svelte';
+  import { elementLabel, propLabel, SIMPLE_PROPS, TYPE_LABELS, typeLabel, viewHelp, viewLabel } from '$lib/friendly';
 
   const GROUPS: { id: PropSpec['group']; label: string }[] = [
     { id: 'layout', label: 'Layout' },
@@ -30,6 +31,22 @@
   });
 
   let adding = $state('');
+  let showAll = $state(false);
+  $effect(() => {
+    el?.name;
+    showAll = false;
+  });
+
+  const visibleRows = $derived(ed.simple && !showAll ? rows.filter((r) => SIMPLE_PROPS.has(r.def.name)) : rows);
+  const hiddenCount = $derived(rows.length - rows.filter((r) => SIMPLE_PROPS.has(r.def.name)).length);
+
+  /** Other screens that share a definition with this element, so beginners know an edit spreads. */
+  const sharedViews = $derived.by(() => {
+    if (!el) return [];
+    const set = new Set<string>();
+    for (const d of el.defs) for (const v of sharing(d).views) if (v !== ed.view) set.add(v);
+    return [...set];
+  });
 
   function defaultFor(spec: PropSpec): string {
     switch (spec.kind) {
@@ -59,24 +76,29 @@
 
   async function remove() {
     if (!el) return;
-    const ok = await ask(`Delete “${el.name}” from the ${ed.view} view? Definitions shared with other elements or views are kept.`, { title: 'Delete element', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
+    const ok = await ask(`Delete “${elementLabel(el.name)}” from ${viewLabel(ed.view)}? Parts shared with other screens are kept. You can undo this with Ctrl+Z.`, { title: 'Delete element', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
     if (!ok) return;
     const r = ed.deleteElement(el.name);
-    if (!r.removed) ed.notify('This element is only defined in shared blocks. Set visible to false to hide it here.', 'error');
+    if (!r.removed) ed.notify('This element is shared with other screens, so it can’t be deleted here. Untick “Visible” to hide it instead.', 'error');
     else if (r.kept) ed.notify(`Deleted ${r.removed} definition(s); ${r.kept} shared definition(s) kept`);
   }
 </script>
 
 {#if !el}
   <div class="empty">
-    <h3>{ed.currentView?.displayName ?? ed.view} view</h3>
-    <p class="dim">Click an element in the preview or the Elements list to edit it.</p>
+    <h3>{viewLabel(ed.view, ed.currentView?.displayName)}</h3>
+    {#if viewHelp(ed.view)}<p class="dim">{viewHelp(ed.view)}</p>{/if}
+    <div class="pick">
+      <span class="arrow">←</span>
+      <span>Click any part of the preview, or pick it from the list on the left, to change it here.</span>
+    </div>
     <ul class="dim tips">
-      <li>Drag the selected element to move it; arrow keys nudge it (Shift for bigger steps).</li>
-      <li>Colours linked to a variable change everywhere that variable is used.</li>
-      <li>Nothing is written to disk until you press Save. A backup zip is made before the first save.</li>
+      <li>Drag the selected part to move it. Arrow keys move it a little; hold Shift for bigger steps.</li>
+      <li>Colours marked “Shared” change everywhere they are used. Find them all in the Colours tab.</li>
+      <li>Nothing is written until you press Save. A backup of the theme is made first, and Ctrl+Z undoes any change.</li>
     </ul>
-    {#if ed.res && ed.res.unknownConditions > 0}
+    <button class="small" onclick={() => (ed.showGuide = true)}>Show the getting started guide</button>
+    {#if !ed.simple && ed.res && ed.res.unknownConditions > 0}
       <p class="warn">
         {ed.res.unknownConditions} condition(s) couldn't be evaluated and are treated as true.
         <span class="mono small" title={[...ed.res.unknownExpressions].join('\n')}>Hover for details</span>
@@ -88,11 +110,18 @@
     <div class="title">
       <span class="ic">{TYPE_ICON[el.type] ?? '•'}</span>
       <div>
-        <div class="label">{ELEMENT_LABELS[el.name] ?? el.name}</div>
-        <div class="faint mono small">{el.type} name="{el.name}"{el.extra ? ` extra="${el.extra}"` : ''}</div>
+        <div class="label">{ed.simple ? elementLabel(el.name) : (ELEMENT_LABELS[el.name] ?? el.name)}</div>
+        {#if ed.simple}
+          <div class="faint small">{typeLabel(el.type)}{TYPE_LABELS[el.type]?.help ? ` · ${TYPE_LABELS[el.type].help}` : ''}</div>
+        {:else}
+          <div class="faint mono small">{el.type} name="{el.name}"{el.extra ? ` extra="${el.extra}"` : ''}</div>
+        {/if}
       </div>
     </div>
-    <div class="defs">
+    {#if ed.simple && sharedViews.length}
+      <p class="shared">Some of these settings also apply to {sharedViews.map((v) => viewLabel(v)).join(', ')}.</p>
+    {/if}
+    <div class="defs" class:hide={ed.simple}>
       {#each el.defs as d, i}
         {@const sh = sharing(d)}
         <button class="def ghost small" onclick={() => ed.showInSource(d.file, d.node.start)} title="Show this definition in the source">
@@ -109,7 +138,7 @@
   </div>
 
   {#each GROUPS as g}
-    {@const groupRows = rows.filter((r) => r.spec.group === g.id)}
+    {@const groupRows = visibleRows.filter((r) => r.spec.group === g.id)}
     {#if groupRows.length}
       <h4>{g.label}</h4>
       {#each groupRows as r (r.def.name)}
@@ -118,7 +147,13 @@
     {/if}
   {/each}
 
-  {#if el.complex.length}
+  {#if ed.simple && hiddenCount > 0}
+    <button class="more ghost" onclick={() => (showAll = !showAll)}>
+      {showAll ? 'Show fewer settings' : `Show ${hiddenCount} more setting${hiddenCount === 1 ? '' : 's'}`}
+    </button>
+  {/if}
+
+  {#if !ed.simple && el.complex.length}
     <h4>Animations and nested blocks</h4>
     {#each el.complex as c}
       <button class="def ghost small block" onclick={() => ed.showInSource(c.file, c.node.start)}>
@@ -131,9 +166,9 @@
   {#if missing.length}
     <div class="add">
       <select bind:value={adding} onchange={() => addProp(adding)}>
-        <option value="">＋ Add property…</option>
+        <option value="">{ed.simple ? '＋ Add a setting…' : '＋ Add property…'}</option>
         {#each missing as m}
-          <option value={m.name} title={m.hint}>{m.name}</option>
+          <option value={m.name} title={m.hint}>{ed.simple ? propLabel(m.name) : m.name}</option>
         {/each}
       </select>
     </div>
@@ -220,6 +255,33 @@
   }
   .add {
     padding: 12px;
+  }
+  .pick {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: var(--accent-soft);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 12px 0;
+  }
+  .arrow {
+    font-size: 20px;
+    color: var(--accent);
+  }
+  .shared {
+    margin: 0;
+    font-size: 12px;
+    color: var(--warn);
+  }
+  .defs.hide {
+    display: none;
+  }
+  .more {
+    width: calc(100% - 24px);
+    margin: 8px 12px 0;
+    color: var(--accent);
   }
   .add select {
     width: 100%;

@@ -8,6 +8,7 @@ import { resolveTheme, type ResolvedElement, type Resolution } from './theme/res
 import { STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { patchRemoveNode } from './xml/cst';
+import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 
 interface HistoryEntry {
   label: string;
@@ -34,6 +35,22 @@ const DEFAULT_SETTINGS: PreviewSettings = {
   cheevos: false,
 };
 
+function readPref(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Preferences are a convenience; ignore storage failures.
+  }
+}
+
 class Editor {
   root = $state<RootInfo | null>(null);
   themes = $state<ThemeInfo[]>([]);
@@ -54,6 +71,33 @@ class Editor {
   loading = $state(false);
   /** Theme options RetroBat has saved for the open theme (themesettings\<theme>.cfg). */
   savedSubsets: Record<string, string> = {};
+  /** Simple hides file names, line numbers and rarely used settings. */
+  mode = $state<'simple' | 'advanced'>(readPref('ccs.mode') === 'advanced' ? 'advanced' : 'simple');
+  /** Whether the getting-started guide is open. */
+  showGuide = $state(readPref('ccs.guideDone') !== '1');
+  /** Ask before editing an original theme instead of a copy. */
+  askCopy = $state(readPref('ccs.askCopy') !== '0');
+
+  setMode(m: 'simple' | 'advanced') {
+    this.mode = m;
+    writePref('ccs.mode', m);
+    if (m === 'simple' && this.leftTab === 'files') this.leftTab = 'elements';
+    if (m === 'simple') this.showSource = false;
+  }
+
+  closeGuide() {
+    this.showGuide = false;
+    writePref('ccs.guideDone', '1');
+  }
+
+  setAskCopy(v: boolean) {
+    this.askCopy = v;
+    writePref('ccs.askCopy', v ? '1' : '0');
+  }
+
+  get simple() {
+    return this.mode === 'simple';
+  }
 
   private undoStack = $state.raw<HistoryEntry[]>([]);
   private redoStack = $state.raw<HistoryEntry[]>([]);
@@ -249,27 +293,27 @@ class Editor {
       const v = varRef(def.raw);
       const vdef = v ? res.vars.get(v) : undefined;
       if (vdef && !opts.literal) {
-        this.commit(`${v} = ${value}`, [setTextChange(vdef.file, vdef.node, value)], `var.${v}`);
+        this.commit(`change of ${humanize(v!)}`, [setTextChange(vdef.file, vdef.node, value)], `var.${v}`);
       } else {
-        this.commit(`${elementName} ${prop}`, [setTextChange(def.file, def.node, value)], key);
+        this.commit(`${propLabel(prop).toLowerCase()} of ${elementLabel(elementName)}`, [setTextChange(def.file, def.node, value)], key);
       }
       return;
     }
     const target = insertTarget(el, this.view);
     if (!target) return;
-    this.commit(`add ${prop} to ${elementName}`, [addPropChange(target, prop, value)]);
+    this.commit(`${propLabel(prop).toLowerCase()} of ${elementLabel(elementName)}`, [addPropChange(target, prop, value)]);
   }
 
   setVar(name: string, value: string) {
     const vdef = this.res?.vars.get(name);
     if (!vdef) return;
-    this.commit(`${name} = ${value}`, [setTextChange(vdef.file, vdef.node, value)], `var.${name}`);
+    this.commit(`change of ${humanize(name)}`, [setTextChange(vdef.file, vdef.node, value)], `var.${name}`);
   }
 
   removeProp(elementName: string, prop: string) {
     const def = this.currentView?.elements.get(elementName)?.props.get(prop);
     if (!def) return;
-    this.commit(`remove ${prop}`, [{ file: def.file, patch: patchRemoveNode(def.file.doc, def.node) }]);
+    this.commit(`removing ${propLabel(prop).toLowerCase()}`, [{ file: def.file, patch: patchRemoveNode(def.file.doc, def.node) }]);
   }
 
   addElement(type: string) {
@@ -278,7 +322,7 @@ class Editor {
     if (!p || !res) return;
     const name = uniqueName(res, this.view, type === 'text' ? 'label' : type);
     const body = STARTER_PROPS[type] ?? '<pos>0.4 0.4</pos>\n<size>0.2 0.2</size>';
-    this.commit(`add ${type} ${name}`, [addElementChange(p, res, this.view, type, name, body)]);
+    this.commit(`adding ${typeLabel(type).toLowerCase()}`, [addElementChange(p, res, this.view, type, name, body)]);
     this.selected = name;
   }
 
@@ -375,6 +419,7 @@ class Editor {
   // ---- misc --------------------------------------------------------------------------------
 
   showInSource(file: ThemeFile, offset: number) {
+    if (this.mode === 'simple') this.setMode('advanced');
     this.sourceFile = file.key;
     let line = 1;
     for (let i = 0; i < offset && i < file.src.length; i++) if (file.src.charCodeAt(i) === 10) line++;
