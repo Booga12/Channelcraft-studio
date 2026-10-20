@@ -340,7 +340,7 @@ export function patchSetText(doc: XDoc, el: XElement, value: string): Patch {
   return { start: first.start + lead.length, end: first.end - trail.length, text: esc };
 }
 
-export function patchSetAttr(doc: XDoc, el: XElement, name: string, value: string): Patch {
+export function patchSetAttr(_doc: XDoc, el: XElement, name: string, value: string): Patch {
   const a = el.attrs.find((x) => x.name === name);
   if (a) {
     if (a.quote) return { start: a.valueStart, end: a.valueEnd, text: escapeAttr(value, a.quote) };

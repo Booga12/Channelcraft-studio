@@ -237,7 +237,10 @@
       ed.select(name, 'toggle');
       return;
     }
-    if (name && ed.isSelected(name)) {
+    // Full-screen backgrounds aren't dragged around by accident: dragging on them draws a selection box.
+    const r = name ? ed.rects[name] : null;
+    const isBackdrop = !!r && r.w > 0.98 && r.h > 0.98;
+    if (name && ed.isSelected(name) && !isBackdrop) {
       startMove(e);
       return;
     }

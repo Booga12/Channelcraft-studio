@@ -9,6 +9,9 @@ use walkdir::WalkDir;
 
 type CmdResult<T> = Result<T, String>;
 
+// Every command is sync: Tauri then runs it on a worker thread instead of the window's thread,
+// so slow work (zipping backups, scanning folders, downloads) never freezes the window.
+
 fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
@@ -165,18 +168,18 @@ fn root_info(root: &Path) -> RootInfo {
 }
 
 /// Looks for `X:\RetroBat` on every drive letter.
-#[tauri::command]
-pub fn detect_retrobat() -> Option<String> {
+#[tauri::command(async)]
+pub fn detect_retrobat() -> CmdResult<Option<String>> {
     for letter in b'C'..=b'Z' {
         let p = PathBuf::from(format!("{}:\\RetroBat", letter as char));
         if themes_dir(&p).is_dir() {
-            return Some(p.to_string_lossy().into_owned());
+            return Ok(Some(p.to_string_lossy().into_owned()));
         }
     }
-    None
+    Ok(None)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_retrobat_root(app: AppHandle, roots: State<Roots>, path: String) -> CmdResult<RootInfo> {
     let root = PathBuf::from(&path);
     if !themes_dir(&root).is_dir() {
@@ -188,12 +191,12 @@ pub fn set_retrobat_root(app: AppHandle, roots: State<Roots>, path: String) -> C
     Ok(root_info(&root))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn root_status(roots: State<Roots>) -> CmdResult<RootInfo> {
     Ok(root_info(&roots.root()?))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_themes(roots: State<Roots>) -> CmdResult<Vec<ThemeInfo>> {
     let dir = themes_dir(&roots.root()?);
     let mut out = Vec::new();
@@ -224,7 +227,7 @@ pub fn list_themes(roots: State<Roots>) -> CmdResult<Vec<ThemeInfo>> {
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_theme_files(dir: String) -> CmdResult<Vec<FileEntry>> {
     let base = PathBuf::from(&dir);
     let mut out = Vec::new();
@@ -239,7 +242,7 @@ pub fn list_theme_files(dir: String) -> CmdResult<Vec<FileEntry>> {
 }
 
 /// Reads every XML file in a theme in one round trip.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_theme_xml(dir: String) -> CmdResult<Vec<TextFile>> {
     let mut out = Vec::new();
     for e in WalkDir::new(&dir).into_iter().flatten() {
@@ -250,18 +253,18 @@ pub fn read_theme_xml(dir: String) -> CmdResult<Vec<TextFile>> {
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_text(path: String) -> CmdResult<TextFile> {
     read_text_file(Path::new(&path))
 }
 
-#[tauri::command]
-pub fn read_text_optional(path: String) -> Option<TextFile> {
-    read_text_file(Path::new(&path)).ok()
+#[tauri::command(async)]
+pub fn read_text_optional(path: String) -> CmdResult<Option<TextFile>> {
+    Ok(read_text_file(Path::new(&path)).ok())
 }
 
 /// Writes through a temp file and rename, keeping the BOM state the file had.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_text(roots: State<Roots>, path: String, text: String, bom: bool) -> CmdResult<()> {
     let p = PathBuf::from(&path);
     ensure_writable(&roots, &p)?;
@@ -302,7 +305,7 @@ fn timestamp() -> String {
 
 /// Zips a whole theme folder into the app's backups folder and returns the zip path. With `keep`,
 /// only that many of the newest backups of this theme are kept.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_theme(app: AppHandle, dir: String, keep: Option<usize>) -> CmdResult<String> {
     let src = PathBuf::from(&dir);
     let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "theme".into());
@@ -332,7 +335,7 @@ pub fn backup_theme(app: AppHandle, dir: String, keep: Option<usize>) -> CmdResu
 }
 
 /// Zips a theme to a file the user chose, ready to share or copy to another RetroBat.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_theme(dir: String, dest: String) -> CmdResult<String> {
     let src = PathBuf::from(&dir);
     if !src.join("theme.xml").is_file() {
@@ -345,14 +348,17 @@ pub fn export_theme(dir: String, dest: String) -> CmdResult<String> {
 
 fn zip_dir(src: &Path, name: &str, zip_path: &Path) -> CmdResult<()> {
     let file = fs::File::create(zip_path).map_err(err)?;
-    let mut zip = zip::ZipWriter::new(file);
-    let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    for e in WalkDir::new(&src).into_iter().flatten() {
+    let mut zip = zip::ZipWriter::new(std::io::BufWriter::new(file));
+    let deflate = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    // Pictures, videos, sounds and fonts are already compressed: storing them is much faster.
+    let store = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for e in WalkDir::new(src).into_iter().flatten() {
         if !e.file_type().is_file() {
             continue;
         }
-        let rel = e.path().strip_prefix(&src).map_err(err)?.to_string_lossy().replace('\\', "/");
-        zip.start_file(format!("{name}/{rel}"), opts).map_err(err)?;
+        let rel = e.path().strip_prefix(src).map_err(err)?.to_string_lossy().replace('\\', "/");
+        let packed = matches!(file_kind(e.path()), "image" | "video" | "sound" | "font") && !rel.to_lowercase().ends_with(".svg");
+        zip.start_file(format!("{name}/{rel}"), if packed { store } else { deflate }).map_err(err)?;
         let mut f = fs::File::open(e.path()).map_err(err)?;
         std::io::copy(&mut f, &mut zip).map_err(err)?;
     }
@@ -360,13 +366,13 @@ fn zip_dir(src: &Path, name: &str, zip_path: &Path) -> CmdResult<()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backups_dir(app: AppHandle) -> CmdResult<String> {
     Ok(app.path().app_data_dir().map_err(err)?.join("backups").to_string_lossy().into_owned())
 }
 
 /// Writes binary data (base64) inside the themes folder, e.g. a preview.png or artwork.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_binary(roots: State<Roots>, path: String, base64: String) -> CmdResult<()> {
     use base64::Engine;
     let p = PathBuf::from(&path);
@@ -380,7 +386,7 @@ pub fn write_binary(roots: State<Roots>, path: String, base64: String) -> CmdRes
 
 /// Copies every file of a folder (from any installed theme) into a theme's subfolder, keeping
 /// files that are already there. Returns how many files were copied.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn copy_folder_into_theme(roots: State<Roots>, src: String, theme_dir: String, dest_rel: String) -> CmdResult<usize> {
     let root = roots.root()?;
     let src_p = PathBuf::from(&src);
@@ -413,17 +419,17 @@ fn recovery_path(app: &AppHandle, key: &str) -> CmdResult<PathBuf> {
 }
 
 /// Keeps unsaved edits outside the theme, so they can be offered back after a crash.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_recovery(app: AppHandle, key: String, data: String) -> CmdResult<()> {
     fs::write(recovery_path(&app, &key)?, data).map_err(err)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn load_recovery(app: AppHandle, key: String) -> CmdResult<Option<String>> {
     Ok(fs::read_to_string(recovery_path(&app, &key)?).ok())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn clear_recovery(app: AppHandle, key: String) -> CmdResult<()> {
     let p = recovery_path(&app, &key)?;
     if p.exists() {
@@ -433,7 +439,7 @@ pub fn clear_recovery(app: AppHandle, key: String) -> CmdResult<()> {
 }
 
 /// Systems that have a scraped gamelist in RetroBat's roms folder.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_gamelists(roots: State<Roots>) -> CmdResult<Vec<String>> {
     let roms = roots.root()?.join("roms");
     let mut out: Vec<String> = fs::read_dir(&roms)
@@ -446,7 +452,7 @@ pub fn list_gamelists(roots: State<Roots>) -> CmdResult<Vec<String>> {
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_gamelist(roots: State<Roots>, system: String) -> CmdResult<Option<TextFile>> {
     if system.contains(['\\', '/', ':']) || system.starts_with('.') {
         return Err("Bad system name".into());
@@ -464,7 +470,7 @@ pub struct FontEntry {
 }
 
 /// Fonts that can be copied into a theme: Windows fonts and the fonts of installed themes.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_fonts(roots: State<Roots>) -> CmdResult<Vec<FontEntry>> {
     let mut out = Vec::new();
     let is_font = |p: &Path| matches!(p.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref(), Some("ttf") | Some("otf"));
@@ -495,7 +501,7 @@ pub fn list_fonts(roots: State<Roots>) -> CmdResult<Vec<FontEntry>> {
 }
 
 /// Copies a font file into the theme's fonts folder; returns its theme-relative path.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_font_to_theme(roots: State<Roots>, theme_dir: String, src: String) -> CmdResult<String> {
     let src_p = PathBuf::from(&src);
     let file_name = src_p.file_name().ok_or("No file name")?.to_string_lossy().into_owned();
@@ -509,7 +515,7 @@ pub fn add_font_to_theme(roots: State<Roots>, theme_dir: String, src: String) ->
 }
 
 /// Downloads an open-licence font from the Google Fonts repository into the theme.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn download_font(roots: State<Roots>, theme_dir: String, url: String, file_name: String) -> CmdResult<String> {
     const ALLOWED: &str = "https://raw.githubusercontent.com/google/fonts/main/";
     if !url.starts_with(ALLOWED) || file_name.contains(['\\', '/', ':']) {
@@ -551,14 +557,14 @@ fn new_theme_path(roots: &Roots, name: &str) -> CmdResult<PathBuf> {
     Ok(dest)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn copy_theme(roots: State<Roots>, src: String, name: String) -> CmdResult<String> {
     let dest = new_theme_path(&roots, &name)?;
     copy_dir(Path::new(&src), &dest)?;
     Ok(dest.to_string_lossy().into_owned())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: String) -> CmdResult<String> {
     let dest = new_theme_path(&roots, &name)?;
     let starter = app
@@ -576,7 +582,7 @@ pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: Stri
 }
 
 /// Copies a file the user picked into the theme and returns its theme-relative path.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_asset(roots: State<Roots>, theme_dir: String, src: String, dest_rel_dir: String) -> CmdResult<String> {
     let src_p = PathBuf::from(&src);
     let file_name = src_p.file_name().ok_or("No file name")?.to_string_lossy().into_owned();
@@ -600,7 +606,7 @@ pub fn import_asset(roots: State<Roots>, theme_dir: String, src: String, dest_re
 
 /// Moves a theme folder to the Recycle Bin after zipping a backup of it. The theme RetroBat is
 /// currently using can't be deleted, so RetroBat always has a theme to start with.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_theme(app: AppHandle, roots: State<Roots>, dir: String) -> CmdResult<String> {
     let root = roots.root()?;
     let path = PathBuf::from(&dir);
@@ -619,14 +625,14 @@ pub fn delete_theme(app: AppHandle, roots: State<Roots>, dir: String) -> CmdResu
 }
 
 /// Theme option choices RetroBat saved for this theme, as raw `key=value` text.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_themesettings(roots: State<Roots>, theme: String) -> CmdResult<String> {
     let p = es_home(&roots.root()?).join("themesettings").join(format!("{theme}.cfg"));
     Ok(fs::read_to_string(p).unwrap_or_default())
 }
 
 /// Sets `ThemeSet` in es_settings.cfg, after copying the file to es_settings.cfg.bak.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_active_theme(roots: State<Roots>, theme: String) -> CmdResult<()> {
     let root = roots.root()?;
     if !themes_dir(&root).join(&theme).join("theme.xml").is_file() {
@@ -653,7 +659,7 @@ pub fn set_active_theme(roots: State<Roots>, theme: String) -> CmdResult<()> {
     fs::write(&cfg_path, text).map_err(err)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn launch_retrobat(roots: State<Roots>) -> CmdResult<()> {
     let root = roots.root()?;
     let exe = root.join("RetroBat.exe");
@@ -684,6 +690,24 @@ mod tests {
         assert!(valid_theme_name("a/b").is_err());
         assert!(valid_theme_name("..").is_err());
         assert!(valid_theme_name(" ").is_err());
+    }
+
+    #[test]
+    fn zips_a_theme_storing_media_and_compressing_text() {
+        let base = std::env::temp_dir().join(format!("ccs-zip-test-{}", std::process::id()));
+        let theme = base.join("My Theme");
+        fs::create_dir_all(theme.join("_inc")).unwrap();
+        fs::write(theme.join("theme.xml"), "<theme>".repeat(200)).unwrap();
+        fs::write(theme.join("_inc").join("bg.png"), vec![7u8; 4096]).unwrap();
+        let zip_path = base.join("out.zip");
+        zip_dir(&theme, "My Theme", &zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(fs::File::open(&zip_path).unwrap()).unwrap();
+        let mut names: Vec<String> = (0..archive.len()).map(|i| archive.by_index(i).unwrap().name().to_string()).collect();
+        names.sort();
+        assert_eq!(names, vec!["My Theme/_inc/bg.png", "My Theme/theme.xml"]);
+        assert_eq!(archive.by_name("My Theme/_inc/bg.png").unwrap().compression(), zip::CompressionMethod::Stored);
+        assert_eq!(archive.by_name("My Theme/theme.xml").unwrap().compression(), zip::CompressionMethod::Deflated);
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]

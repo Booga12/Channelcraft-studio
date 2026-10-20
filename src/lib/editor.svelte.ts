@@ -373,6 +373,8 @@ class Editor {
   commit(label: string, changes: Change[], coalesce?: string) {
     const p = this.project;
     if (!p || !changes.length) return;
+    // A slow action (downloads, artwork) may finish after its theme was closed or another opened.
+    if (!changes.every((c) => p.files.get(c.file.key) === c.file)) return;
     // Where each patch starts before applying, in the order applyChanges reports them.
     const byFile = new Map<string, number[]>();
     for (const c of changes) byFile.set(c.file.key, [...(byFile.get(c.file.key) ?? []), c.patch.start]);
@@ -814,22 +816,12 @@ class Editor {
   async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[] } = {}) {
     const p = this.project;
     if (!p) return;
-    await this.ensureBackup();
     const artRel = `_inc/ccs/${design.id}`;
-    const assets = designAssets(design);
-    let wrote = true;
-    for (const [file, svg] of Object.entries(assets)) {
-      const abs = join(p.dir, artRel, file);
-      registerVirtualFile(abs, svg);
-      try {
-        await api.writeText(abs, svg, false);
-      } catch {
-        wrote = false;
-      }
-    }
-    p.setAssets([...p.assets.filter((a) => !a.rel.startsWith(`${artRel}/`)), ...Object.keys(assets).map((f) => ({ rel: `${artRel}/${f}`, kind: 'image' as const, size: 0 }))]);
+    const wrote = await this.writeArt(artRel, designAssets(design));
     const font = await this.ensureFont(design.font);
     const titleFont = design.titleFont ? await this.ensureFont(design.titleFont) : null;
+    // The theme may have been closed while the fonts downloaded.
+    if (this.project !== p) return;
     const has = (dir: string) => p.assets.some((a) => a.rel.toLowerCase().startsWith(`${dir}/`));
     const ctx = {
       art: `./${artRel}`,
@@ -852,7 +844,20 @@ class Editor {
    * Finds the folders of system logos and console pictures in an installed theme, by counting
    * image files named after systems.
    */
-  async findConsoleArt(themeDir: string): Promise<{ logos: string | null; consoles: string | null; logoCount: number; consoleCount: number }> {
+  private consoleArtCache = new Map<string, Promise<{ logos: string | null; consoles: string | null; logoCount: number; consoleCount: number }>>();
+
+  /** Cached per theme folder: scanning a big theme takes a moment. */
+  findConsoleArt(themeDir: string) {
+    let p = this.consoleArtCache.get(themeDir);
+    if (!p) {
+      p = this.scanConsoleArt(themeDir);
+      this.consoleArtCache.set(themeDir, p);
+      p.catch(() => this.consoleArtCache.delete(themeDir));
+    }
+    return p;
+  }
+
+  private async scanConsoleArt(themeDir: string): Promise<{ logos: string | null; consoles: string | null; logoCount: number; consoleCount: number }> {
     const files = await api.listThemeFiles(themeDir);
     const names = new Set(this.systems.map((s) => s.theme.toLowerCase()));
     const counts = new Map<string, number>();
