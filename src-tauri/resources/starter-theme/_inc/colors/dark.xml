@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<theme>
+  <variables>
+    <bgColor>15171CFF</bgColor>
+    <panelColor>FFFFFF14</panelColor>
+    <textColor>F2F4F8FF</textColor>
+    <dimTextColor>A0A7B4FF</dimTextColor>
+    <accentColor>4C8DFFFF</accentColor>
+    <selectedTextColor>FFFFFFFF</selectedTextColor>
+  </variables>
+</theme>

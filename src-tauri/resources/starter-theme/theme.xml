@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Starter theme created with ChannelCraft Studio. -->
+<theme defaultView="detailed">
+  <formatVersion>7</formatVersion>
+
+  <!-- Theme options. Each colour set is a file holding a <variables> block. -->
+  <subset name="colorset" displayName="Color set">
+    <include name="dark" displayName="Dark">./_inc/colors/dark.xml</include>
+    <include name="light" displayName="Light">./_inc/colors/light.xml</include>
+  </subset>
+
+  <!-- Shared by every view. -->
+  <view name="system, basic, detailed, video">
+    <image name="background" extra="true">
+      <pos>0 0</pos>
+      <size>1 1</size>
+      <path>./_inc/images/background.svg</path>
+      <color>${bgColor}</color>
+      <zIndex>0</zIndex>
+    </image>
+    <helpsystem name="help">
+      <pos>0.015 0.955</pos>
+      <textColor>${dimTextColor}</textColor>
+      <iconColor>${dimTextColor}</iconColor>
+    </helpsystem>
+  </view>
+
+  <view name="system">
+    <image name="band" extra="true">
+      <pos>0 0.36</pos>
+      <size>1 0.28</size>
+      <path>./_inc/images/band.svg</path>
+      <color>${panelColor}</color>
+      <zIndex>10</zIndex>
+    </image>
+    <carousel name="systemcarousel">
+      <type>horizontal</type>
+      <pos>0 0.38</pos>
+      <size>1 0.24</size>
+      <color>00000000</color>
+      <logoSize>0.24 0.16</logoSize>
+      <maxLogoCount>3</maxLogoCount>
+      <zIndex>40</zIndex>
+    </carousel>
+    <text name="logoText">
+      <fontSize>0.07</fontSize>
+      <color>${textColor}</color>
+      <forceUppercase>true</forceUppercase>
+    </text>
+    <text name="systemInfo">
+      <pos>0 0.66</pos>
+      <size>1 0.05</size>
+      <alignment>center</alignment>
+      <fontSize>0.03</fontSize>
+      <color>${dimTextColor}</color>
+      <backgroundColor>00000000</backgroundColor>
+    </text>
+  </view>
+
+  <view name="basic, detailed, video">
+    <text name="logoText">
+      <pos>0.04 0.05</pos>
+      <size>0.45 0.08</size>
+      <alignment>left</alignment>
+      <fontSize>0.06</fontSize>
+      <color>${textColor}</color>
+    </text>
+    <textlist name="gamelist">
+      <pos>0.53 0.14</pos>
+      <size>0.43 0.76</size>
+      <alignment>left</alignment>
+      <horizontalMargin>0.01</horizontalMargin>
+      <fontSize>0.034</fontSize>
+      <lineSpacing>1.6</lineSpacing>
+      <primaryColor>${textColor}</primaryColor>
+      <secondaryColor>${accentColor}</secondaryColor>
+      <selectedColor>${selectedTextColor}</selectedColor>
+      <selectorColor>${accentColor}</selectorColor>
+    </textlist>
+  </view>
+
+  <view name="detailed, video">
+    <image name="md_image">
+      <pos>0.26 0.38</pos>
+      <origin>0.5 0.5</origin>
+      <maxSize>0.42 0.42</maxSize>
+    </image>
+    <rating name="md_rating">
+      <pos>0.05 0.66</pos>
+      <size>0 0.035</size>
+      <color>${accentColor}</color>
+    </rating>
+    <datetime name="md_releasedate">
+      <pos>0.2 0.66</pos>
+      <fontSize>0.028</fontSize>
+      <color>${dimTextColor}</color>
+    </datetime>
+    <text name="md_description">
+      <pos>0.05 0.72</pos>
+      <size>0.42 0.19</size>
+      <fontSize>0.022</fontSize>
+      <lineSpacing>1.4</lineSpacing>
+      <color>${dimTextColor}</color>
+    </text>
+    <text name="md_lbl_rating, md_lbl_releasedate, md_lbl_developer, md_lbl_publisher, md_lbl_genre, md_lbl_players, md_lbl_lastplayed, md_lbl_playcount">
+      <visible>false</visible>
+    </text>
+    <text name="md_developer, md_publisher, md_genre, md_players, md_playcount">
+      <visible>false</visible>
+    </text>
+    <datetime name="md_lastplayed">
+      <visible>false</visible>
+    </datetime>
+  </view>
+
+  <view name="video">
+    <video name="md_video">
+      <pos>0.26 0.38</pos>
+      <origin>0.5 0.5</origin>
+      <maxSize>0.42 0.42</maxSize>
+    </video>
+  </view>
+</theme>
