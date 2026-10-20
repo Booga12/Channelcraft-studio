@@ -5,7 +5,8 @@ import { resolveTheme } from './resolver';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
 import { applyChanges } from './edits';
-import { designChanges } from './presets';
+import { appliedSystemLayout, designChanges } from './presets';
+import { SYSTEM_LAYOUTS, systemLayout } from './systemLayouts';
 import { DESIGNS, designAssets, type DesignContext } from './designs';
 import { parse, print } from '../xml/cst';
 import type { Environment } from './context';
@@ -48,7 +49,7 @@ describe('designs on the starter theme (in memory)', () => {
       const sys = r.views.get('system')!.elements;
       for (const n of SYSTEM_DATA) expect(sys.has(n), `system has ${n}`).toBe(true);
       // Consoles are shown either as a carousel or as a grid of tiles.
-      if (['grid', 'tile-row', 'big-tiles'].includes(d.system)) {
+      if (systemLayout(d.system)!.grid) {
         expect(sys.get('imagegrid')!.props.get('autoLayout')).toBeTruthy();
         expect(sys.get('selected')!.type).toBe('gridtile');
         expect(sys.get('default')!.props.get('backgroundImage')!.value).toContain(`ccs/${d.id}/panel.svg`);
@@ -60,6 +61,37 @@ describe('designs on the starter theme (in memory)', () => {
       expect(print(parse(p.entry!.src))).toBe(p.entry!.src);
     });
   }
+
+  it('every design works with every system layout, with all the system data on screen', async () => {
+    expect(SYSTEM_LAYOUTS.length).toBeGreaterThanOrEqual(16);
+    // Every layout has a design made for it.
+    for (const l of SYSTEM_LAYOUTS) expect(DESIGNS.some((d) => d.system === l.id), `a design for ${l.id}`).toBe(true);
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    for (const d of DESIGNS) {
+      for (const l of SYSTEM_LAYOUTS) {
+        applyChanges(p, designChanges(p, resolveTheme(p, env), d, ctx(d.id), ['system'], true, l.id));
+        expect(appliedSystemLayout(p)).toBe(l.id);
+        const sys = resolveTheme(p, env).views.get('system')!.elements;
+        for (const n of SYSTEM_DATA) expect(sys.has(n), `${d.id}/${l.id} has ${n}`).toBe(true);
+        expect(sys.get('systemInfo')!.props.get('visible')!.value).toBe('false');
+        if (l.grid) expect(sys.get('imagegrid')!.props.get('autoLayout')!.value).toBe(l.grid.autoLayout);
+        else expect(sys.get('systemcarousel')!.props.get('type')!.value).toBe(l.carousel!.type);
+        for (const e of sys.values()) {
+          if (e.name === 'systemcarousel' || e.name === 'imagegrid' || !e.name.startsWith('ccs_')) continue;
+          const pos = e.props.get('pos')?.value.split(' ').map(Number);
+          const size = (e.props.get('size') ?? e.props.get('maxSize'))?.value.split(' ').map(Number);
+          if (!pos || !size) continue;
+          const [ox, oy] = (e.props.get('origin')?.value ?? '0 0').split(' ').map(Number);
+          const x0 = pos[0] - ox * size[0];
+          const y0 = pos[1] - oy * size[1];
+          expect(x0 >= -0.001 && y0 >= -0.001 && x0 + size[0] <= 1.001 && y0 + size[1] <= 1.001, `${l.id}/${e.name} fits on screen`).toBe(true);
+        }
+      }
+    }
+    // Still one block for the system screen.
+    expect(p.entry!.src.split('ChannelCraft layout preset (system)').length).toBe(2);
+    expect(print(parse(p.entry!.src))).toBe(p.entry!.src);
+  });
 
   it('swaps one design for another instead of stacking them', async () => {
     const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);

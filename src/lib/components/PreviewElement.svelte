@@ -209,23 +209,67 @@
   });
 
   // ---- carousel ----
+  // Laid out the way EmulationStation's SystemView does it: logos spaced across the carousel
+  // (horizontal / vertical), or all on one spot and turned around a far-away point (wheels).
   const carouselItems = $derived.by(() => {
     if (el.type !== 'carousel') return [];
+    const type = (val('type') ?? 'horizontal').trim();
     const n = Math.max(1, Math.round(num('maxLogoCount', 3)));
+    const cw = box.w ?? W;
+    const ch = box.h ?? H * 0.2325;
+    const ls = parsePair(val('logoSize')) ?? [0.25, 0.155];
+    const lw = ls[0] * W;
+    const lh = ls[1] * H;
+    const L = Math.max(1, num('logoScale', 1.2));
+    const logoAlign = (val('logoAlignment') ?? 'center').trim();
+    const wheel = type.endsWith('_wheel');
+    const rot = num('logoRotation', 7.5);
+    const ro = parsePair(val('logoRotationOrigin')) ?? (type === 'horizontal_wheel' ? [0.5, -5] : [-5, 0.5]);
+    const minOp = num('minLogoOpacity', 0.5);
+    const isVertical = type.startsWith('vertical');
+    let sx = 0;
+    let sy = 0;
+    let xOff: number;
+    let yOff: number;
+    if (isVertical) {
+      if (type === 'vertical') sy = (ch - lh * n) / n + lh;
+      yOff = (ch - lh) / 2;
+      xOff = logoAlign === 'left' ? lw / 10 : logoAlign === 'right' ? cw - lw * 1.1 : (cw - lw) / 2;
+    } else {
+      if (type !== 'horizontal_wheel') sx = (cw - lw * n) / n + lw;
+      xOff = (cw - lw) / 2;
+      yOff = logoAlign === 'top' ? lh / 10 : logoAlign === 'bottom' ? ch - lh * 1.1 : (ch - lh) / 2;
+    }
     const list = carousel.systems;
     const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
-    const half = Math.floor(n / 2);
-    const items: { sys: SystemInfo; logo: string | null; selected: boolean }[] = [];
-    for (let k = -half; k < n - half; k++) {
-      const sys = list[(cur + k + list.length * 10) % list.length] ?? env.settings.system;
-      items.push({ sys, logo: logoFor(sys), selected: k === 0 });
+    // RetroBat also draws a couple of logos past each end (they're clipped by the carousel box).
+    const reach = n === 1 ? 0 : Math.floor(n / 2) + 2;
+    const items: { sys: SystemInfo; logo: string | null; selected: boolean; x: number; y: number; w: number; h: number; transform: string; opacity: number; z: number }[] = [];
+    for (let k = -reach; k <= reach; k++) {
+      const sys = list.length ? list[(((cur + k) % list.length) + list.length) % list.length] : env.settings.system;
+      const d = Math.abs(k);
+      const scale = Math.min(L, Math.max(1, 1 + (L - 1) * (1 - d))) / L;
+      const opacity = Math.min(1, Math.max(minOp, (0x80 + 0x7f * (1 - d)) / 255));
+      // The logo is sized to logoSize × logoScale and centred on its slot, then scaled down.
+      const w = lw * L;
+      const h = lh * L;
+      const dx = (ro[0] - 0.5) * w;
+      const dy = (ro[1] - 0.5) * h;
+      const transform = wheel ? `scale(${scale}) translate(${dx}px, ${dy}px) rotate(${rot * k}deg) translate(${-dx}px, ${-dy}px)` : `scale(${scale})`;
+      items.push({ sys, logo: logoFor(sys), selected: k === 0, x: k * sx + xOff + lw / 2 - w / 2, y: k * sy + yOff + lh / 2 - h / 2, w, h, transform, opacity, z: 100 - d });
     }
     return items;
   });
 
   const logoFor = (sys: SystemInfo) => carousel.logoFor(sys);
 
-  const vertical = $derived((val('type') ?? 'horizontal').startsWith('vertical'));
+  /** The carousel's own background: RetroBat's default is a translucent white band. */
+  const carouselBg = $derived.by(() => {
+    if (el.type !== 'carousel') return 'transparent';
+    const c = val('color') ?? 'FFFFFFD8';
+    const end = val('colorEnd');
+    return end ? `linear-gradient(${val('gradientType') === 'horizontal' ? 'to right' : 'to bottom'}, ${cssColor(c)}, ${cssColor(end)})` : cssColor(c, 'transparent');
+  });
 
   // ---- rating ----
   const stars = $derived(Math.round(game.rating * 5));
@@ -302,7 +346,14 @@
       </div>
     {/if}
   {:else if el.type === 'text' || el.type === 'datetime' || el.type === 'clock'}
-    <div class="text" class:wrap={box.w !== null} style={textStyle}>{textContent()}</div>
+    <div class="text" class:wrap={box.w !== null} style={textStyle}>
+      {#if box.w !== null && box.h !== null && box.h > 0}
+        <!-- RetroBat cuts text that doesn't fit its box with "..." after the last full line. -->
+        <span class="clamp" style:-webkit-line-clamp={Math.max(1, Math.floor(box.h / (fontPx * num('lineSpacing', 1.5)) + 0.05))}>{textContent()}</span>
+      {:else}
+        {textContent()}
+      {/if}
+    </div>
   {:else if el.type === 'textlist'}
     <div class="list" style="font-family:{font};font-size:{fontPx}px;text-align:{align};{upper ? 'text-transform:uppercase' : ''}">
       {#each rows as r, i}
@@ -318,20 +369,19 @@
       {/each}
     </div>
   {:else if el.type === 'carousel'}
-    <div class="carousel" class:vertical style:background={val('colorEnd') ? `linear-gradient(${val('gradientType') === 'horizontal' ? 'to right' : 'to bottom'}, ${cssColor(val('color'))}, ${cssColor(val('colorEnd'))})` : cssColor(val('color'), 'transparent')}>
+    {@const lt = carousel.logoText}
+    {@const ltFont = familyFor(lt && ed.project ? resolveAsset(lt.props.get('fontPath'), res, ed.project, env) : null)}
+    <div class="carousel" style:background={carouselBg}>
       {#each carouselItems as it}
-        {@const ls = parsePair(val('logoSize')) ?? [0.25, 0.155]}
-        <div class="slot" style:width="{vertical ? 100 : 100 / carouselItems.length}%" style:height="{vertical ? 100 / carouselItems.length : 100}%">
-          <div class="logo" style:width="{ls[0] * W}px" style:height="{ls[1] * H}px" style:transform="scale({it.selected ? num('logoScale', 1.2) : 1})" style:opacity={it.selected ? 1 : Math.max(num('minLogoOpacity', 0.5), 0.35)}>
-            {#if it.logo}
-              <img src={fileUrl(it.logo)} alt="" draggable="false" />
-            {:else}
-              <span
-                style="font-family:{familyFor(carousel.logoText && ed.project ? resolveAsset(carousel.logoText.props.get('fontPath'), res, ed.project, env) : null)};font-size:{parseFloat(carousel.logoText?.props.get('fontSize')?.value ?? '0.07') * H * 0.6}px;color:{cssColor(carousel.logoText?.props.get('color')?.value, '#fff')}"
-                >{it.sys.fullName}</span
-              >
-            {/if}
-          </div>
+        <div class="logo" style="left:{it.x}px;top:{it.y}px;width:{it.w}px;height:{it.h}px;transform:{it.transform};opacity:{it.opacity};z-index:{it.z}">
+          {#if it.logo}
+            <img src={fileUrl(it.logo)} alt="" draggable="false" />
+          {:else}
+            <span
+              style="font-family:{ltFont};font-size:{parseFloat(lt?.props.get('fontSize')?.value ?? '0.07') * H * 0.6}px;color:{cssColor(lt?.props.get('color')?.value, '#fff')};{lt?.props.get('forceUppercase')?.value === 'true' ? 'text-transform:uppercase' : ''}"
+              >{it.sys.fullName}</span
+            >
+          {/if}
         </div>
       {/each}
     </div>
@@ -486,7 +536,13 @@
   }
   .text.wrap {
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+  }
+  .clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-width: 100%;
   }
   .list {
     width: 100%;
@@ -500,22 +556,16 @@
     overflow: hidden;
   }
   .carousel {
-    display: flex;
+    position: relative;
     width: 100%;
     height: 100%;
-    align-items: center;
-  }
-  .carousel.vertical {
-    flex-direction: column;
-  }
-  .slot {
-    display: grid;
-    place-items: center;
+    overflow: hidden;
   }
   .logo {
+    position: absolute;
     display: grid;
     place-items: center;
-    transition: transform 0.15s;
+    transform-origin: 50% 50%;
   }
   .logo img {
     max-width: 100%;

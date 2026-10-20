@@ -2,10 +2,10 @@
   // Layout presets for the current screen and colour palettes for the whole theme.
   import { ed } from '$lib/editor.svelte';
   import { viewLabel } from '$lib/friendly';
-  import { appliedLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
+  import { appliedDesign, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
   import Icon from './Icon.svelte';
   import DesignThumb from './DesignThumb.svelte';
-  import { DESIGNS, type Design } from '$lib/theme/designs';
+  import { DESIGNS, designAssets, type Design } from '$lib/theme/designs';
 
   const GAME_LISTS = ['basic', 'detailed', 'video'];
 
@@ -27,6 +27,39 @@
     ed.rev;
     return ed.project ? appliedLayout(ed.project, ed.view) : null;
   });
+  const isSystem = $derived(ed.view === 'system');
+  /** The layout card to tick: on the system screen also the layout a design brought with it. */
+  const currentLayout = $derived.by(() => {
+    ed.rev;
+    return ed.project && isSystem ? appliedSystemLayout(ed.project) : current;
+  });
+  const sysDesign = $derived.by(() => {
+    ed.rev;
+    return ed.project ? appliedDesign(ed.project, 'system') : null;
+  });
+
+  // How system layouts look: 'auto' keeps the design already there (or each layout's matching
+  // design), 'match' always uses the matching one, 'plain' only moves RetroBat's own parts.
+  let styleChoice = $state('auto');
+  const matching = (l: LayoutPreset) => DESIGNS.find((d) => d.system === l.id) ?? null;
+  function styleFor(l: LayoutPreset): Design | null {
+    if (!isSystem || styleChoice === 'plain') return null;
+    if (styleChoice === 'auto') return sysDesign ?? matching(l) ?? DESIGNS[0];
+    if (styleChoice === 'match') return matching(l) ?? sysDesign ?? DESIGNS[0];
+    return DESIGNS.find((d) => d.id === styleChoice) ?? null;
+  }
+  const bgCache = new Map<string, string>();
+  function bgOf(d: Design) {
+    let u = bgCache.get(d.id);
+    if (!u) bgCache.set(d.id, (u = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(designAssets(d)['background.svg'])}")`));
+    return u;
+  }
+  const hexA = (h: string, a: number) => `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
+  function fillFor(r: Rect, d: Design | null) {
+    if (!d) return COLORS[r.role];
+    const p = d.palette;
+    return r.role === 'carousel' ? hexA(p.accent, 0.95) : r.role === 'art' ? hexA(p.text, 0.32) : r.role === 'logo' ? hexA(p.dim, 0.6) : hexA(p.text, 0.5);
+  }
   const targets = $derived(GAME_LISTS.includes(ed.view) && allLists ? GAME_LISTS.filter((v) => ed.viewNames.includes(v)) : [ed.view]);
   const gridSystem = $derived(ed.view === 'system' && !ed.currentView?.elements.has('systemcarousel') && [...(ed.currentView?.elements.values() ?? [])].some((e) => e.type === 'imagegrid'));
 
@@ -39,8 +72,18 @@
     info: '#8a8a8a',
   };
 
-  function apply(l: LayoutPreset) {
-    ed.applyLayout(l, targets);
+  async function apply(l: LayoutPreset) {
+    const style = styleFor(l);
+    if (style) {
+      applying = true;
+      try {
+        await ed.applyLayout(l, ['system'], style, hideOwn);
+      } finally {
+        applying = false;
+      }
+      return;
+    }
+    await ed.applyLayout(l, targets);
     ed.notify(`“${l.label}” applied to ${targets.map((v) => viewLabel(v)).join(', ')}. Press Ctrl+Z to undo.`);
   }
 
@@ -80,7 +123,25 @@
     {#if !layouts.length}
       <p class="faint note">There are no layout presets for this screen.</p>
     {:else}
-      <p class="dim note">Moves the parts RetroBat draws itself (game list, picture, description, carousel). Decorations made for this theme stay where they are, so presets suit simple and new themes best.</p>
+      {#if isSystem}
+        <p class="dim note">How the consoles are laid out: a carousel, a wheel, an arc or a grid of tiles. Pick a style to get the background, colours, fonts, console picture, name, maker and game count placed to match.</p>
+        <label class="style">
+          <span>Style</span>
+          <select bind:value={styleChoice}>
+            <option value="auto">{sysDesign ? `Current design (${sysDesign.label})` : 'Matching design for each layout'}</option>
+            {#if sysDesign}<option value="match">Matching design for each layout</option>{/if}
+            <option value="plain">No design: keep the theme's own look</option>
+            <optgroup label="Designs">
+              {#each DESIGNS as d (d.id)}<option value={d.id}>{d.label}</option>{/each}
+            </optgroup>
+          </select>
+        </label>
+        {#if styleChoice === 'plain'}
+          <p class="faint note">Only RetroBat's carousel (or grid) and its game count move. The theme's decorations stay where they are.</p>
+        {/if}
+      {:else}
+        <p class="dim note">Moves the parts RetroBat draws itself (game list, picture, description, carousel). Decorations made for this theme stay where they are, so presets suit simple and new themes best.</p>
+      {/if}
       {#if gridSystem}
         <p class="warn note">This theme shows consoles in a grid, not a carousel. A carousel preset adds a carousel that may overlap the grid.</p>
       {/if}
@@ -89,11 +150,12 @@
       {/if}
       <div class="grid">
         {#each layouts as l (l.id)}
-          <button class="card" class:on={current === l.id} onclick={() => apply(l)} title={l.description}>
-            <svg viewBox="0 0 160 90" class="pic" aria-hidden="true">
-              <rect x="0" y="0" width="160" height="90" fill="#141414" />
+          {@const st = styleFor(l)}
+          <button class="card" class:on={currentLayout === l.id} onclick={() => apply(l)} title={l.description} disabled={applying}>
+            <svg viewBox="0 0 160 90" class="pic" aria-hidden="true" style:background-image={st ? bgOf(st) : undefined}>
+              {#if !st}<rect x="0" y="0" width="160" height="90" fill="#141414" />{/if}
               {#each l.diagram as r}
-                <rect x={r.x * 160} y={r.y * 90} width={r.w * 160} height={r.h * 90} rx="2" fill={COLORS[r.role]} opacity={r.role === 'text' || r.role === 'info' ? 0.55 : 0.9} />
+                <rect x={r.x * 160} y={r.y * 90} width={r.w * 160} height={r.h * 90} rx={st ? Math.min(st.radius / 8, 4) : 2} fill={fillFor(r, st)} opacity={r.role === 'text' || r.role === 'info' ? 0.55 : 0.9} />
                 {#if r.role === 'list'}
                   {#each Array(Math.max(2, Math.floor((r.h * 90) / 8))) as _, i}
                     <rect x={r.x * 160 + 3} y={r.y * 90 + 3 + i * 8} width={r.w * 160 - 6} height="4" rx="1" fill="#fff" opacity={i === 1 ? 0.9 : 0.35} />
@@ -102,10 +164,11 @@
               {/each}
             </svg>
             <span class="name">
-              {#if current === l.id}<Icon name="check" size={12} />{/if}
+              {#if currentLayout === l.id}<Icon name="check" size={12} />{/if}
               {l.label}
             </span>
             <small>{l.description}</small>
+            {#if st}<small class="in">in {st.label}</small>{/if}
           </button>
         {/each}
       </div>
@@ -183,7 +246,25 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent);
   }
+  .style {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+    color: var(--text-dim);
+  }
+  .style select {
+    min-width: 0;
+  }
+  small.in {
+    color: var(--accent);
+  }
+  .card:disabled {
+    opacity: 0.6;
+  }
   .pic {
+    background-size: cover;
     width: 100%;
     border-radius: 3px;
     display: block;

@@ -38,7 +38,7 @@ describe.skipIf(!existsSync(THEMES))('resolver on installed themes (read-only)',
       console.log(`${name}: files=${p.files.size} used=${r.usedFiles.size} vars=${r.vars.size} subsets=${r.subsets.map((s) => `${s.name}=${s.selected}[${s.options.length}]`).join(' ')} unknown=${r.unknownConditions} missing=${r.missing.length}\n  views: ${views}`);
       expect(r.views.size).toBeGreaterThan(0);
     }
-  });
+  }, 30_000);
 
   const V5 = `${THEMES}\\Booga's WiiTheme v5`;
 

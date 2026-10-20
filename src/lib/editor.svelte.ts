@@ -15,7 +15,7 @@ import { patchInsertChild, patchRemoveNode, patchReplaceSpan, patchSetAttr } fro
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
-import { designChanges, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
+import { designChanges, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
 import { DESIGNS, designAssets, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
 
@@ -737,9 +737,12 @@ class Editor {
   }
 
   /** Writes a layout preset into its own block at the end of theme.xml (replacing an earlier one). */
-  async applyLayout(preset: LayoutPreset, views: string[]) {
+  async applyLayout(preset: LayoutPreset, views: string[], style: Design | null = null, hideOwn = true) {
     const p = this.project;
     if (!p) return;
+    // A system layout can come dressed in a design: its background, colours, fonts and the
+    // console name, maker, game count and picture placed to suit the layout.
+    if (style && preset.kind === 'system') return this.applyDesign(style, { hideOwn, views: ['system'], systemLayout: preset.id });
     if (preset.assets) await this.writeArt('_inc/ccs/common', preset.assets);
     const res = this.res;
     if (!res) return;
@@ -813,7 +816,7 @@ class Editor {
    * Applies a design: writes its artwork into the theme, fetches its fonts, and replaces the
    * layout of each screen with the design's (one undo step for the layout).
    */
-  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[] } = {}) {
+  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string } = {}) {
     const p = this.project;
     if (!p) return;
     const artRel = `_inc/ccs/${design.id}`;
@@ -834,9 +837,11 @@ class Editor {
     const res = this.res;
     if (!res) return;
     const views = opts.views ?? ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v));
-    this.commit(`design “${design.label}”`, designChanges(p, res, design, ctx, views, opts.hideOwn ?? true));
+    const label = opts.systemLayout ? `“${LAYOUTS.find((l) => l.id === opts.systemLayout)?.label ?? opts.systemLayout}” in the ${design.label} style` : `design “${design.label}”`;
+    this.commit(label, designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout));
     this.selected = null;
     const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
+    if (opts.systemLayout) return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to the System screen.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
     this.notify(wrote ? `Design “${design.label}” applied.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `Design “${design.label}” applied in the preview only (files can’t be written here).`);
   }
 

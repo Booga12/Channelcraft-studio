@@ -6,6 +6,7 @@
 
 import type { AnimPreset } from './animations';
 import { ANIMATIONS, storyboardXml } from './animations';
+import { systemLayout, type SystemLayout } from './systemLayouts';
 
 export interface Palette6 {
   bg: string;
@@ -17,7 +18,7 @@ export interface Palette6 {
   accentText: string;
 }
 
-type Background = 'gradient' | 'grid' | 'scanlines' | 'waves' | 'stripes' | 'sunset' | 'dots' | 'plain' | 'glass' | 'pixels';
+type Background = 'gradient' | 'grid' | 'scanlines' | 'waves' | 'stripes' | 'sunset' | 'dots' | 'plain' | 'glass' | 'pixels' | 'rays' | 'aurora';
 
 export interface Design {
   id: string;
@@ -31,7 +32,8 @@ export interface Design {
   /** Corner radius of panels in pixels; 0 for square, pixel corners for the pixel look. */
   radius: number;
   game: 'list-right' | 'cinema' | 'cover' | 'centered';
-  system: 'carousel-mid' | 'wheel-right' | 'bottom' | 'left' | 'grid' | 'tile-row' | 'big-tiles';
+  /** Id of the system screen layout the design comes with (any layout in SYSTEM_LAYOUTS works). */
+  system: string;
   glow?: boolean;
   scanlines?: boolean;
   uppercase?: boolean;
@@ -53,7 +55,7 @@ export const DESIGNS: Design[] = [
     background: 'plain',
     radius: 10,
     game: 'cinema',
-    system: 'bottom',
+    system: 'carousel-bottom',
     anims: { title: 'fade-in', art: 'fade-in', console: 'rise' },
   },
   {
@@ -82,7 +84,7 @@ export const DESIGNS: Design[] = [
     background: 'scanlines',
     radius: 26,
     game: 'list-right',
-    system: 'carousel-mid',
+    system: 'carousel-middle',
     scanlines: true,
     uppercase: true,
     anims: { title: 'fade-in', logo: 'breathe' },
@@ -97,7 +99,7 @@ export const DESIGNS: Design[] = [
     background: 'pixels',
     radius: 0,
     game: 'centered',
-    system: 'carousel-mid',
+    system: 'grid-wall',
     uppercase: true,
     anims: { art: 'pop', logo: 'swing' },
   },
@@ -111,7 +113,7 @@ export const DESIGNS: Design[] = [
     background: 'stripes',
     radius: 28,
     game: 'list-right',
-    system: 'grid',
+    system: 'channel-grid',
     anims: { art: 'float', console: 'float' },
   },
   {
@@ -137,7 +139,7 @@ export const DESIGNS: Design[] = [
     background: 'gradient',
     radius: 14,
     game: 'cover',
-    system: 'left',
+    system: 'list-left',
     anims: { art: 'rise' },
   },
   {
@@ -150,7 +152,7 @@ export const DESIGNS: Design[] = [
     background: 'sunset',
     radius: 8,
     game: 'cinema',
-    system: 'carousel-mid',
+    system: 'carousel-middle',
     glow: true,
     anims: { console: 'float', title: 'rise' },
   },
@@ -164,7 +166,7 @@ export const DESIGNS: Design[] = [
     background: 'plain',
     radius: 2,
     game: 'list-right',
-    system: 'left',
+    system: 'cover-flow',
   },
   {
     id: 'magazine',
@@ -177,7 +179,7 @@ export const DESIGNS: Design[] = [
     background: 'plain',
     radius: 0,
     game: 'cinema',
-    system: 'bottom',
+    system: 'carousel-bottom',
     anims: { title: 'fade-in' },
   },
   {
@@ -190,7 +192,7 @@ export const DESIGNS: Design[] = [
     background: 'dots',
     radius: 6,
     game: 'centered',
-    system: 'carousel-mid',
+    system: 'wheel-left',
     uppercase: true,
   },
   {
@@ -230,8 +232,81 @@ export const DESIGNS: Design[] = [
     background: 'dots',
     radius: 30,
     game: 'centered',
-    system: 'grid',
+    system: 'grid-shelf',
     anims: { art: 'pop', console: 'float' },
+  },
+  {
+    id: 'arcade-marquee',
+    label: 'Arcade Marquee',
+    description: 'Gold on deep red like a lit-up cabinet marquee, logos fanned out in an arch.',
+    tags: ['arcade', 'dark', 'colourful'],
+    palette: P('140507', '3A0B12', 'FFC83D1C', 'FFF4DC', 'D9B98A', 'FFC83D', '140507'),
+    font: 'russo',
+    titleFont: 'righteous',
+    background: 'rays',
+    radius: 12,
+    game: 'list-right',
+    system: 'arc-bottom',
+    glow: true,
+    uppercase: true,
+    anims: { title: 'slide-left', console: 'float', logo: 'pulse' },
+  },
+  {
+    id: 'spotlight',
+    label: 'Spotlight Stage',
+    description: 'A single huge logo under a stage light, everything else fading into the dark.',
+    tags: ['dark', 'modern', 'streaming'],
+    palette: P('050507', '1C1C26', 'FFFFFF12', 'FFFFFF', '9C9CAE', 'F5C451', '050507'),
+    font: 'montserrat',
+    titleFont: 'bebas',
+    background: 'rays',
+    radius: 18,
+    game: 'cinema',
+    system: 'spotlight',
+    anims: { title: 'fade-in', console: 'rise', art: 'fade-in' },
+  },
+  {
+    id: 'deep-sea',
+    label: 'Deep Sea',
+    description: 'Teal light rippling through dark water, logos stacked on the right.',
+    tags: ['dark', 'blue', 'modern'],
+    palette: P('03141C', '0B4157', 'FFFFFF14', 'E8FBFF', '8FC4D1', '2FE0C5', '03141C'),
+    font: 'exo2',
+    titleFont: 'audiowide',
+    background: 'aurora',
+    radius: 20,
+    game: 'cover',
+    system: 'list-right',
+    anims: { art: 'float', console: 'float', title: 'fade-in' },
+  },
+  {
+    id: 'graphite',
+    label: 'Graphite',
+    description: 'Brushed dark grey with orange highlights, logos along the top and a big console below.',
+    tags: ['dark', 'modern', 'minimal'],
+    palette: P('16171A', '2A2C31', 'FFFFFF12', 'F1F2F4', '9DA1A9', 'FF7A1A', 'FFFFFF'),
+    font: 'rajdhani',
+    titleFont: 'russo',
+    background: 'gradient',
+    radius: 6,
+    game: 'list-right',
+    system: 'carousel-top',
+    uppercase: true,
+    anims: { title: 'slide-left', console: 'rise' },
+  },
+  {
+    id: 'candy',
+    label: 'Candy Pop',
+    description: 'Pastel pink and mint with bouncy rounded type, logos hanging in a smile-shaped curve.',
+    tags: ['light', 'colourful', 'friendly'],
+    palette: P('FFF0F6', 'FFD9EA', 'FFFFFFE6', '3A2140', '8A6A92', 'FF4FA0', 'FFFFFF'),
+    font: 'fredoka',
+    titleFont: 'lilita',
+    background: 'dots',
+    radius: 30,
+    game: 'centered',
+    system: 'arc-top',
+    anims: { art: 'pop', console: 'float', title: 'rise' },
   },
 ];
 
@@ -314,6 +389,30 @@ export function designAssets(d: Design): Record<string, string> {
       const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
       for (let i = 0; i < 60; i++) blocks.push(`<rect x="${Math.floor(rnd() * 48) * 40}" y="${Math.floor(rnd() * 27) * 40}" width="40" height="40" fill="${hex(p.bg2)}"/>`);
       bg = svg(W, H, `<rect width="${W}" height="${H}" fill="${hex(p.bg)}"/>${blocks.join('')}`);
+      break;
+    }
+    case 'rays': {
+      // Stage light: soft beams fanning down from the top centre.
+      const beams: string[] = [];
+      for (let i = -6; i <= 6; i++) beams.push(`<path d="M${W / 2 - 30} -20 L${W / 2 + 30} -20 L${W / 2 + i * 260 + 120} ${H} L${W / 2 + i * 260 - 120} ${H} Z" fill="${hex(p.accent)}" fill-opacity="${(0.07 - Math.abs(i) * 0.008).toFixed(3)}"/>`);
+      bg = svg(
+        W,
+        H,
+        `<defs><radialGradient id="r" cx="0.5" cy="0" r="1"><stop offset="0" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}"/></radialGradient><radialGradient id="f" cx="0.5" cy="0.55" r="0.4"><stop offset="0" stop-color="${hex(p.accent)}" stop-opacity="0.18"/><stop offset="1" stop-color="${hex(p.accent)}" stop-opacity="0"/></radialGradient></defs><rect width="${W}" height="${H}" fill="url(#r)"/>${beams.join('')}<rect width="${W}" height="${H}" fill="url(#f)"/>`,
+      );
+      break;
+    }
+    case 'aurora': {
+      const band = (y: number, a: number, o: number, op: number) => {
+        let d0 = `M0 ${y}`;
+        for (let x = 0; x <= W; x += 60) d0 += ` L${x} ${(y + Math.sin(x / 300 + o) * a).toFixed(1)}`;
+        return `<path d="${d0} L${W} ${H} L0 ${H} Z" fill="${hex(p.accent)}" fill-opacity="${op}"/>`;
+      };
+      bg = svg(
+        W,
+        H,
+        `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#g)"/>${band(H * 0.35, 40, 0, 0.05)}${band(H * 0.5, 55, 1.7, 0.05)}${band(H * 0.68, 35, 3.1, 0.06)}`,
+      );
       break;
     }
     case 'gradient':
@@ -532,7 +631,7 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
   return els;
 }
 
-function systemScreen(d: Design, c: DesignContext): DesignEl[] {
+function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] {
   const p = d.palette;
   const els: DesignEl[] = [...common(d, c, 'system')];
   const consoleArt = (pos: string, max: string): DesignEl => ({
@@ -547,90 +646,59 @@ function systemScreen(d: Design, c: DesignContext): DesignEl[] {
     },
     anim: d.anims?.console,
   });
-  const randomArt: DesignEl = { type: 'image', name: 'ccs_systemart', props: { pos: '0 0', size: '1 1', path: 'firstfile({system:random:fanart}, {system:random:image})', color: 'FFFFFF2E', zIndex: '1' } };
-  const carousel = (type: string, pos: string, size: string, logo: string, count: string): DesignEl => ({
-    type: 'carousel',
-    name: 'systemcarousel',
-    props: { type, pos, size, logoSize: logo, maxLogoCount: count, color: '00000000', logoScale: '1.25', minLogoOpacity: '0.45', zIndex: '40' },
-  });
   const logoStyle: DesignEl[] = [
     { type: 'image', name: 'logo', props: c.logos ? { path: [`${c.logos}/\${system.theme}.svg`, `${c.logos}/\${system.theme}.png`] } : {} },
-    text(d, c, 'logoText', { fontSize: '0.06' }, { title: true, native: true }),
+    // Shown in the carousel for systems without a logo picture.
+    text(d, c, 'logoText', { fontSize: l.carousel && Number(l.carousel.maxLogoCount) <= 1 ? '0.08' : '0.06', alignment: 'center' }, { title: true, native: true }),
   ];
-  const name = (pos: string, size: string, align: string, fs = '0.052') => text(d, c, 'ccs_systemname', { pos, size, alignment: align, fontSize: fs, text: '{system:fullName}', zIndex: '45' }, { title: true });
-  const maker = (pos: string, size: string, align: string) => text(d, c, 'ccs_systemmaker', { pos, size, alignment: align, fontSize: '0.026', text: '{system:manufacturer} + "  ·  " + {system:releaseYear}', zIndex: '45' }, { dim: true });
-  const count = (pos: string, size: string, align: string) => text(d, c, 'ccs_systemcount', { pos, size, alignment: align, fontSize: '0.024', text: '{system:total} + " games"', color: col(p.accent), zIndex: '45' });
-  const hideInfo: DesignEl = { type: 'text', name: 'systemInfo', props: { visible: 'false' } };
+  const spot = ([pos, size, align, fs]: [string, string, string, string?], name: string, value: string, kind: 'title' | 'dim' | 'accent', defFs: string): DesignEl => {
+    // Pixel fonts are very wide: long names like "Super Nintendo Entertainment System" need a smaller size.
+    const font = kind === 'title' ? (d.titleFont ?? d.font) : d.font;
+    const scale = ['pressstart', 'silkscreen'].includes(font) ? 0.62 : ['orbitron', 'audiowide', 'monoton', 'russo', 'lilita'].includes(font) ? 0.85 : 1;
+    const size0 = Number(fs ?? defFs) * scale;
+    const el = text(d, c, name, { pos, size, alignment: align, fontSize: String(Math.round(size0 * 1000) / 1000), text: value, zIndex: '45' }, kind === 'title' ? { title: true } : { dim: kind === 'dim' });
+    if (kind === 'accent') el.props.color = col(p.accent);
+    return el;
+  };
 
-  /** A system grid: tiles in the design's colours, logos washed out until selected. */
-  const systemGrid = (props: Record<string, string>): DesignEl[] => {
+  els.push({ type: 'image', name: 'ccs_systemart', props: { pos: '0 0', size: '1 1', path: 'firstfile({system:random:fanart}, {system:random:image})', color: `FFFFFF${l.art ?? '2E'}`, zIndex: '1' } });
+  if (l.fade) els.push({ type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.svg`, zIndex: '2' } });
+  if (l.band) els.push(panel(d, c, 'ccs_band', l.band[0], l.band[1], 10));
+
+  if (l.grid) {
+    // Tiles in the design's colours, logos washed out until selected.
     const corner = Math.max(8, d.radius);
-    return [
-      { type: 'imagegrid', name: 'imagegrid', props: { autoLayoutSelectedZoom: '1.06', animateSelection: 'true', padding: '0.012 0.012 0.012 0.012', scrollLoop: 'false', scrollbarColor: '00000000', zIndex: '30', ...props } },
-      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: col(p.surface.length === 8 && parseInt(p.surface.slice(6), 16) < 0x30 ? `${p.text}22` : p.surface), imageColor: 'FFFFFFFF', padding: '24 24 24 24', selectionMode: 'full', imageSizeMode: 'maxSize' } },
+    const faint = p.surface.length === 8 && parseInt(p.surface.slice(6), 16) < 0x30;
+    els.push(
+      { type: 'imagegrid', name: 'imagegrid', props: { autoLayoutSelectedZoom: '1.06', animateSelection: 'true', padding: '0.012 0.012 0.012 0.012', scrollLoop: 'false', scrollbarColor: '00000000', zIndex: '30', ...l.grid } },
+      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: col(faint ? `${p.text}22` : p.surface), imageColor: 'FFFFFFFF', padding: '24 24 24 24', selectionMode: 'full', imageSizeMode: 'maxSize' } },
       { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: col(p.accent), imageColor: 'FFFFFFFF', padding: '24 24 24 24' } },
       { type: 'text', name: 'gridtile', props: { visible: 'false', size: '0 0' } },
       { type: 'image', name: 'gridtile.image', props: { color: 'FFFFFFAA' } },
       { type: 'image', name: 'gridtile.image:selected', props: { color: 'FFFFFFFF' } },
-    ];
-  };
-
-  switch (d.system) {
-    case 'grid':
-      els.push(
-        randomArt,
-        ...systemGrid({ pos: '0.075 0.08', size: '0.85 0.56', autoLayout: '4 3', margin: '0.014 0.028', scrollDirection: 'vertical', centerSelection: 'false' }),
-        ...logoStyle,
-        name('0.075 0.69', '0.6 0.07', 'left'),
-        maker('0.075 0.76', '0.6 0.04', 'left'),
-        count('0.075 0.8', '0.6 0.04', 'left'),
-        consoleArt('0.84 0.78', '0.22 0.24'),
-        hideInfo,
-      );
-      break;
-    case 'tile-row':
-      els.push(
-        { ...randomArt, props: { ...randomArt.props, color: 'FFFFFFB3' } },
-        { type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.svg`, zIndex: '2' } },
-        ...systemGrid({ pos: '0.04 0.1', size: '0.92 0.2', autoLayout: '7 1', margin: '0.01 0', scrollDirection: 'horizontal', centerSelection: 'false' }),
-        ...logoStyle,
-        name('0.05 0.6', '0.66 0.08', 'left', '0.052'),
-        maker('0.05 0.68', '0.6 0.04', 'left'),
-        count('0.05 0.725', '0.6 0.04', 'left'),
-        consoleArt('0.78 0.64', '0.34 0.42'),
-        hideInfo,
-      );
-      break;
-    case 'big-tiles':
-      els.push(
-        randomArt,
-        ...systemGrid({ pos: '0.04 0.3', size: '0.92 0.36', autoLayout: '5 1', margin: '0.016 0', scrollDirection: 'horizontal', centerSelection: 'true', autoLayoutSelectedZoom: '1.12' }),
-        ...logoStyle,
-        name('0.1 0.1', '0.8 0.08', 'center', '0.06'),
-        maker('0.1 0.19', '0.8 0.04', 'center'),
-        count('0.1 0.72', '0.8 0.04', 'center'),
-        consoleArt('0.5 0.84', '0.2 0.16'),
-        hideInfo,
-      );
-      break;
-    case 'wheel-right':
-      els.push(randomArt, panel(d, c, 'ccs_wheelpanel', '0.6 0', '0.4 1', 10), carousel('vertical_wheel', '0.6 0', '0.4 1', '0.28 0.13', '5'), ...logoStyle, consoleArt('0.3 0.42', '0.44 0.46'), name('0.05 0.76', '0.5 0.07', 'left'), maker('0.05 0.83', '0.5 0.04', 'left'), count('0.05 0.875', '0.5 0.04', 'left'), hideInfo);
-      break;
-    case 'bottom':
-      els.push(randomArt, panel(d, c, 'ccs_band', '0 0.72', '1 0.22', 10), carousel('horizontal', '0 0.73', '1 0.2', '0.16 0.11', '5'), ...logoStyle, consoleArt('0.5 0.34', '0.5 0.44'), name('0.1 0.6', '0.8 0.07', 'center'), maker('0.1 0.665', '0.8 0.04', 'center'), count('0.1 0.94', '0.8 0.03', 'center'), hideInfo);
-      break;
-    case 'left':
-      els.push(randomArt, panel(d, c, 'ccs_column', '0 0', '0.3 1', 10), carousel('vertical', '0 0', '0.3 1', '0.24 0.1', '7'), ...logoStyle, consoleArt('0.65 0.4', '0.5 0.5'), name('0.36 0.74', '0.6 0.07', 'left'), maker('0.36 0.81', '0.6 0.04', 'left'), count('0.36 0.855', '0.6 0.04', 'left'), hideInfo);
-      break;
-    default:
-      els.push(randomArt, panel(d, c, 'ccs_band', '0 0.37', '1 0.26', 10), carousel('horizontal', '0 0.38', '1 0.24', '0.22 0.15', '3'), ...logoStyle, consoleArt('0.5 0.19', '0.3 0.26'), name('0.1 0.66', '0.8 0.07', 'center'), maker('0.1 0.73', '0.8 0.04', 'center'), count('0.1 0.775', '0.8 0.04', 'center'), hideInfo);
+    );
+  } else {
+    els.push({
+      type: 'carousel',
+      name: 'systemcarousel',
+      props: { color: '00000000', logoScale: '1.25', minLogoOpacity: '0.45', zIndex: '40', ...l.carousel },
+    });
   }
+  els.push(
+    ...logoStyle,
+    spot(l.name, 'ccs_systemname', '{system:fullName}', 'title', '0.052'),
+    spot(l.maker, 'ccs_systemmaker', '{system:manufacturer} + "  ·  " + {system:releaseYear}', 'dim', '0.026'),
+    spot(l.count, 'ccs_systemcount', '{system:total} + " games"', 'accent', '0.024'),
+    consoleArt(l.console[0], l.console[1]),
+    // The design shows the game count itself.
+    { type: 'text', name: 'systemInfo', props: { visible: 'false' } },
+  );
   return els;
 }
 
 /** Elements of a design for one screen. */
-export function designElements(d: Design, c: DesignContext, view: string): DesignEl[] {
-  if (view === 'system') return systemScreen(d, c);
+export function designElements(d: Design, c: DesignContext, view: string, systemLayoutId = d.system): DesignEl[] {
+  if (view === 'system') return systemScreen(d, c, systemLayout(systemLayoutId) ?? systemLayout(d.system)!);
   if (['basic', 'detailed', 'video'].includes(view)) {
     const els = gameScreen(d, c, view);
     for (const n of LABELS_AND_EXTRAS) els.push({ type: n === 'md_lastplayed' ? 'datetime' : 'text', name: n, props: { visible: 'false' } });

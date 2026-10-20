@@ -4,10 +4,11 @@
 // and can be swapped for another preset later.
 
 import { attr, patchInsertChild, patchReplaceSpan, type XNode } from '../xml/cst';
-import { designElements, elementsMarkup, isDesignExtra, type Design, type DesignContext } from './designs';
+import { DESIGNS, designElements, elementsMarkup, isDesignExtra, type Design, type DesignContext } from './designs';
 import type { Change } from './edits';
 import type { ThemeProject } from './project';
 import type { Resolution } from './resolver';
+import { SYSTEM_LAYOUTS, systemLayout, type SystemLayout } from './systemLayouts';
 
 type Props = Record<string, string>;
 
@@ -207,146 +208,30 @@ export const LAYOUTS: LayoutPreset[] = [
       ...TIDY,
     },
   },
-  {
-    id: 'carousel-middle',
-    label: 'Carousel in the middle',
-    description: 'A row of console logos across the middle of the screen.',
-    kind: 'system',
-    diagram: [
-      { x: 0, y: 0.38, w: 1, h: 0.24, role: 'carousel' },
-      { x: 0.3, y: 0.65, w: 0.4, h: 0.05, role: 'info' },
-    ],
-    elements: {
-      systemcarousel: { type: 'horizontal', pos: '0 0.38', size: '1 0.24', logoSize: '0.24 0.16', maxLogoCount: '3' },
-      systemInfo: { pos: '0 0.64', size: '1 0.05', alignment: 'center' },
-    },
-  },
-  {
-    id: 'wheel-right',
-    label: 'Wheel on the right',
-    description: 'Console logos on a wheel down the right side, like an arcade cabinet.',
-    kind: 'system',
-    diagram: [
-      { x: 0.6, y: 0, w: 0.4, h: 1, role: 'carousel' },
-      { x: 0.04, y: 0.88, w: 0.4, h: 0.05, role: 'info' },
-    ],
-    elements: {
-      systemcarousel: { type: 'vertical_wheel', pos: '0.6 0', size: '0.4 1', logoSize: '0.3 0.13', maxLogoCount: '5' },
-      systemInfo: { pos: '0.04 0.88', size: '0.5 0.05', alignment: 'left' },
-    },
-  },
-  {
-    id: 'carousel-bottom',
-    label: 'Carousel at the bottom',
-    description: 'Small logos along the bottom, leaving room for artwork above.',
-    kind: 'system',
-    diagram: [
-      { x: 0, y: 0.7, w: 1, h: 0.22, role: 'carousel' },
-      { x: 0.3, y: 0.93, w: 0.4, h: 0.04, role: 'info' },
-    ],
-    elements: {
-      systemcarousel: { type: 'horizontal', pos: '0 0.7', size: '1 0.22', logoSize: '0.18 0.12', maxLogoCount: '5' },
-      systemInfo: { pos: '0 0.93', size: '1 0.04', alignment: 'center' },
-    },
-  },
-  {
-    id: 'list-left',
-    label: 'Logo list on the left',
-    description: 'A vertical list of console logos down the left side.',
-    kind: 'system',
-    diagram: [
-      { x: 0, y: 0, w: 0.34, h: 1, role: 'carousel' },
-      { x: 0.4, y: 0.9, w: 0.5, h: 0.05, role: 'info' },
-    ],
-    elements: {
-      systemcarousel: { type: 'vertical', pos: '0 0', size: '0.34 1', logoSize: '0.26 0.1', maxLogoCount: '7' },
-      systemInfo: { pos: '0.4 0.9', size: '0.55 0.05', alignment: 'left' },
-    },
-  },
-  {
-    id: 'wheel-left',
-    label: 'Wheel on the left',
-    description: 'The arcade-cabinet wheel, down the left side instead.',
-    kind: 'system',
-    diagram: [
-      { x: 0, y: 0, w: 0.4, h: 1, role: 'carousel' },
-      { x: 0.56, y: 0.88, w: 0.4, h: 0.05, role: 'info' },
-    ],
-    elements: {
-      systemcarousel: { type: 'vertical_wheel', pos: '0 0', size: '0.4 1', logoSize: '0.3 0.13', maxLogoCount: '5', logoRotationOrigin: '-3 0.5' },
-      systemInfo: { pos: '0.46 0.88', size: '0.5 0.05', alignment: 'right' },
-    },
-  },
-  {
-    id: 'cover-flow',
-    label: 'Cover flow',
-    description: 'Five big logos in a row, the selected one zoomed and the others faded.',
-    kind: 'system',
-    diagram: [
-      { x: 0, y: 0.32, w: 1, h: 0.36, role: 'carousel' },
-      { x: 0.3, y: 0.72, w: 0.4, h: 0.05, role: 'info' },
-    ],
-    elements: {
-      systemcarousel: { type: 'horizontal', pos: '0 0.32', size: '1 0.36', logoSize: '0.2 0.2', maxLogoCount: '5', logoScale: '1.5', minLogoOpacity: '0.3', color: '00000000' },
-      systemInfo: { pos: '0 0.72', size: '1 0.05', alignment: 'center' },
-    },
-  },
-  {
-    id: 'channel-grid',
-    label: 'Channel grid',
-    description: 'Consoles as a 4 × 3 grid of rounded tiles, like a classic console home screen.',
-    kind: 'system',
-    diagram: [
-      ...grid(0.075, 0.06, 0.85, 0.56, 4, 3),
-      { x: 0.3, y: 0.7, w: 0.4, h: 0.05, role: 'info' },
-    ],
-    elements: gridElements({ pos: '0.075 0.06', size: '0.85 0.56', autoLayout: '4 3', margin: '0.014 0.028', scrollDirection: 'vertical', centerSelection: 'false' }, '0 0.7', 'center'),
-    assets: { 'tile.svg': TILE_SVG },
-  },
-  {
-    id: 'grid-wall',
-    label: 'Grid wall',
-    description: 'Lots of small tiles filling the screen, to see many consoles at once.',
-    kind: 'system',
-    diagram: [...grid(0.04, 0.05, 0.92, 0.8, 6, 4), { x: 0.3, y: 0.9, w: 0.4, h: 0.04, role: 'info' }],
-    elements: gridElements({ pos: '0.04 0.05', size: '0.92 0.8', autoLayout: '6 4', margin: '0.008 0.014', scrollDirection: 'vertical', centerSelection: 'false' }, '0 0.89', 'center'),
-    assets: { 'tile.svg': TILE_SVG },
-  },
-  {
-    id: 'tile-row',
-    label: 'Dashboard row',
-    description: 'A row of tiles across the top, like a modern console dashboard, with room for big artwork below.',
-    kind: 'system',
-    diagram: [...grid(0.04, 0.1, 0.92, 0.2, 7, 1), { x: 0.05, y: 0.62, w: 0.4, h: 0.07, role: 'logo' }, { x: 0.05, y: 0.72, w: 0.3, h: 0.04, role: 'info' }],
-    elements: gridElements({ pos: '0.04 0.1', size: '0.92 0.2', autoLayout: '7 1', margin: '0.01 0', scrollDirection: 'horizontal', centerSelection: 'false' }, '0.05 0.72', 'left'),
-    assets: { 'tile.svg': TILE_SVG },
-  },
-  {
-    id: 'big-tiles',
-    label: 'Big tiles',
-    description: 'Five large tiles across the middle, the selected one in the centre. A modern handheld-console feel.',
-    kind: 'system',
-    diagram: [...grid(0.04, 0.3, 0.92, 0.36, 5, 1), { x: 0.3, y: 0.72, w: 0.4, h: 0.05, role: 'info' }],
-    elements: gridElements({ pos: '0.04 0.3', size: '0.92 0.36', autoLayout: '5 1', margin: '0.016 0', scrollDirection: 'horizontal', centerSelection: 'true', autoLayoutSelectedZoom: '1.12' }, '0 0.72', 'center'),
-    assets: { 'tile.svg': TILE_SVG },
-  },
+  ...SYSTEM_LAYOUTS.map(systemPreset),
 ];
 
 
-/** Diagram cells for a grid. */
-function grid(x: number, y: number, w: number, h: number, cols: number, rows: number): Rect[] {
-  const out: Rect[] = [];
-  const gw = w / cols;
-  const gh = h / rows;
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out.push({ x: x + c * gw + gw * 0.06, y: y + r * gh + gh * 0.08, w: gw * 0.88, h: gh * 0.84, role: r === 0 && c === 0 ? 'carousel' : 'art' });
-  return out;
+/** A plain system layout preset: moves RetroBat's carousel (or grid) and info line, nothing else. */
+function systemPreset(l: SystemLayout): LayoutPreset {
+  const [infoPos, infoSize, infoAlign] = l.info;
+  const systemInfo = { pos: infoPos, size: infoSize, alignment: infoAlign, visible: 'true' };
+  return {
+    id: l.id,
+    label: l.label,
+    description: l.description,
+    kind: 'system',
+    diagram: l.diagram,
+    elements: l.grid ? { ...gridElements(l.grid), systemInfo } : { systemcarousel: { ...l.carousel! }, systemInfo },
+    assets: l.grid ? { 'tile.svg': TILE_SVG } : undefined,
+  };
 }
 
 /**
  * Elements for a system grid in the way RetroBat themes write it: an imagegrid, tile styles
  * for normal and selected tiles, logo colours, and the info line.
  */
-function gridElements(gridProps: Props, infoPos: string, infoAlign: string): Record<string, Props> {
+function gridElements(gridProps: Props): Record<string, Props> {
   return {
     imagegrid: { ...gridProps, autoLayoutSelectedZoom: gridProps.autoLayoutSelectedZoom ?? '1.06', animateSelection: 'true', padding: '0.012 0.012 0.012 0.012', scrollLoop: 'false', scrollbarColor: '00000000', zIndex: '30' },
     default: { backgroundImage: './_inc/ccs/common/tile.svg', backgroundCornerSize: '22 22', backgroundColor: 'FFFFFF22', imageColor: 'FFFFFFFF', padding: '24 24 24 24', selectionMode: 'full', imageSizeMode: 'maxSize' },
@@ -354,7 +239,6 @@ function gridElements(gridProps: Props, infoPos: string, infoAlign: string): Rec
     gridtile: { visible: 'false', size: '0 0' },
     'gridtile.image': { color: 'FFFFFFAA' },
     'gridtile.image:selected': { color: 'FFFFFFFF' },
-    systemInfo: { pos: infoPos, size: '0.9 0.05', alignment: infoAlign, visible: 'true' },
   };
 }
 
@@ -381,12 +265,36 @@ const MARK = (view: string) => `ChannelCraft layout preset (${view})`;
 
 /** The preset id last applied to a view, read back from its marker comment. */
 export function appliedLayout(project: ThemeProject, view: string): string | null {
+  return markerText(project, view)?.match(/\[([\w-]+)\]/)?.[1] ?? null;
+}
+
+/**
+ * The system layout in use on the system screen, if ChannelCraft wrote it: a plain layout preset,
+ * or the layout of a design (the one chosen with it, or the design's own).
+ */
+export function appliedSystemLayout(project: ThemeProject): string | null {
+  const text = markerText(project, 'system');
+  if (!text) return null;
+  const chosen = text.match(/\[layout:([\w-]+)\]/)?.[1];
+  if (chosen) return chosen;
+  const id = text.match(/\[([\w-]+)\]/)?.[1] ?? null;
+  if (id?.startsWith('design-')) return DESIGNS.find((d) => `design-${d.id}` === id)?.system ?? null;
+  return id;
+}
+
+/** The design on a screen, if one was applied there. */
+export function appliedDesign(project: ThemeProject, view: string): Design | null {
+  const id = appliedLayout(project, view);
+  return id?.startsWith('design-') ? (DESIGNS.find((d) => `design-${d.id}` === id) ?? null) : null;
+}
+
+function markerText(project: ThemeProject, view: string): string | null {
   const entry = project.entry;
   if (!entry?.doc.root) return null;
   for (const n of entry.doc.root.children) {
     if (n.kind !== 'comment') continue;
     const text = entry.src.slice(n.start, n.end);
-    if (text.includes(MARK(view))) return text.match(/\[([\w-]+)\]/)?.[1] ?? null;
+    if (text.includes(MARK(view))) return text;
   }
   return null;
 }
@@ -425,10 +333,11 @@ export function blockChange(project: ThemeProject, res: Resolution, view: string
 }
 
 /** Changes that apply a design to the given views; `hideOwn` hides the theme's own decorations. */
-export function designChanges(project: ThemeProject, res: Resolution, design: Design, ctx: DesignContext, views: string[], hideOwn: boolean): Change[] {
+export function designChanges(project: ThemeProject, res: Resolution, design: Design, ctx: DesignContext, views: string[], hideOwn: boolean, systemLayoutId = design.system): Change[] {
   const out: Change[] = [];
+  const layout = systemLayout(systemLayoutId) ?? systemLayout(design.system)!;
   for (const view of views) {
-    const els = designElements(design, ctx, view);
+    const els = designElements(design, ctx, view, layout.id);
     if (!els.length) continue;
     const names = new Set(els.map((e) => e.name));
     const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
@@ -438,7 +347,8 @@ export function designChanges(project: ThemeProject, res: Resolution, design: De
         if (e.extra && !names.has(e.name) && !isDesignExtra(e.name)) body.push(`  <${e.type} name="${e.name}" extra="${e.extra}">`, '    <visible>false</visible>', `  </${e.type}>`);
       }
     }
-    out.push(blockChange(project, res, view, `design ${design.label} [design-${design.id}]`, body));
+    const title = view === 'system' ? `design ${design.label} [design-${design.id}], layout ${layout.label} [layout:${layout.id}]` : `design ${design.label} [design-${design.id}]`;
+    out.push(blockChange(project, res, view, title, body));
   }
   return out;
 }
