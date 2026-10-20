@@ -1,8 +1,9 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
-  import { fileUrl } from '$lib/api';
+  import { api, fileUrl } from '$lib/api';
   import { join } from '$lib/path';
+  import { FONT_CATALOG } from '$lib/theme/fonts';
 
   let {
     value,
@@ -58,6 +59,41 @@
     browsing = false;
     onchange(toRelative(join(ed.project!.dir, rel)));
   }
+
+  // ---- fonts ----
+  let fontTab = $state<'theme' | 'free' | 'pc'>('theme');
+  let pcFonts = $state<{ name: string; path: string; source: string }[]>([]);
+  let busy = $state(false);
+
+  async function loadPcFonts() {
+    if (pcFonts.length) return;
+    try {
+      pcFonts = (await api.listFonts()).sort((a, b) => a.name.localeCompare(b.name));
+    } catch (e) {
+      ed.notify(String(e), 'error');
+    }
+  }
+
+  async function pickCatalog(id: string) {
+    busy = true;
+    const rel = await ed.ensureFont(id);
+    busy = false;
+    if (rel) pick(rel);
+    else ed.notify('That font could not be downloaded. Check the internet connection.', 'error');
+  }
+
+  async function pickPc(path: string) {
+    busy = true;
+    try {
+      const rel = await api.addFontToTheme(ed.project!.dir, path);
+      ed.project!.setAssets(await api.listThemeFiles(ed.project!.dir));
+      pick(rel);
+    } catch (e) {
+      ed.notify(String(e), 'error');
+    } finally {
+      busy = false;
+    }
+  }
 </script>
 
 <div class="asset">
@@ -76,6 +112,36 @@
         <input placeholder="Filter {kind}s…" bind:value={filter} />
         <button class="small" onclick={importFile}>Import…</button>
       </div>
+      {#if kind === 'font'}
+        <div class="ftabs" role="tablist">
+          <button class:on={fontTab === 'theme'} onclick={() => (fontTab = 'theme')}>In this theme</button>
+          <button class:on={fontTab === 'free'} onclick={() => (fontTab = 'free')}>Free fonts</button>
+          <button class:on={fontTab === 'pc'} onclick={() => ((fontTab = 'pc'), loadPcFonts())}>On this PC</button>
+        </div>
+      {/if}
+      {#if kind === 'font' && fontTab === 'free'}
+        <div class="items">
+          {#each FONT_CATALOG.filter((f) => !filter || f.label.toLowerCase().includes(filter.toLowerCase())) as f (f.id)}
+            <button class="item ghost font" onclick={() => pickCatalog(f.id)} disabled={busy}>
+              <span>{f.label}</span>
+              <small class="faint">{f.style}</small>
+            </button>
+          {/each}
+          <p class="faint lic">Free fonts (Open Font License) from Google Fonts, downloaded into the theme when picked.</p>
+        </div>
+      {:else if kind === 'font' && fontTab === 'pc'}
+        <div class="items">
+          {#each pcFonts.filter((f) => !filter || f.name.toLowerCase().includes(filter.toLowerCase())).slice(0, 300) as f (f.path)}
+            <button class="item ghost font" onclick={() => pickPc(f.path)} disabled={busy}>
+              <span>{f.name}</span>
+              <small class="faint">{f.source}</small>
+            </button>
+          {:else}
+            <p class="faint">{pcFonts.length ? 'No fonts match.' : 'Looking for fonts…'}</p>
+          {/each}
+          <p class="faint lic">The font file is copied into the theme. Check a font's licence before sharing your theme.</p>
+        </div>
+      {:else}
       <div class="items" class:imgs={kind === 'image'}>
         {#each assets as a (a.rel)}
           <button class="item ghost" onclick={() => pick(a.rel)} title={a.rel}>
@@ -88,6 +154,7 @@
           <p class="faint">No {kind} files in this theme.</p>
         {/each}
       </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -153,6 +220,31 @@
     object-fit: contain;
     background: repeating-conic-gradient(#20242b 0 25%, #2a2f38 0 50%) 0 0 / 10px 10px;
     border-radius: 4px;
+  }
+  .ftabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 6px;
+  }
+  .ftabs button {
+    flex: 1;
+    background: transparent;
+    padding: 3px 4px;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+  .ftabs button.on {
+    background: var(--raised);
+    color: var(--text);
+  }
+  .item.font {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .lic {
+    font-size: 10.5px;
+    margin: 6px 2px 0;
   }
   .item span {
     font-size: 10.5px;

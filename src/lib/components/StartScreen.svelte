@@ -70,6 +70,8 @@
     <nav>
       <button class="nav on"><Icon name="home" size={16} /> Home</button>
       <button class="nav" onclick={() => ed.refreshThemes()} disabled={!ed.root}><Icon name="redo" size={16} /> Refresh themes</button>
+      <button class="nav" onclick={() => (ed.showSettings = true)}><Icon name="settings" size={16} /> Settings</button>
+      <button class="nav" onclick={() => (ed.showShortcuts = true)}><Icon name="help" size={16} /> Keyboard shortcuts</button>
     </nav>
     <div class="grow"></div>
     {#if ed.root}

@@ -9,12 +9,15 @@
     collapsed = $bindable(false),
     children,
     actions,
+    ontabmenu,
   }: {
     tabs: { id: string; label: string; icon?: string; title?: string; count?: number }[];
     active: string;
     collapsed?: boolean;
     children: Snippet;
     actions?: Snippet;
+    /** Right-click on a tab (to move or close the panel). */
+    ontabmenu?: (id: string, x: number, y: number) => void;
   } = $props();
 </script>
 
@@ -34,6 +37,11 @@
           onclick={() => {
             active = t.id;
             collapsed = false;
+          }}
+          oncontextmenu={(e) => {
+            if (!ontabmenu) return;
+            e.preventDefault();
+            ontabmenu(t.id, e.clientX, e.clientY);
           }}
         >
           {t.label}
@@ -85,6 +93,11 @@
     flex: 1;
     display: flex;
     min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
   .tab {
     background: transparent;

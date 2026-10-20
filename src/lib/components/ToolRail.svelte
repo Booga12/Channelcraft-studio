@@ -24,10 +24,10 @@
     </button>
   {/each}
   <div class="sep"></div>
-  <button class="tool" class:open={ed.leftTab === 'library'} onclick={() => (ed.leftTab = 'library')} title="Add ready-made elements that show RetroBat’s game and system data">
+  <button class="tool" class:open={ed.leftTab === 'library'} onclick={() => ed.showPanel('library')} title="Add ready-made elements that show RetroBat’s game and system data">
     <Icon name="sparkle" size={18} />
   </button>
-  <button class="tool" class:open={ed.leftTab === 'presets'} onclick={() => (ed.leftTab = 'presets')} title="Layout presets and colour palettes">
+  <button class="tool" class:open={ed.leftTab === 'presets'} onclick={() => ed.showPanel('presets')} title="Layout presets and colour palettes">
     <Icon name="grid" size={18} />
   </button>
   <div class="sep"></div>

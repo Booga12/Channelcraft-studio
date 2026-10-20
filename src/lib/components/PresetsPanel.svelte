@@ -4,10 +4,23 @@
   import { viewLabel } from '$lib/friendly';
   import { appliedLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
   import Icon from './Icon.svelte';
+  import DesignThumb from './DesignThumb.svelte';
+  import { DESIGNS, type Design } from '$lib/theme/designs';
 
   const GAME_LISTS = ['basic', 'detailed', 'video'];
 
   let allLists = $state(true);
+  let hideOwn = $state(true);
+  let applying = $state(false);
+
+  async function applyDesign(d: Design) {
+    applying = true;
+    try {
+      await ed.applyDesign(d, { hideOwn });
+    } finally {
+      applying = false;
+    }
+  }
 
   const layouts = $derived(layoutsFor(ed.view));
   const current = $derived.by(() => {
@@ -45,6 +58,23 @@
 </script>
 
 <div class="presets">
+  <section>
+    <h4>Designs</h4>
+    <p class="dim note">A complete look for every screen: artwork, colours, font, animations, and all of RetroBat's game and system data placed for you.</p>
+    <label class="chk"><input type="checkbox" bind:checked={hideOwn} /> Hide this theme's own decorations</label>
+    <div class="designs">
+      {#each DESIGNS as d (d.id)}
+        <button class="dcard" class:on={current === `design-${d.id}`} onclick={() => applyDesign(d)} title={d.description} disabled={applying}>
+          <DesignThumb design={d} />
+          <span class="name">
+            {#if current === `design-${d.id}`}<Icon name="check" size={12} />{/if}
+            {d.label}
+          </span>
+        </button>
+      {/each}
+    </div>
+  </section>
+
   <section>
     <h4>Layout of {viewLabel(ed.view)}</h4>
     {#if !layouts.length}
@@ -171,6 +201,30 @@
     color: var(--text-faint);
     font-size: 10.5px;
     line-height: 1.3;
+  }
+  .designs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .dcard {
+    display: grid;
+    gap: 4px;
+    padding: 5px;
+    background: var(--bg);
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    text-align: left;
+  }
+  .dcard:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+  .dcard.on {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .dcard.on .name {
+    color: var(--accent);
   }
   .pals {
     display: grid;

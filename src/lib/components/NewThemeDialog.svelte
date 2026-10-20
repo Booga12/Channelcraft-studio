@@ -1,15 +1,15 @@
 <script lang="ts" module>
   export interface StarterChoice {
-    game: string;
-    system: string;
-    palette: string;
+    design: string;
+    artFrom: string | null;
   }
 </script>
 
 <script lang="ts">
   import { ed } from '$lib/editor.svelte';
   import type { ThemeInfo } from '$lib/api';
-  import { LAYOUTS, PALETTES, type Rect } from '$lib/theme/presets';
+  import { DESIGNS } from '$lib/theme/designs';
+  import DesignThumb from './DesignThumb.svelte';
 
   let {
     mode,
@@ -29,19 +29,36 @@
   let error = $state('');
   let working = $state(false);
   let input: HTMLInputElement;
-  let game = $state('classic');
-  let system = $state('carousel-middle');
-  let palette = $state('midnight');
-
-  const gameLayouts = LAYOUTS.filter((l) => l.kind === 'game');
-  const systemLayouts = LAYOUTS.filter((l) => l.kind === 'system');
-
-  const COLORS: Record<Rect['role'], string> = { list: '#378ef0', art: '#e8733d', text: '#8a8a8a', logo: '#b98cff', carousel: '#2d9d78', info: '#8a8a8a' };
+  let design = $state('cinema');
+  let artFrom = $state<string>('');
+  let sources = $state<{ theme: ThemeInfo; logos: number; consoles: number }[]>([]);
+  let scanning = $state(false);
 
   const exists = $derived(ed.themes.some((t) => t.name.toLowerCase() === name.trim().toLowerCase()));
 
   $effect(() => {
     input?.select();
+  });
+
+  // Find installed themes that have system logos and console pictures to borrow.
+  $effect(() => {
+    if (mode !== 'new') return;
+    scanning = true;
+    (async () => {
+      const out: typeof sources = [];
+      for (const t of ed.themes) {
+        try {
+          const f = await ed.findConsoleArt(t.path);
+          if (f.logoCount >= 10) out.push({ theme: t, logos: f.logoCount, consoles: f.consoleCount });
+        } catch {
+          // Unreadable theme: skip it.
+        }
+      }
+      out.sort((a, b) => b.logos + b.consoles - (a.logos + a.consoles));
+      sources = out;
+      if (out[0] && !artFrom) artFrom = out[0].theme.path;
+      scanning = false;
+    })();
   });
 
   async function submit(e: Event) {
@@ -51,7 +68,7 @@
     error = '';
     try {
       const path = mode === 'new' ? await ed.createTheme(name.trim()) : await ed.duplicateTheme(source!.path, name.trim());
-      oncreated(path, mode === 'new' ? { game, system, palette } : undefined);
+      oncreated(path, mode === 'new' ? { design, artFrom: artFrom || null } : undefined);
     } catch (err) {
       error = String(err);
     } finally {
@@ -60,21 +77,12 @@
   }
 </script>
 
-{#snippet diagram(rects: Rect[])}
-  <svg viewBox="0 0 160 90" class="pic" aria-hidden="true">
-    <rect x="0" y="0" width="160" height="90" fill="#141414" />
-    {#each rects as r}
-      <rect x={r.x * 160} y={r.y * 90} width={r.w * 160} height={r.h * 90} rx="2" fill={COLORS[r.role]} opacity={r.role === 'text' || r.role === 'info' ? 0.55 : 0.9} />
-    {/each}
-  </svg>
-{/snippet}
-
 <div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && oncancel()} onkeydown={(e) => e.key === 'Escape' && oncancel()}>
   <form class="dialog" class:wide={mode === 'new'} onsubmit={submit}>
     <h2>{mode === 'new' ? 'New theme' : `Duplicate “${source?.name}”`}</h2>
     <p class="dim">
       {#if mode === 'new'}
-        Pick a starting point. You can change everything afterwards, and switch layouts any time in the Presets panel.
+        Pick a design to start from. It comes with artwork, colours, a font, animations and every RetroBat data element already placed: box art, screenshots, videos, logos, descriptions and more.
       {:else}
         Copies every file of the theme to a new folder, so you can change the copy and keep the original.
       {/if}
@@ -89,44 +97,27 @@
 
     {#if mode === 'new'}
       <fieldset>
-        <legend>Game list layout</legend>
-        <div class="choices">
-          {#each gameLayouts as l (l.id)}
-            <label class="choice" class:on={game === l.id} title={l.description}>
-              <input type="radio" name="game" value={l.id} bind:group={game} />
-              {@render diagram(l.diagram)}
-              <span>{l.label}</span>
+        <legend>Design</legend>
+        <div class="designs">
+          {#each DESIGNS as d (d.id)}
+            <label class="choice" class:on={design === d.id} title={d.description}>
+              <input type="radio" name="design" value={d.id} bind:group={design} />
+              <DesignThumb design={d} />
+              <span class="dname">{d.label}</span>
+              <small>{d.description}</small>
             </label>
           {/each}
         </div>
       </fieldset>
       <fieldset>
-        <legend>System screen</legend>
-        <div class="choices">
-          {#each systemLayouts as l (l.id)}
-            <label class="choice" class:on={system === l.id} title={l.description}>
-              <input type="radio" name="system" value={l.id} bind:group={system} />
-              {@render diagram(l.diagram)}
-              <span>{l.label}</span>
-            </label>
+        <legend>Console logos and pictures</legend>
+        <select bind:value={artFrom} disabled={scanning}>
+          <option value="">{scanning ? 'Looking through your themes…' : 'None: show console names as text'}</option>
+          {#each sources as s (s.theme.path)}
+            <option value={s.theme.path}>Copy from {s.theme.name} ({s.logos} logos{s.consoles ? `, ${s.consoles} console pictures` : ''})</option>
           {/each}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>Colours</legend>
-        <div class="pals">
-          {#each PALETTES as p (p.id)}
-            <label class="pal" class:on={palette === p.id}>
-              <input type="radio" name="palette" value={p.id} bind:group={palette} />
-              <span class="sw">
-                {#each ['bgColor', 'accentColor', 'textColor', 'dimTextColor'] as k}
-                  <span style:background="#{p.colors[k].slice(0, 6)}"></span>
-                {/each}
-              </span>
-              <span>{p.label}</span>
-            </label>
-          {/each}
-        </div>
+        </select>
+        <small class="note">Copies the system logos (and console pictures, if it has them) from one of your installed themes, so the system screen shows real logos straight away.</small>
       </fieldset>
     {/if}
 
@@ -155,12 +146,12 @@
     overflow: auto;
     background: var(--panel);
     border: 1px solid #3a3a3a;
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 20px 24px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   }
   .dialog.wide {
-    width: min(720px, 94vw);
+    width: min(880px, 95vw);
   }
   h2 {
     margin: 0 0 6px;
@@ -191,61 +182,48 @@
     padding: 0;
     margin-bottom: 6px;
   }
-  .choices {
+  .designs {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 10px;
   }
-  .choice,
-  .pal {
+  .choice {
     position: relative;
     display: grid;
     gap: 4px;
+    align-content: start;
     padding: 6px;
     background: var(--bg);
     border: 1px solid #3a3a3a;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 11.5px;
   }
-  .choice input,
-  .pal input {
+  .choice input {
     position: absolute;
     opacity: 0;
     pointer-events: none;
   }
-  .choice.on,
-  .pal.on {
+  .choice.on {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent);
   }
-  .choice:has(input:focus-visible),
-  .pal:has(input:focus-visible) {
+  .choice:has(input:focus-visible) {
     outline: 2px solid var(--accent);
   }
-  .pic {
+  .dname {
+    font-weight: 600;
+  }
+  small {
+    color: var(--text-faint);
+    font-size: 10.5px;
+    line-height: 1.35;
+  }
+  select {
     width: 100%;
+  }
+  .note {
     display: block;
-    border-radius: 3px;
-  }
-  .pals {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-  .pal {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .sw {
-    display: flex;
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  .sw span {
-    width: 10px;
-    height: 18px;
+    margin-top: 5px;
   }
   .err {
     color: var(--danger);

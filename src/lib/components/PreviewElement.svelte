@@ -435,9 +435,10 @@
   }
   /* Artwork RetroBat fills in per game: a blue frame with its name. */
   .placeholder.data {
-    background: repeating-linear-gradient(45deg, rgba(55, 142, 240, 0.12) 0 14px, rgba(55, 142, 240, 0.2) 14px 28px);
-    border-color: rgba(55, 142, 240, 0.6);
-    color: #bfe0ff;
+    background: rgba(55, 142, 240, 0.08);
+    border: 2px dashed rgba(55, 142, 240, 0.45);
+    color: rgba(191, 224, 255, 0.8);
+    font-size: 18px;
   }
   .text {
     display: flex;

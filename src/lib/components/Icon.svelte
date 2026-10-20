@@ -40,7 +40,15 @@
     check: 'M5 12.5l4.5 4.5L19 7',
     settings: 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6 M19 12l2-1-1-3-2.2.2-1.3-1.3L16.7 4.7l-3-1-1 2h-1.4l-1-2-3 1 .2 2.2L6.2 8.2 4 8l-1 3 2 1v1.4l-2 1 1 3 2.2-.2 1.3 1.3-.2 2.2 3 1 1-2h1.4l1 2 3-1-.2-2.2 1.3-1.3 2.2.2 1-3-2-1z',
     lock: 'M6 11h12v9H6z M8.5 11V8a3.5 3.5 0 0 1 7 0v3',
-    sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
+    alignLeft: 'M4 3v18 M8 7h10v4H8z M8 13h6v4H8z',
+    alignHCenter: 'M12 3v18 M6 7h12v4H6z M8 13h8v4H8z',
+    alignRight: 'M20 3v18 M6 7h10v4H6z M10 13h6v4h-6z',
+    alignTop: 'M3 4h18 M7 8v10h4V8z M13 8v6h4V8z',
+    alignVCenter: 'M3 12h18 M7 6v12h4V6z M13 8v8h4V8z',
+    alignBottom: 'M3 20h18 M7 6v10h4V6z M13 10v6h4v-6z',
+    distH: 'M4 4v16 M20 4v16 M10 8h4v8h-4z',
+    distV: 'M4 4h16 M4 20h16 M8 10h8v4H8z',
+    sparkle:'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
   };
 
   export type IconName = keyof typeof PATHS;

@@ -26,7 +26,7 @@
 
   function pickSystem(e: Event) {
     const s = ed.systems.find((x) => x.name === (e.currentTarget as HTMLSelectElement).value);
-    if (s) ed.settings.system = s;
+    if (s) ed.setSystem(s);
   }
 
   async function remove() {
@@ -38,8 +38,32 @@
   }
 </script>
 
+{#snippet aligners()}
+  {@const many = ed.selection.length > 1}
+  <div class="aligns" role="group" aria-label="Align">
+    <button class="icon" onclick={() => ed.align('left')} title={many ? 'Align left edges' : 'Move to the left edge of the screen'}><Icon name="alignLeft" size={16} /></button>
+    <button class="icon" onclick={() => ed.align('hcenter')} title={many ? 'Align centres' : 'Centre across the screen'}><Icon name="alignHCenter" size={16} /></button>
+    <button class="icon" onclick={() => ed.align('right')} title={many ? 'Align right edges' : 'Move to the right edge of the screen'}><Icon name="alignRight" size={16} /></button>
+    <button class="icon" onclick={() => ed.align('top')} title={many ? 'Align top edges' : 'Move to the top of the screen'}><Icon name="alignTop" size={16} /></button>
+    <button class="icon" onclick={() => ed.align('vcenter')} title={many ? 'Align middles' : 'Centre down the screen'}><Icon name="alignVCenter" size={16} /></button>
+    <button class="icon" onclick={() => ed.align('bottom')} title={many ? 'Align bottom edges' : 'Move to the bottom of the screen'}><Icon name="alignBottom" size={16} /></button>
+  </div>
+{/snippet}
+
 <div class="optbar">
-  {#if el}
+  {#if ed.selection.length > 1}
+    <div class="sel">
+      <Icon name="layers" size={15} />
+      <strong>{ed.selection.length} elements</strong>
+    </div>
+    <div class="sep"></div>
+    {@render aligners()}
+    <button class="icon" onclick={() => ed.distribute('h')} disabled={ed.selection.length < 3} title="Space evenly across"><Icon name="distH" size={16} /></button>
+    <button class="icon" onclick={() => ed.distribute('v')} disabled={ed.selection.length < 3} title="Space evenly down"><Icon name="distV" size={16} /></button>
+    <div class="sep"></div>
+    <button class="icon" onclick={() => ed.duplicate()} title="Duplicate (Ctrl+D)"><Icon name="copy" size={15} /></button>
+    <button class="icon" onclick={() => ed.deleteSelection()} title="Delete (Del)"><Icon name="trash" size={15} /></button>
+  {:else if el}
     <div class="sel">
       <Icon name={TYPE_ICONS[el.type] ?? 'file'} size={15} />
       <strong title={el.name}>{ed.simple ? elementLabel(el.name) : el.name}</strong>
@@ -67,6 +91,8 @@
       <Icon name={isVisible(el) ? 'eye' : 'eyeOff'} size={15} />
     </button>
     <button class="icon" onclick={remove} title="Delete this element"><Icon name="trash" size={15} /></button>
+    <div class="sep"></div>
+    {@render aligners()}
   {:else}
     <div class="sel faint"><Icon name="move" size={15} /> Click something on the screen to select it</div>
   {/if}
@@ -76,8 +102,8 @@
   <label class="f" title="Which console the preview shows">
     <Icon name="monitor" size={14} />
     <select value={ed.settings.system.name} onchange={pickSystem} class="system">
-      {#each ed.systems as s (s.name)}
-        <option value={s.name}>{s.fullName}</option>
+      {#each ed.previewSystems as s (s.name)}
+        <option value={s.name}>{ed.gameSystems.includes(s.name) ? '★ ' : ''}{s.fullName}</option>
       {/each}
     </select>
   </label>
@@ -155,6 +181,10 @@
   }
   .spacer {
     flex: 1;
+  }
+  .aligns {
+    display: flex;
+    gap: 0;
   }
   select.system {
     max-width: 220px;

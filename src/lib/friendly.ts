@@ -128,8 +128,35 @@ export const SIMPLE_PROPS = new Set([
 ]);
 
 /** "fontPath" → "Font path", "system-console-name" → "System console name". */
+/** Names of the parts ChannelCraft designs add. */
+const DESIGN_NAMES: Record<string, string> = {
+  ccs_background: 'Background',
+  ccs_fanart: 'Fan art',
+  ccs_fade: 'Fade',
+  ccs_boxart: 'Box art',
+  ccs_reflection: 'Box art reflection',
+  ccs_title: 'Game name',
+  ccs_favorite: 'Favourite badge',
+  ccs_clock: 'Clock',
+  ccs_console: 'Console picture',
+  ccs_systemart: 'Random game art',
+  ccs_systemname: 'System name',
+  ccs_systemmaker: 'Maker and year',
+  ccs_systemcount: 'Game count',
+  ccs_listpanel: 'Game list panel',
+  ccs_infopanel: 'Info panel',
+  ccs_artpanel: 'Artwork panel',
+  ccs_band: 'Carousel band',
+  ccs_wheelpanel: 'Wheel panel',
+  ccs_column: 'Logo column',
+  ccs_scanlines: 'Scanlines',
+  ccs_bezel: 'Screen bezel',
+};
+
 export function humanize(name: string): string {
+  if (DESIGN_NAMES[name]) return DESIGN_NAMES[name];
   const s = name
+    .replace(/^ccs_/, '')
     .replace(/^md_lbl_/, 'label ')
     .replace(/^md_/, '')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')

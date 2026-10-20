@@ -7,8 +7,15 @@
   import EditorView from '$lib/components/EditorView.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import Guide from '$lib/components/Guide.svelte';
+  import SettingsDialog from '$lib/components/SettingsDialog.svelte';
+  import ShortcutsDialog from '$lib/components/ShortcutsDialog.svelte';
+  import SearchPalette from '$lib/components/SearchPalette.svelte';
+  import { prefs } from '$lib/prefs.svelte';
+  import { api } from '$lib/api';
 
   onMount(() => {
+    prefs.applyLook();
+    ed.startAutosave();
     if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window)) {
       // Running in a plain browser during development: use the read-only bridge.
       import('$lib/devmock').then((m) => {
@@ -28,6 +35,8 @@
         cancelLabel: 'Keep editing',
       });
       if (!leave) event.preventDefault();
+      // Closing without saving on purpose: don't offer these changes back next time.
+      else if (ed.project) await api.clearRecovery(ed.recoveryKey(ed.project.dir)).catch(() => {});
     });
     return () => {
       unlisten.then((f) => f());
@@ -50,5 +59,14 @@
 {/if}
 {#if ed.showGuide}
   <Guide />
+{/if}
+{#if ed.showSettings}
+  <SettingsDialog />
+{/if}
+{#if ed.showShortcuts}
+  <ShortcutsDialog />
+{/if}
+{#if ed.showSearch && ed.project}
+  <SearchPalette />
 {/if}
 <Toast />

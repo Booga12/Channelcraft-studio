@@ -4,6 +4,7 @@
   import { viewLabel } from '$lib/friendly';
   import type { Ratio } from '$lib/theme/context';
   import Icon from './Icon.svelte';
+  import { BUILTIN_WORKSPACES, prefs, type PanelId } from '$lib/prefs.svelte';
 
   interface Item {
     label?: string;
@@ -46,15 +47,36 @@
     { v: '4/3', label: 'Old TV (4:3)' },
   ];
 
+  const PANELS: [PanelId, string][] = [
+    ['elements', 'Layers'],
+    ['library', 'Add'],
+    ['presets', 'Presets'],
+    ['variables', 'Colours'],
+    ['options', 'Options'],
+    ['history', 'History'],
+    ['files', 'Files'],
+  ];
+
+  function saveWorkspace() {
+    const n = prefs.v.customWorkspaces.length + 1;
+    const name = `My workspace ${n}`;
+    prefs.saveWorkspaceAs(name);
+    ed.notify(`Saved as “${name}”. Find it in the Window menu.`);
+  }
+
   const menus = $derived<{ id: string; label: string; items: Item[] }[]>([
     {
       id: 'file',
       label: 'File',
       items: [
         { label: 'Save', shortcut: 'Ctrl+S', action: () => ed.save(), disabled: ed.dirtyCount === 0 },
+        { label: 'Export as zip…', action: () => ed.exportZip() },
+        { label: 'Make preview.png from this screen', action: () => ed.makePreviewImage() },
         { separator: true },
         { label: isActive ? 'In use by RetroBat' : 'Use in RetroBat', action: () => ed.setActive(), disabled: isActive },
         { label: 'Launch RetroBat', action: launch },
+        { separator: true },
+        { label: 'Settings…', shortcut: 'Ctrl+,', action: () => (ed.showSettings = true) },
         { separator: true },
         { label: 'Close theme', action: close },
       ],
@@ -66,21 +88,51 @@
         { label: 'Undo', shortcut: 'Ctrl+Z', action: () => ed.undo(), disabled: !ed.canUndo },
         { label: 'Redo', shortcut: 'Ctrl+Y', action: () => ed.redo(), disabled: !ed.canRedo },
         { separator: true },
+        { label: 'Copy', shortcut: 'Ctrl+C', action: () => ed.copy(), disabled: !ed.selection.length },
+        { label: 'Paste', shortcut: 'Ctrl+V', action: () => ed.paste() },
+        { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => ed.duplicate(), disabled: !ed.selection.length },
+        { label: 'Delete', shortcut: 'Del', action: () => ed.deleteSelection(), disabled: !ed.selection.length },
+        { separator: true },
+        { label: 'Select all', shortcut: 'Ctrl+A', action: () => ed.selectAll() },
         { label: 'Deselect', shortcut: 'Esc', action: () => (ed.selected = null), disabled: !ed.selected },
+        { separator: true },
+        { label: 'Search…', shortcut: 'Ctrl+K', action: () => (ed.showSearch = true) },
       ],
     },
     {
       id: 'insert',
       label: 'Insert',
       items: [
-        { label: 'Ready-made elements…', action: () => (ed.leftTab = 'library') },
-        { label: 'Layout presets…', action: () => (ed.leftTab = 'presets') },
-        { label: 'Colour palettes…', action: () => (ed.leftTab = 'presets') },
+        { label: 'Design…', action: () => ed.showPanel('presets') },
+        { label: 'Ready-made elements…', action: () => ed.showPanel('library') },
+        { label: 'Layout presets…', action: () => ed.showPanel('presets') },
         { separator: true },
         { label: 'Picture', action: () => ed.addElement('image') },
         { label: 'Text', action: () => ed.addElement('text') },
         { label: 'Panel', action: () => ed.addElement('ninepatch') },
         { label: 'Clock', action: () => ed.addElement('clock') },
+      ],
+    },
+    {
+      id: 'arrange',
+      label: 'Arrange',
+      items: [
+        { label: 'Bring to front', shortcut: 'Ctrl+Shift+]', action: () => ed.arrange('front'), disabled: !ed.selection.length },
+        { label: 'Bring forward', shortcut: 'Ctrl+]', action: () => ed.arrange('forward'), disabled: !ed.selection.length },
+        { label: 'Send backward', shortcut: 'Ctrl+[', action: () => ed.arrange('backward'), disabled: !ed.selection.length },
+        { label: 'Send to back', shortcut: 'Ctrl+Shift+[', action: () => ed.arrange('back'), disabled: !ed.selection.length },
+        { separator: true },
+        { label: 'Align left', action: () => ed.align('left'), disabled: !ed.selection.length },
+        { label: 'Align centre', action: () => ed.align('hcenter'), disabled: !ed.selection.length },
+        { label: 'Align right', action: () => ed.align('right'), disabled: !ed.selection.length },
+        { label: 'Align top', action: () => ed.align('top'), disabled: !ed.selection.length },
+        { label: 'Align middle', action: () => ed.align('vcenter'), disabled: !ed.selection.length },
+        { label: 'Align bottom', action: () => ed.align('bottom'), disabled: !ed.selection.length },
+        { separator: true },
+        { label: 'Space evenly across', action: () => ed.distribute('h'), disabled: ed.selection.length < 3 },
+        { label: 'Space evenly down', action: () => ed.distribute('v'), disabled: ed.selection.length < 3 },
+        { separator: true },
+        { label: 'Lock / unlock', shortcut: 'Ctrl+L', action: () => ed.selection.forEach((n) => ed.setLocked(n, !ed.locked[n])), disabled: !ed.selection.length },
       ],
     },
     {
@@ -96,15 +148,44 @@
         { label: 'Zoom to fit', shortcut: 'Ctrl+0', action: () => (ed.zoom = 'fit') },
         { label: 'Actual size', shortcut: 'Ctrl+1', action: () => (ed.zoom = 1) },
         { separator: true },
+        { label: 'Grid', shortcut: "Ctrl+'", checked: prefs.v.showGrid, action: () => prefs.set('showGrid', !prefs.v.showGrid) },
+        { label: 'TV safe area', checked: prefs.v.showSafeArea, action: () => prefs.set('showSafeArea', !prefs.v.showSafeArea) },
+        { label: 'Rulers', checked: prefs.v.showRulers, action: () => prefs.set('showRulers', !prefs.v.showRulers) },
+        { label: 'Snap to guides', checked: prefs.v.snap, action: () => prefs.set('snap', !prefs.v.snap) },
+        { label: 'Play animations', shortcut: 'P', checked: ed.playAnimations, action: () => (ed.playAnimations = !ed.playAnimations) },
+        { label: 'Six systems at once', checked: ed.contactSheet, action: () => (ed.contactSheet = !ed.contactSheet) },
+        { separator: true },
         { label: 'Simple mode', checked: ed.simple, action: () => ed.setMode('simple') },
         { label: 'Advanced mode', checked: !ed.simple, action: () => ed.setMode('advanced') },
         ...(ed.simple ? [] : [{ label: 'XML source', checked: ed.showSource, action: () => (ed.showSource = !ed.showSource) }]),
       ],
     },
     {
+      id: 'window',
+      label: 'Window',
+      items: [
+        { heading: 'Workspace' },
+        ...[...BUILTIN_WORKSPACES, ...prefs.v.customWorkspaces].map((w) => ({ label: w.name, checked: prefs.v.workspace.name === w.name, action: () => prefs.setWorkspace(w) })),
+        { label: 'Save this workspace', action: saveWorkspace },
+        ...(prefs.v.customWorkspaces.some((w) => w.name === prefs.v.workspace.name) ? [{ label: `Delete “${prefs.v.workspace.name}”`, action: () => (prefs.deleteWorkspace(prefs.v.workspace.name), prefs.setWorkspace(BUILTIN_WORKSPACES[0])) }] : []),
+        { separator: true },
+        { heading: 'Panels' },
+        ...PANELS.map(([id, label]) => ({ label, checked: !prefs.v.workspace.hidden?.includes(id), action: () => (prefs.v.workspace.hidden?.includes(id) ? (prefs.movePanel(id, 'bottom'), ed.showPanel(id)) : prefs.movePanel(id, null)) })),
+        { separator: true },
+        { label: 'Tools', checked: prefs.v.workspace.showRail, action: () => ((prefs.v.workspace.showRail = !prefs.v.workspace.showRail), prefs.save()) },
+        { label: 'Quick settings bar', checked: prefs.v.workspace.showOptionsBar, action: () => ((prefs.v.workspace.showOptionsBar = !prefs.v.workspace.showOptionsBar), prefs.save()) },
+        { label: `Panels on the ${prefs.v.workspace.dockSide === 'right' ? 'left' : 'right'}`, action: () => ((prefs.v.workspace.dockSide = prefs.v.workspace.dockSide === 'right' ? 'left' : 'right'), prefs.save()) },
+        { label: 'Reset workspace', action: () => prefs.setWorkspace(BUILTIN_WORKSPACES[0]) },
+      ],
+    },
+    {
       id: 'help',
       label: 'Help',
-      items: [{ label: 'Getting started', action: () => (ed.showGuide = true) }],
+      items: [
+        { label: 'Getting started', action: () => (ed.showGuide = true) },
+        { label: 'Keyboard shortcuts', shortcut: '?', action: () => (ed.showShortcuts = true) },
+        { label: 'Search for anything', shortcut: 'Ctrl+K', action: () => (ed.showSearch = true) },
+      ],
     },
   ]);
 
@@ -153,9 +234,16 @@
   </nav>
 
   <div class="doc" title={ed.project?.dir}>
+    <div class="history-btns" role="group" aria-label="Undo and redo">
+      <button onclick={() => ed.undo()} disabled={!ed.canUndo} title={ed.canUndo ? `Undo ${ed.history.done[ed.history.done.length - 1] ?? ''} (Ctrl+Z)` : 'Nothing to undo'}><Icon name="undo" size={15} /></button>
+      <button onclick={() => ed.redo()} disabled={!ed.canRedo} title={ed.canRedo ? `Redo ${ed.history.undone[0] ?? ''} (Ctrl+Y)` : 'Nothing to redo'}><Icon name="redo" size={15} /></button>
+    </div>
     <span class="name">{ed.project?.name}</span>
     {#if ed.dirtyCount > 0}<span class="dot" title="Unsaved changes">●</span>{/if}
     {#if isActive}<span class="badge accent">In use by RetroBat</span>{/if}
+    <button class="search" onclick={() => (ed.showSearch = true)} title="Search for any command, element or setting (Ctrl+K)">
+      <Icon name="zoomIn" size={13} /> Search <kbd>Ctrl K</kbd>
+    </button>
   </div>
 
   <div class="right">
@@ -279,6 +367,39 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .history-btns {
+    display: flex;
+    gap: 2px;
+    margin-right: 6px;
+  }
+  .history-btns button {
+    background: transparent;
+    padding: 4px 6px;
+    color: var(--text-dim);
+  }
+  .history-btns button:hover:not(:disabled) {
+    background: var(--raised);
+    color: var(--text);
+  }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 10px;
+    background: var(--bg);
+    border: 1px solid #3a3a3a;
+    border-radius: 14px;
+    padding: 3px 10px;
+    color: var(--text-faint);
+  }
+  .search:hover {
+    color: var(--text-dim);
+    border-color: #555;
+  }
+  .search kbd {
+    font: 10px var(--mono);
+    color: var(--text-faint);
   }
   .dot {
     color: var(--text-dim);

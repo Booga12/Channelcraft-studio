@@ -3,7 +3,8 @@
   import { ed } from '$lib/editor.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { bindingValue, screenSize } from '$lib/theme/context';
-  import type { ExprEnv } from '$lib/theme/expr';
+  import { evaluate, truthy, type ExprEnv } from '$lib/theme/expr';
+  import type { ResolvedElement } from '$lib/theme/resolver';
   import { assetExists, resolveAsset } from '$lib/theme/resolver';
   import { fmtNum, parsePair } from '$lib/theme/schema';
   import { isCarouselPart, isVisible, zOf } from '$lib/render';
@@ -92,6 +93,19 @@
     };
   });
 
+  /** Visible right now: evaluates data-driven visibility like {game:favorite}. */
+  function visibleNow(e: ResolvedElement): boolean {
+    const v = e.props.get('visible')?.value;
+    if (v && /[{(]/.test(v)) {
+      try {
+        return truthy(evaluate(v, exprEnv));
+      } catch {
+        return true;
+      }
+    }
+    return isVisible(e);
+  }
+
   const drawn = $derived.by(() => {
     const v = ed.currentView;
     if (!v) return [];
@@ -105,7 +119,7 @@
           !e.name.startsWith('gridtile') &&
           e.type !== 'sound' &&
           !e.type.startsWith('menu') &&
-          (isVisible(e) || ed.isSelected(e.name)),
+          (visibleNow(e) || ed.isSelected(e.name)),
       )
       .sort((a, b) => zOf(a) - zOf(b) || a.order - b.order);
   });
@@ -510,7 +524,7 @@
                   H={dims.height}
                   {exprEnv}
                   selected={false}
-                  ghost={!isVisible(el)}
+                  ghost={!visibleNow(el)}
                   {carousel}
                   res={ed.res}
                   env={ed.env}

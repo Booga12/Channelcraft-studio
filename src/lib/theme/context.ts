@@ -113,9 +113,16 @@ export function bindingValue(name: string, env: Environment, subsets: Map<string
     }
     case 'system': {
       const k = key.toLowerCase();
-      if (k === 'total' || k === 'gamecount') return 128;
-      if (k === 'played') return 37;
-      if (k === 'favorites') return 9;
+      const real = env.gameNames?.length;
+      if (k === 'total' || k === 'gamecount') return real ?? 128;
+      if (k === 'played') return real ? Math.ceil(real / 3) : 37;
+      if (k === 'favorites') return real ? Math.ceil(real / 8) : 9;
+      // A random game's art: the preview borrows the current game's.
+      if (k.startsWith('random') && env.game) {
+        const what = k.split('.').pop() ?? 'image';
+        const m = env.game.media;
+        return m[what] ?? (what === 'fanart' ? (m.fanart ?? m.image) : what === 'thumbnail' ? (m.thumbnail ?? m.image) : m.image) ?? '';
+      }
       if (k === 'image' || k === 'thumbnail' || k === 'video' || k === 'marquee' || k.startsWith('random')) return '';
       return builtinVar(`system.${key}`, env, '', subsets) ?? builtinVar(`system.${key[0]?.toLowerCase()}${key.slice(1)}`, env, '', subsets) ?? '';
     }

@@ -4,6 +4,7 @@
 // and can be swapped for another preset later.
 
 import { attr, patchInsertChild, patchReplaceSpan, type XNode } from '../xml/cst';
+import { designElements, elementsMarkup, isDesignExtra, type Design, type DesignContext } from './designs';
 import type { Change } from './edits';
 import type { ThemeProject } from './project';
 import type { Resolution } from './resolver';
@@ -288,8 +289,6 @@ export function appliedLayout(project: ThemeProject, view: string): string | nul
 
 /** Changes that write `preset` for each view, replacing an earlier ChannelCraft preset block. */
 export function layoutChanges(project: ThemeProject, res: Resolution, preset: LayoutPreset, views: string[]): Change[] {
-  const entry = project.entry!;
-  const root = entry.doc.root!;
   const changes: Change[] = [];
   for (const view of views) {
     const resolved = res.views.get(view);
@@ -303,14 +302,41 @@ export function layoutChanges(project: ThemeProject, res: Resolution, preset: La
       for (const [k, v] of Object.entries(props)) body.push(`    <${k}>${v}</${k}>`);
       body.push(`  </${type}>`);
     }
-    const tag = resolved?.custom ? 'customView' : 'view';
-    const markup = [`<!-- ${MARK(view)}: ${preset.label} [${preset.id}]. Delete this block to undo the preset. -->`, `<${tag} name="${view}">`, ...body, `</${tag}>`].join('\n');
-
-    const existing = findBlock(root.children, entry.src, view);
-    if (existing) changes.push({ file: entry, patch: patchReplaceSpan(entry.doc, existing.comment, existing.view, markup) });
-    else changes.push({ file: entry, patch: patchInsertChild(entry.doc, root, markup) });
+    changes.push(blockChange(project, res, view, `${preset.label} [${preset.id}]`, body));
   }
   return changes;
+}
+
+/**
+ * The ChannelCraft block for a view at the end of theme.xml: replaces the existing block (layout
+ * preset or design), or adds one. `body` lines are two-space indented children of the view.
+ */
+export function blockChange(project: ThemeProject, res: Resolution, view: string, title: string, body: string[]): Change {
+  const entry = project.entry!;
+  const root = entry.doc.root!;
+  const tag = res.views.get(view)?.custom ? 'customView' : 'view';
+  const markup = [`<!-- ${MARK(view)}: ${title}. Delete this block to undo it. -->`, `<${tag} name="${view}">`, ...body, `</${tag}>`].join('\n');
+  const existing = findBlock(root.children, entry.src, view);
+  return existing ? { file: entry, patch: patchReplaceSpan(entry.doc, existing.comment, existing.view, markup) } : { file: entry, patch: patchInsertChild(entry.doc, root, markup) };
+}
+
+/** Changes that apply a design to the given views; `hideOwn` hides the theme's own decorations. */
+export function designChanges(project: ThemeProject, res: Resolution, design: Design, ctx: DesignContext, views: string[], hideOwn: boolean): Change[] {
+  const out: Change[] = [];
+  for (const view of views) {
+    const els = designElements(design, ctx, view);
+    if (!els.length) continue;
+    const names = new Set(els.map((e) => e.name));
+    const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
+    const body = elementsMarkup(els, extras);
+    if (hideOwn) {
+      for (const e of res.views.get(view)?.elements.values() ?? []) {
+        if (e.extra && !names.has(e.name) && !isDesignExtra(e.name)) body.push(`  <${e.type} name="${e.name}" extra="${e.extra}">`, '    <visible>false</visible>', `  </${e.type}>`);
+      }
+    }
+    out.push(blockChange(project, res, view, `design ${design.label} [design-${design.id}]`, body));
+  }
+  return out;
 }
 
 function findBlock(children: XNode[], src: string, view: string) {

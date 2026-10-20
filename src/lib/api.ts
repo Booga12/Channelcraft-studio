@@ -72,9 +72,17 @@ export const tauriFs: ThemeFs = {
 };
 
 const urlCache = new Map<string, string>();
+/** Files created in this session (design artwork), shown before or without being on disk. */
+const virtualFiles = new Map<string, string>();
+
+export function registerVirtualFile(path: string, content: string, mime = 'image/svg+xml') {
+  virtualFiles.set(path.toLowerCase().replace(/\//g, '\\'), `data:${mime};charset=utf-8,${encodeURIComponent(content)}`);
+}
 
 /** URL the webview can load a local file from. */
 export function fileUrl(path: string): string {
+  const v = virtualFiles.get(path.toLowerCase().replace(/\//g, '\\'));
+  if (v) return v;
   let u = urlCache.get(path);
   if (!u) {
     u = convertFileSrc(path);

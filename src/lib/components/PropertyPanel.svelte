@@ -6,6 +6,7 @@
   import { TYPE_ICON } from '$lib/render';
   import { lineOf } from '$lib/xml/cst';
   import PropRow from './PropRow.svelte';
+  import { ANIMATIONS, presetOf } from '$lib/theme/animations';
   import { elementLabel, propLabel, SIMPLE_PROPS, TYPE_LABELS, typeLabel, viewHelp, viewLabel } from '$lib/friendly';
 
   const GROUPS: { id: PropSpec['group']; label: string }[] = [
@@ -32,6 +33,7 @@
 
   let adding = $state('');
   let showAll = $state(false);
+  const animId = $derived(el ? presetOf(el) : null);
   $effect(() => {
     el?.name;
     showAll = false;
@@ -146,6 +148,21 @@
       {/each}
     {/if}
   {/each}
+
+  <h4>Animation</h4>
+  <div class="anim">
+    <select value={animId ?? ''} onchange={(e) => ed.setAnimation(el.name, e.currentTarget.value || null)}>
+      <option value="">None</option>
+      {#if animId === 'custom'}<option value="custom" disabled>Custom (from the theme)</option>{/if}
+      <optgroup label="When the screen opens">
+        {#each ANIMATIONS.filter((a) => a.kind === 'entrance') as a}<option value={a.id} title={a.help}>{a.label}</option>{/each}
+      </optgroup>
+      <optgroup label="All the time">
+        {#each ANIMATIONS.filter((a) => a.kind === 'loop') as a}<option value={a.id} title={a.help}>{a.label}</option>{/each}
+      </optgroup>
+    </select>
+    <button class="secondary small" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title="Play animations in the preview">{ed.playAnimations ? '■ Stop' : '▶ Play'}</button>
+  </div>
 
   {#if ed.simple && hiddenCount > 0}
     <button class="more ghost" onclick={() => (showAll = !showAll)}>
@@ -277,6 +294,14 @@
   }
   .defs.hide {
     display: none;
+  }
+  .anim {
+    display: flex;
+    gap: 6px;
+    padding: 4px 12px 10px;
+  }
+  .anim select {
+    flex: 1;
   }
   .more {
     width: calc(100% - 24px);

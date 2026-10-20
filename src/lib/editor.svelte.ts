@@ -1,9 +1,9 @@
 import { load, type Store } from '@tauri-apps/plugin-store';
-import { ask } from '@tauri-apps/plugin-dialog';
-import { api, tauriFs, type RootInfo, type ThemeInfo } from './api';
+import { ask, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { api, registerVirtualFile, tauriFs, type RootInfo, type ThemeInfo } from './api';
 import { join, relative, dirname, pathKey } from './path';
 import { parseGamelist, type GameInfo } from './theme/games';
-import type { Environment, PreviewSettings } from './theme/context';
+import { screenSize, type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
 import { ThemeProject, type ThemeFile } from './theme/project';
 import { resolveTheme, type ResolvedElement, type Resolution } from './theme/resolver';
@@ -15,7 +15,9 @@ import { patchInsertChild, patchRemoveNode, patchReplaceSpan, patchSetAttr } fro
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
-import { LAYOUTS, layoutChanges, PALETTES, type LayoutPreset, type Palette } from './theme/presets';
+import { designChanges, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
+import { DESIGNS, designAssets, type Design } from './theme/designs';
+import { catalogFont } from './theme/fonts';
 
 interface HistoryEntry {
   label: string;
@@ -85,6 +87,14 @@ class Editor {
   showShortcuts = $state(false);
   showSearch = $state(false);
 
+  /** Bumped whenever a panel is asked for, so asking twice still brings it forward. */
+  panelRequest = $state(0);
+
+  showPanel(id: 'elements' | 'library' | 'presets' | 'options' | 'variables' | 'files' | 'history' | 'properties') {
+    this.leftTab = id as typeof this.leftTab;
+    this.panelRequest++;
+  }
+
   isSelected(name: string) {
     return this.selection.includes(name);
   }
@@ -107,7 +117,7 @@ class Editor {
   hidden = $state<Record<string, boolean>>({});
   sourceFile = $state<string | null>(null);
   sourceLine = $state<number | null>(null);
-  leftTab = $state<'elements' | 'library' | 'presets' | 'options' | 'variables' | 'files'>('elements');
+  leftTab = $state<'elements' | 'library' | 'presets' | 'options' | 'variables' | 'files' | 'history' | 'properties'>('elements');
   showSource = $state(false);
   toast = $state<Toast | null>(null);
   busy = $state(false);
@@ -734,18 +744,166 @@ class Editor {
   }
 
   /** Applies the choices from the New theme dialog to a freshly created theme and saves it. */
-  async applyStarter(choice: { game: string; system: string; palette: string }) {
-    const game = LAYOUTS.find((l) => l.id === choice.game);
-    const system = LAYOUTS.find((l) => l.id === choice.system);
-    const palette = PALETTES.find((p) => p.id === choice.palette);
-    if (system && this.viewNames.includes('system')) this.applyLayout(system, ['system']);
-    if (game) this.applyLayout(game, ['basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v)));
-    if (palette) this.applyPalette(palette);
+  async applyStarter(choice: { design: string; artFrom: string | null }) {
+    const p = this.project;
+    if (!p) return;
+    if (choice.artFrom) await this.importConsoleArt(choice.artFrom);
+    const design = DESIGNS.find((d) => d.id === choice.design);
+    if (design) await this.applyDesign(design, { hideOwn: true });
     await this.save();
     // The starting point is the saved theme, not something to undo back past.
     this.undoStack = [];
     this.redoStack = [];
-    this.view = 'detailed';
+    this.view = this.viewNames.includes('detailed') ? 'detailed' : this.view;
+  }
+
+  /** Makes a backup zip of the open theme once per session, before anything is written to it. */
+  async ensureBackup() {
+    const p = this.project;
+    if (!p || this.backedUp.has(p.dir)) return;
+    try {
+      await api.backupTheme(p.dir, prefs.v.backupsKeep);
+      this.backedUp.add(p.dir);
+    } catch {
+      // Browser preview or no access: nothing gets written anyway.
+    }
+  }
+
+  /** Downloads a catalogue font into the theme; returns its theme-relative path, or null. */
+  async ensureFont(id: string): Promise<string | null> {
+    const p = this.project;
+    const f = catalogFont(id);
+    if (!p || !f) return null;
+    const existing = p.assets.find((a) => a.rel.toLowerCase() === `_inc/fonts/${f.file}`.toLowerCase());
+    if (existing) return existing.rel;
+    try {
+      const rel = await api.downloadFont(p.dir, f.url, f.file);
+      p.setAssets([...p.assets, { rel, kind: 'font', size: 0 }]);
+      return rel;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Applies a design: writes its artwork into the theme, fetches its fonts, and replaces the
+   * layout of each screen with the design's (one undo step for the layout).
+   */
+  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[] } = {}) {
+    const p = this.project;
+    if (!p) return;
+    await this.ensureBackup();
+    const artRel = `_inc/ccs/${design.id}`;
+    const assets = designAssets(design);
+    let wrote = true;
+    for (const [file, svg] of Object.entries(assets)) {
+      const abs = join(p.dir, artRel, file);
+      registerVirtualFile(abs, svg);
+      try {
+        await api.writeText(abs, svg, false);
+      } catch {
+        wrote = false;
+      }
+    }
+    p.setAssets([...p.assets.filter((a) => !a.rel.startsWith(`${artRel}/`)), ...Object.keys(assets).map((f) => ({ rel: `${artRel}/${f}`, kind: 'image' as const, size: 0 }))]);
+    const font = await this.ensureFont(design.font);
+    const titleFont = design.titleFont ? await this.ensureFont(design.titleFont) : null;
+    const has = (dir: string) => p.assets.some((a) => a.rel.toLowerCase().startsWith(`${dir}/`));
+    const ctx = {
+      art: `./${artRel}`,
+      font: font ? `./${font}` : null,
+      titleFont: titleFont ? `./${titleFont}` : null,
+      logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null,
+      consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null,
+    };
+    this.rev++;
+    const res = this.res;
+    if (!res) return;
+    const views = opts.views ?? ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v));
+    this.commit(`design “${design.label}”`, designChanges(p, res, design, ctx, views, opts.hideOwn ?? true));
+    this.selected = null;
+    const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
+    this.notify(wrote ? `Design “${design.label}” applied.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `Design “${design.label}” applied in the preview only (files can’t be written here).`);
+  }
+
+  /**
+   * Finds the folders of system logos and console pictures in an installed theme, by counting
+   * image files named after systems.
+   */
+  async findConsoleArt(themeDir: string): Promise<{ logos: string | null; consoles: string | null; logoCount: number; consoleCount: number }> {
+    const files = await api.listThemeFiles(themeDir);
+    const names = new Set(this.systems.map((s) => s.theme.toLowerCase()));
+    const counts = new Map<string, number>();
+    for (const f of files) {
+      if (f.kind !== 'image') continue;
+      const i = f.rel.lastIndexOf('/');
+      const dir = i < 0 ? '' : f.rel.slice(0, i);
+      const stem = f.rel.slice(i + 1).replace(/\.[^.]+$/, '').toLowerCase();
+      if (names.has(stem)) counts.set(dir, (counts.get(dir) ?? 0) + 1);
+    }
+    const pick = (re: RegExp) => [...counts].filter(([d, n]) => re.test(d) && n >= 5).sort((a, b) => b[1] - a[1])[0];
+    const logos = pick(/logo|wheel|marquee/i) ?? [...counts].sort((a, b) => b[1] - a[1])[0];
+    const consoles = pick(/console|device|controller|hardware/i);
+    return {
+      logos: logos ? logos[0] : null,
+      consoles: consoles ? consoles[0] : null,
+      logoCount: logos?.[1] ?? 0,
+      consoleCount: consoles?.[1] ?? 0,
+    };
+  }
+
+  /** Copies system logos and console pictures from an installed theme into this one. */
+  async importConsoleArt(fromThemeDir: string) {
+    const p = this.project;
+    if (!p) return;
+    const found = await this.findConsoleArt(fromThemeDir);
+    let n = 0;
+    try {
+      if (found.logos !== null) n += await api.copyFolderIntoTheme(join(fromThemeDir, found.logos), p.dir, '_inc/systems/logos');
+      if (found.consoles) n += await api.copyFolderIntoTheme(join(fromThemeDir, found.consoles), p.dir, '_inc/systems/consoles');
+      p.setAssets(await api.listThemeFiles(p.dir));
+      this.rev++;
+      this.notify(`Copied ${n} logo and console pictures into the theme`);
+    } catch (e) {
+      this.notify(`Couldn't copy the console art: ${e}`, 'error');
+    }
+  }
+
+  /** Saves the theme as a zip, ready to share or copy to another RetroBat. */
+  async exportZip() {
+    const p = this.project;
+    if (!p) return;
+    const dest = await saveDialog({ title: 'Export theme', defaultPath: `${p.name}.zip`, filters: [{ name: 'Zip', extensions: ['zip'] }] });
+    if (!dest) return;
+    try {
+      if (this.dirtyCount) await this.save();
+      await api.exportTheme(p.dir, dest);
+      this.notify(`Exported to ${dest}. To install it, unzip it into RetroBat's themes folder.`);
+    } catch (e) {
+      this.notify(`Export failed: ${e}`, 'error');
+    }
+  }
+
+  /** Captures the current screen as the theme's preview.png (shown in RetroBat and here). */
+  async makePreviewImage() {
+    const p = this.project;
+    const stage = document.querySelector<HTMLElement>('.stage');
+    if (!p || !stage) return;
+    try {
+      const { toPng } = await import('html-to-image');
+      const { width, height } = screenSize(this.settings);
+      const keep = this.selection;
+      this.selection = [];
+      await new Promise((r) => setTimeout(r, 50));
+      const url = await toPng(stage, { width, height, pixelRatio: 1, style: { transform: 'none' }, filter: (n) => !(n instanceof HTMLElement && n.classList.contains('overlay')) });
+      this.selection = keep;
+      await api.writeBinary(join(p.dir, 'preview.png'), url.split(',')[1]);
+      p.setAssets(await api.listThemeFiles(p.dir));
+      await this.refreshThemes();
+      this.notify('Saved preview.png from this screen');
+    } catch (e) {
+      this.notify(`Couldn't capture the screen: ${e}`, 'error');
+    }
   }
 
   /** Sets every colour of a palette that this theme has a variable for. Returns how many were set. */
