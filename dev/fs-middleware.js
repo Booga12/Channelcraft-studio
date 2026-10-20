@@ -55,7 +55,16 @@ export function devFs() {
       return null;
     }
   };
-  const rootInfo = () => ({ root, themesDir: themesDir(), esHome: esHome(), resourcesDir: join(root, 'emulationstation', 'resources'), activeTheme: activeTheme() });
+  // The same RetroBat settings the app reads (see es_settings in src-tauri/src/commands.rs).
+  const esSettings = () => {
+    let cfg = '';
+    try {
+      cfg = readFileSync(join(esHome(), 'es_settings.cfg'), 'utf8');
+    } catch {}
+    const get = (n) => cfg.match(new RegExp(`name="${n}" value="([^"]*)"`))?.[1];
+    return { clock12: get('ClockMode12') === 'true', drawClock: get('DrawClock') !== 'false', transitionStyle: get('TransitionStyle') || 'auto', powerSaver: get('PowerSaverMode') || 'disabled' };
+  };
+  const rootInfo = () => ({ root, themesDir: themesDir(), esHome: esHome(), resourcesDir: join(root, 'emulationstation', 'resources'), activeTheme: activeTheme(), es: esSettings() });
   const guard = (p) => {
     if (!inside(p)) throw new Error(`Outside the RetroBat folder: ${p}`);
     return p;

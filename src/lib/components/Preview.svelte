@@ -604,7 +604,7 @@
         <button onclick={() => (ed.gameIndex = (ed.gameIndex + 1) % gamesHere)} title="Next game">›</button>
       </div>
     {:else}
-      <span class="faint">Sample game</span>
+      <span class="faint" title="This console has no scraped games in RetroBat, so made-up sample details are shown. Scrape it in RetroBat to preview your own games.">Sample game (made-up details)</span>
     {/if}
     <span class="spacer"></span>
     <div class="group toggles" role="group" aria-label="Canvas options">

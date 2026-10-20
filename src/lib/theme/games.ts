@@ -15,12 +15,20 @@ export interface GameInfo {
   players: string;
   playcount: string;
   lastplayed: string;
+  /** Total play time in seconds, as RetroBat stores it (MetaData.cpp: gametime). */
+  gametime: string;
   favorite: boolean;
   /** Absolute media paths by gamelist tag: image, thumbnail, marquee, video, fanart, boxart, wheel... */
   media: Record<string, string>;
 }
 
-const TEXT_TAGS = ['name', 'desc', 'rating', 'releasedate', 'developer', 'publisher', 'genre', 'players', 'playcount', 'lastplayed', 'favorite'];
+const TEXT_TAGS = ['name', 'desc', 'rating', 'releasedate', 'developer', 'publisher', 'genre', 'players', 'playcount', 'lastplayed', 'gametime', 'favorite', 'hidden'];
+
+/** `./x`, `../x`, `~/x` (the gamelist's folder in RetroBat) and absolute paths. */
+function mediaPath(systemDir: string, v: string): string {
+  if (/^[A-Za-z]:[\\/]|^\\\\/.test(v)) return v;
+  return join(systemDir, v.replace(/^~[\\/]/, './'));
+}
 
 export function parseGamelist(text: string, systemDir: string): GameInfo[] {
   const doc = parse(text);
@@ -33,9 +41,10 @@ export function parseGamelist(text: string, systemDir: string): GameInfo[] {
       const v = textOf(doc, c).trim();
       if (!v) continue;
       if (TEXT_TAGS.includes(c.name)) fields[c.name] = v;
-      else if (c.name !== 'path' && /^(\.\/|[A-Za-z]:[\\/])/.test(v) && /\.(png|jpe?g|gif|webp|svg|mp4|mkv|webm|avi)$/i.test(v)) media[c.name] = join(systemDir, v);
+      else if (c.name !== 'path' && /^(\.\.?[\\/]|~[\\/]|[A-Za-z]:[\\/]|\\\\)/.test(v) && /\.(png|jpe?g|gif|webp|svg|mp4|mkv|webm|avi)$/i.test(v)) media[c.name] = mediaPath(systemDir, v);
     }
-    if (!fields.name) continue;
+    // RetroBat doesn't show hidden games, so neither does the preview.
+    if (!fields.name || fields.hidden === 'true') continue;
     out.push({
       name: fields.name,
       description: fields.desc ?? '',
@@ -47,6 +56,7 @@ export function parseGamelist(text: string, systemDir: string): GameInfo[] {
       players: fields.players ?? '',
       playcount: fields.playcount ?? '',
       lastplayed: fields.lastplayed ?? '',
+      gametime: fields.gametime ?? '',
       favorite: fields.favorite === 'true',
       media,
     });
@@ -81,6 +91,7 @@ export function gameBinding(g: GameInfo, key: string): string | number | boolean
     case 'players':
     case 'playcount':
     case 'lastplayed':
+    case 'gametime':
       return g[k as 'developer'];
     case 'favorite':
       return g.favorite;

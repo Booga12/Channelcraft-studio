@@ -7,6 +7,8 @@ export interface SystemInfo {
   manufacturer: string;
   releaseYear: string;
   hardwareType: string;
+  /** The ROM folder as es_systems.cfg writes it (e.g. `~\..\roms\snes`), if known. */
+  path?: string;
 }
 
 /** Used when es_systems.cfg can't be read. */
@@ -51,6 +53,7 @@ export function parseEsSystems(text: string): SystemInfo[] {
       manufacturer: get('manufacturer'),
       releaseYear: get('release').slice(0, 4),
       hardwareType: get('hardware') || 'console',
+      path: get('path') || undefined,
     });
   }
   return out;

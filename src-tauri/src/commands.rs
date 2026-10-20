@@ -381,26 +381,66 @@ pub fn clear_recovery(app: AppHandle, key: String) -> CmdResult<()> {
     Ok(())
 }
 
-/// Systems that have a scraped gamelist in RetroBat's roms folder.
+/// A system's ROM folder from its es_systems.cfg `<path>`: `~` is RetroBat's emulationstation
+/// folder and relative paths start there too; without a path it's `roms\<name>`.
+fn rom_dir(root: &Path, name: &str, raw: Option<&str>) -> PathBuf {
+    let es = root.join("emulationstation");
+    match raw.map(str::trim).filter(|r| !r.is_empty()) {
+        None => root.join("roms").join(name),
+        Some(r) => {
+            let r = r.replace('/', "\\");
+            let p = if let Some(rest) = r.strip_prefix('~') {
+                es.join(rest.trim_start_matches('\\'))
+            } else if Path::new(&r).is_absolute() {
+                PathBuf::from(&r)
+            } else {
+                es.join(&r)
+            };
+            normalize(&p)
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct SystemPath {
+    name: String,
+    path: Option<String>,
+}
+
+/// Systems (by name) that have a scraped gamelist.xml in their ROM folder.
 #[tauri::command(async)]
-pub fn list_gamelists(roots: State<Roots>) -> CmdResult<Vec<String>> {
-    let roms = roots.root()?.join("roms");
-    let mut out: Vec<String> = fs::read_dir(&roms)
-        .map_err(err)?
-        .flatten()
-        .filter(|e| e.path().join("gamelist.xml").is_file())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .collect();
+pub fn list_gamelists(roots: State<Roots>, systems: Option<Vec<SystemPath>>) -> CmdResult<Vec<String>> {
+    let root = roots.root()?;
+    let mut out: Vec<String> = match systems {
+        Some(list) => list.into_iter().filter(|s| rom_dir(&root, &s.name, s.path.as_deref()).join("gamelist.xml").is_file()).map(|s| s.name).collect(),
+        None => fs::read_dir(root.join("roms"))
+            .map_err(err)?
+            .flatten()
+            .filter(|e| e.path().join("gamelist.xml").is_file())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect(),
+    };
     out.sort();
+    out.dedup();
     Ok(out)
 }
 
+/// A system's gamelist.xml. Its folder is allowed for the preview, so its pictures and videos
+/// show even when the ROMs are on another drive.
 #[tauri::command(async)]
-pub fn read_gamelist(roots: State<Roots>, system: String) -> CmdResult<Option<TextFile>> {
+pub fn read_gamelist(app: AppHandle, roots: State<Roots>, system: String, path: Option<String>) -> CmdResult<Option<TextFile>> {
     if system.contains(['\\', '/', ':']) || system.starts_with('.') {
         return Err("Bad system name".into());
     }
-    let p = roots.root()?.join("roms").join(&system).join("gamelist.xml");
+    let root = roots.root()?;
+    let dir = rom_dir(&root, &system, path.as_deref());
+    let p = dir.join("gamelist.xml");
+    if !p.is_file() {
+        return Ok(None);
+    }
+    if !is_inside(&dir, &root) {
+        app.asset_protocol_scope().allow_directory(&dir, true).map_err(err)?;
+    }
     Ok(read_text_file(&p).ok())
 }
 
@@ -607,6 +647,15 @@ mod tests {
         assert_eq!(es_value(cfg, "ClockMode12").as_deref(), Some("true"));
         assert_eq!(es_value(cfg, "ThemeSet").as_deref(), Some("Booga's"));
         assert_eq!(es_value(cfg, "DrawClock"), None);
+    }
+
+    #[test]
+    fn finds_rom_folders_like_retrobat() {
+        let root = Path::new(r"M:\Retrobat");
+        assert_eq!(rom_dir(root, "snes", Some(r"~\..\roms\snes")), PathBuf::from(r"M:\Retrobat\roms\snes"));
+        assert_eq!(rom_dir(root, "kodi", Some(r"~\..\kodi")), PathBuf::from(r"M:\Retrobat\kodi"));
+        assert_eq!(rom_dir(root, "x", Some(r"D:\Games\x")), PathBuf::from(r"D:\Games\x"));
+        assert_eq!(rom_dir(root, "x", None), PathBuf::from(r"M:\Retrobat\roms\x"));
     }
 
     #[test]

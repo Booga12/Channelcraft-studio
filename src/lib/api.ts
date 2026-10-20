@@ -74,8 +74,9 @@ export const api = {
   saveRecovery: (key: string, data: string) => invoke<void>('save_recovery', { key, data }),
   loadRecovery: (key: string) => invoke<string | null>('load_recovery', { key }),
   clearRecovery: (key: string) => invoke<void>('clear_recovery', { key }),
-  listGamelists: () => invoke<string[]>('list_gamelists'),
-  readGamelist: (system: string) => invoke<TextFile | null>('read_gamelist', { system }),
+  /** Systems with a gamelist.xml in their ROM folder (from es_systems paths when given). */
+  listGamelists: (systems?: { name: string; path?: string }[]) => invoke<string[]>('list_gamelists', { systems }),
+  readGamelist: (system: string, path?: string) => invoke<TextFile | null>('read_gamelist', { system, path }),
   listFonts: () => invoke<{ name: string; path: string; source: string }[]>('list_fonts'),
   addFontToTheme: (themeDir: string, src: string) => invoke<string>('add_font_to_theme', { themeDir, src }),
   downloadFont: (themeDir: string, url: string, fileName: string) => invoke<string>('download_font', { themeDir, url, fileName }),

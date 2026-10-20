@@ -12,8 +12,8 @@ import { isKnownType, propertyKind, supportsProperty } from './retrobatProfile';
 import type { Environment } from './context';
 
 const env: Environment = {
-  esHome: 'M:\Retrobat\emulationstation\.emulationstation',
-  resourcesDir: 'M:\Retrobat\emulationstation\resources',
+  esHome: String.raw`M:\Retrobat\emulationstation\.emulationstation`,
+  resourcesDir: String.raw`M:\Retrobat\emulationstation\resources`,
   settings: { system: FALLBACK_SYSTEMS[0], subsets: {}, lang: 'en', region: 'us', ratio: '16/9', tinyScreen: false, verticalScreen: false, helpPrompts: true, cheevos: false },
 };
 const ctx = (id: string): DesignContext => ({ art: `./_inc/ccs/${id}`, font: './_inc/fonts/x.ttf', titleFont: null, logos: './_inc/systems/logos', consoles: './_inc/systems/consoles' });

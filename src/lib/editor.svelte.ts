@@ -191,7 +191,7 @@ class Editor {
   /** Loads the list of systems with scraped games, and the current system's games. */
   async loadGames() {
     try {
-      this.gameSystems = await api.listGamelists();
+      this.gameSystems = await api.listGamelists(this.systems.map((s) => ({ name: s.name, path: s.path })));
     } catch {
       this.gameSystems = [];
     }
@@ -201,9 +201,10 @@ class Editor {
   async loadGamesFor(system: string) {
     if (!this.root || this.games[system] || !this.gameSystems.includes(system)) return;
     try {
-      const f = await api.readGamelist(system);
+      // RetroBat finds each system's games in the folder its es_systems.cfg entry names.
+      const f = await api.readGamelist(system, this.systems.find((s) => s.name === system)?.path);
       if (!f) return;
-      const list = parseGamelist(f.text, join(this.root.root, 'roms', system));
+      const list = parseGamelist(f.text, dirname(f.path));
       this.games = { ...this.games, [system]: list };
     } catch {
       // No games for this system: the sample game is shown instead.

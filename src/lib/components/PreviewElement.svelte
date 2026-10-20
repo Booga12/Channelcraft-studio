@@ -280,7 +280,8 @@
   });
 
   // ---- rating ----
-  const stars = $derived(Math.round(game.rating * 5));
+  /** Share of the five stars that are filled: RetroBat ratings go from 0 to 1. */
+  const stars = $derived(Math.max(0, Math.min(1, Number(game.rating) || 0)));
 
   // ---- imagegrid ----
   const grid = $derived.by(() => {
@@ -397,14 +398,26 @@
     {@const h = box.h ?? 0.06 * H}
     {@const filled = asset('filledPath')}
     {@const unfilled = asset('unfilledPath')}
+    <!-- Like RetroBat: unfilled stars underneath, filled stars on top cut at the rating (3.5 stars shows half a star). -->
     <div class="rating" style:height="{h}px">
-      {#each [0, 1, 2, 3, 4] as i}
-        {#if filled && unfilled}
-          <img src={fileUrl(i < stars ? filled : unfilled)} alt="" style:height="{h}px" draggable="false" />
-        {:else}
-          <span style:font-size="{h}px" style:color={cssColor(val('color'), '#ffd34d')} style:opacity={i < stars ? 1 : 0.3}>★</span>
-        {/if}
-      {/each}
+      <div class="stars">
+        {#each [0, 1, 2, 3, 4] as _}
+          {#if filled && unfilled}
+            <img src={fileUrl(unfilled)} alt="" style:height="{h}px" draggable="false" />
+          {:else}
+            <span style:font-size="{h}px" style:color={cssColor(val('unfilledColor') ?? val('color'), '#ffd34d')} style:opacity={val('unfilledColor') ? 1 : 0.3}>★</span>
+          {/if}
+        {/each}
+      </div>
+      <div class="stars on" style:width="{stars * 100}%">
+        {#each [0, 1, 2, 3, 4] as _}
+          {#if filled && unfilled}
+            <img src={fileUrl(filled)} alt="" style:height="{h}px" draggable="false" />
+          {:else}
+            <span style:font-size="{h}px" style:color={cssColor(val('color'), '#ffd34d')}>★</span>
+          {/if}
+        {/each}
+      </div>
     </div>
   {:else if el.type === 'video'}
     <div class="video" style:width="{outer.w ?? 0.3 * W}px" style:height="{outer.h ?? 0.3 * H}px">
@@ -585,10 +598,22 @@
     font-weight: 700;
   }
   .rating {
+    position: relative;
+    display: inline-flex;
+    line-height: 1;
+  }
+  .stars {
     display: flex;
     align-items: center;
     gap: 2px;
-    line-height: 1;
+    white-space: nowrap;
+  }
+  .stars.on {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    overflow: hidden;
   }
   .video {
     background: #000;
