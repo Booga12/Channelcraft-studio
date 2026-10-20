@@ -143,6 +143,13 @@ describe('cst basics', () => {
     expect(out).toBe(SAMPLE.replace('      <size>0.4 0</size>\r\n', ''));
   });
 
+  it('keeps one-line elements on one line', () => {
+    const src = '<theme>\n  <view name="a">\n    <image name="i"><pos>0 0</pos></image>\n  </view>\n</theme>';
+    const doc = parse(src);
+    const img = find(doc.root!, 'a', 'i');
+    expect(applyPatch(src, patchInsertChild(doc, img, '<size>1 1</size>'))).toContain('<image name="i"><pos>0 0</pos><size>1 1</size></image>');
+  });
+
   it('detects tab indentation', () => {
     const src = '<theme>\n\t<view name="a">\n\t\t<image name="i"/>\n\t</view>\n</theme>';
     const doc = parse(src);

@@ -386,6 +386,12 @@ export function patchInsertChild(doc: XDoc, parent: XElement, xml: string, opts:
     const tag = src.slice(parent.start, parent.openEnd).replace(/\s*\/>$/, '>');
     return { start: parent.start, end: parent.end, text: `${tag}${eol}${childIndent}${body(childIndent)}${eol}${parentIndent}</${parent.name}>` };
   }
+  const oneLine = !src.slice(parent.start, parent.end).includes('\n');
+  if (oneLine && !xml.includes('\n')) {
+    // Keep one-line elements on one line: <image name="x"><pos>0 0</pos><new/></image>
+    const at = opts.first ? (anchor?.start ?? parent.openEnd) : (anchor?.end ?? parent.openEnd);
+    return { start: at, end: at, text: xml };
+  }
   if (anchor && opts.first) {
     return { start: anchor.start, end: anchor.start, text: `${body(childIndent)}${eol}${childIndent}` };
   }

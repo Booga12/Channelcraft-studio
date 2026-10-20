@@ -42,7 +42,8 @@ export function parseEsSystems(text: string): SystemInfo[] {
       return el ? textOf(doc, el).trim() : '';
     };
     const name = get('name');
-    if (!name) continue;
+    // Some installs list a system twice; the first entry wins.
+    if (!name || out.some((s) => s.name === name)) continue;
     out.push({
       name,
       theme: get('theme') || name,
