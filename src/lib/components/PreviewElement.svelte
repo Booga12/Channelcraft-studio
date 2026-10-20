@@ -5,6 +5,20 @@
   import { resolveAsset, resolveAssetWithFallbacks, type ResolvedElement } from '$lib/theme/resolver';
   import { cssColor, parsePair } from '$lib/theme/schema';
   import { MOCK_GAME, MOCK_GAMES, type SystemInfo } from '$lib/theme/systems';
+  import type { Resolution } from '$lib/theme/resolver';
+  import type { Environment } from '$lib/theme/context';
+  import { animationCss } from '$lib/theme/animations';
+
+  function relativeDate(iso: string): string {
+    const d = new Date(`${iso.slice(0, 4)}-${iso.slice(4, 6)}-${iso.slice(6, 8)}T00:00:00`);
+    const days = Math.round((Date.now() - d.getTime()) / 86_400_000);
+    if (!Number.isFinite(days)) return 'unknown';
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 30) return `${days} days ago`;
+    if (days < 365) return `${Math.round(days / 30)} months ago`;
+    return `${Math.round(days / 365)} years ago`;
+  }
   import { alphaOf, boxOf, familyFor, fontState, formatDate, imageSize, isWhite, opaque } from '$lib/preview.svelte';
   import { zOf } from '$lib/render';
   import { isDataBound } from '$lib/theme/library';
@@ -18,6 +32,11 @@
     selected,
     ghost,
     carousel,
+    res,
+    env,
+    view,
+    locked = false,
+    animate = false,
   }: {
     el: ResolvedElement;
     W: number;
@@ -26,14 +45,49 @@
     selected: boolean;
     ghost: boolean;
     carousel: { logo: ResolvedElement | null; logoText: ResolvedElement | null; systems: SystemInfo[]; logoFor: (sys: SystemInfo) => string | null };
+    res: Resolution;
+    env: Environment;
+    view: string;
+    locked?: boolean;
+    /** Play the element's storyboard animation as a CSS approximation. */
+    animate?: boolean;
   } = $props();
+
+  /** Where RetroBat's own artwork elements get their pictures from in the game's data. */
+  const NATIVE_MEDIA: Record<string, string[]> = {
+    md_image: ['image', 'thumbnail', 'boxart'],
+    md_thumbnail: ['thumbnail', 'boxart', 'image'],
+    md_marquee: ['marquee', 'wheel'],
+    md_video: ['image', 'thumbnail'],
+    md_fanart: ['fanart', 'image'],
+    md_boxart: ['boxart', 'thumbnail'],
+    md_wheel: ['wheel', 'marquee'],
+    md_cartridge: ['cartridge'],
+    md_titleshot: ['titleshot', 'image'],
+    md_mix: ['mix', 'image'],
+  };
+
+  const game = $derived(env.game ?? MOCK_GAME);
 
   const val = (k: string) => el.props.get(k)?.value;
   const num = (k: string, d: number) => {
     const n = parseFloat(val(k) ?? '');
     return Number.isFinite(n) ? n : d;
   };
-  const asset = (k: string) => (ed.res && ed.project ? resolveAssetWithFallbacks(el, k, ed.res, ed.project, ed.env) : null);
+  const asset = (k: string) => (ed.project ? resolveAssetWithFallbacks(el, k, res, ed.project, env) : null);
+  /** A path written as a data expression, e.g. firstfile({game:boxart}, {game:image}). */
+  const exprAsset = (k: string): string | null => {
+    const v = val(k);
+    if (!v || !/[{(]/.test(v)) return null;
+    const r = renderText(v, exprEnv).trim();
+    return r && !r.includes('{') && /^[A-Za-z]:[\\/]|^\\\\/.test(r) ? r : null;
+  };
+  const nativeMedia = (): string | null => {
+    const keys = NATIVE_MEDIA[el.name];
+    if (!keys || !env.game) return null;
+    for (const k of keys) if (env.game.media[k]) return env.game.media[k];
+    return null;
+  };
 
   const box = $derived(boxOf(el, W, H));
   let natural = $state<{ w: number; h: number } | null>(null);
@@ -43,7 +97,9 @@
     natural = { w: img.naturalWidth, h: img.naturalHeight };
   }
 
-  const imgPath = $derived(el.type === 'image' || el.type === 'video' ? (asset('path') ?? asset('default')) : null);
+  const imgPath = $derived(el.type === 'image' || el.type === 'video' ? (asset('path') ?? exprAsset('path') ?? nativeMedia() ?? asset('default')) : null);
+  /** A real game video to play in video elements. */
+  const videoPath = $derived(el.type === 'video' && env.game ? (exprAsset('path') ?? env.game.media.video ?? null) : null);
   $effect(() => {
     imgPath;
     natural = null;
@@ -80,12 +136,12 @@
   function textContent(): string {
     const t = el.props.get('text');
     if (t) return renderText(t.value, exprEnv);
-    const g = MOCK_GAME;
+    const g = game;
     switch (el.name) {
       case 'logoText':
-        return ed.settings.system.fullName;
+        return env.settings.system.fullName;
       case 'systemInfo':
-        return '128 games available';
+        return env.gameNames ? `${env.gameNames.length} games available` : '128 games available';
       case 'md_description':
         return g.description;
       case 'md_developer':
@@ -103,8 +159,8 @@
     }
     if (LABELS[el.name]) return LABELS[el.name];
     if (el.type === 'datetime') {
-      if (el.name === 'md_lastplayed') return val('displayRelative') === 'false' ? formatDate(g.lastplayed, val('format')) : '2 days ago';
-      return formatDate(g.releasedate, val('format'));
+      if (el.name === 'md_lastplayed') return !g.lastplayed ? 'never' : val('displayRelative') === 'false' ? formatDate(g.lastplayed, val('format')) : relativeDate(g.lastplayed);
+      return g.releasedate ? formatDate(g.releasedate, val('format')) : 'unknown';
     }
     if (el.type === 'clock') return formatDate('20261019T201500', val('format') ?? '%H:%M');
     return el.name;
@@ -129,7 +185,10 @@
   });
 
   const wrapStyle = $derived.by(() => {
-    const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${Math.round(zOf(el) * 10) + 1000}`, `transform:translate(${-box.ox * 100}%, ${-box.oy * 100}%) rotate(${box.rotation}deg)`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
+    const base = `translate(${-box.ox * 100}%, ${-box.oy * 100}%) rotate(${box.rotation}deg)`;
+    const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
+    const anim = animate ? animationCss(el, W, H, base) : null;
+    if (anim) s.push(`animation:${anim}`);
     if (outer.w !== null) s.push(`width:${outer.w}px`);
     if (outer.h !== null) s.push(`height:${outer.h}px`);
     const op = num('opacity', 1);
@@ -145,7 +204,8 @@
     if (el.type !== 'textlist') return [];
     const rowH = fontPx * num('lineSpacing', 1.5);
     const count = Math.max(1, Math.floor((box.h ?? H * 0.5) / rowH));
-    return Array.from({ length: count }, (_, i) => MOCK_GAMES[i % MOCK_GAMES.length]);
+    const names = env.gameNames ?? MOCK_GAMES;
+    return Array.from({ length: count }, (_, i) => names[i % names.length]);
   });
 
   // ---- carousel ----
@@ -153,11 +213,11 @@
     if (el.type !== 'carousel') return [];
     const n = Math.max(1, Math.round(num('maxLogoCount', 3)));
     const list = carousel.systems;
-    const cur = Math.max(0, list.findIndex((s) => s.name === ed.settings.system.name));
+    const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
     const half = Math.floor(n / 2);
     const items: { sys: SystemInfo; logo: string | null; selected: boolean }[] = [];
     for (let k = -half; k < n - half; k++) {
-      const sys = list[(cur + k + list.length * 10) % list.length] ?? ed.settings.system;
+      const sys = list[(cur + k + list.length * 10) % list.length] ?? env.settings.system;
       items.push({ sys, logo: logoFor(sys), selected: k === 0 });
     }
     return items;
@@ -168,7 +228,7 @@
   const vertical = $derived((val('type') ?? 'horizontal').startsWith('vertical'));
 
   // ---- rating ----
-  const stars = $derived(Math.round(MOCK_GAME.rating * 5));
+  const stars = $derived(Math.round(game.rating * 5));
 
   // ---- imagegrid ----
   const grid = $derived.by(() => {
@@ -176,8 +236,8 @@
     const layout = parsePair(val('autoLayout')) ?? [4, 3];
     const cols = Math.max(1, Math.round(layout[0]));
     const rowsN = Math.max(1, Math.round(layout[1]));
-    const tile = ed.currentView?.elements.get('default');
-    const sel = ed.currentView?.elements.get('selected');
+    const tile = res.views.get(view)?.elements.get('default');
+    const sel = res.views.get(view)?.elements.get('selected');
     return { cols, rows: rowsN, tile, sel };
   });
 
@@ -188,7 +248,7 @@
   const helpIcon = $derived(cssColor(val('iconColor'), '#bbb'));
 </script>
 
-<div class="el {el.type}" class:selected class:ghost data-name={el.name} style={wrapStyle}>
+<div class="el {el.type}" class:selected class:ghost class:locked data-name={el.name} style={wrapStyle}>
   {#if el.type === 'image'}
     {#if imgPath}
       {@const url = fileUrl(imgPath)}
@@ -244,7 +304,7 @@
               <img src={fileUrl(it.logo)} alt="" draggable="false" />
             {:else}
               <span
-                style="font-family:{familyFor(carousel.logoText && ed.res && ed.project ? resolveAsset(carousel.logoText.props.get('fontPath'), ed.res, ed.project, ed.env) : null)};font-size:{parseFloat(carousel.logoText?.props.get('fontSize')?.value ?? '0.07') * H * 0.6}px;color:{cssColor(carousel.logoText?.props.get('color')?.value, '#fff')}"
+                style="font-family:{familyFor(carousel.logoText && ed.project ? resolveAsset(carousel.logoText.props.get('fontPath'), res, ed.project, env) : null)};font-size:{parseFloat(carousel.logoText?.props.get('fontSize')?.value ?? '0.07') * H * 0.6}px;color:{cssColor(carousel.logoText?.props.get('color')?.value, '#fff')}"
                 >{it.sys.fullName}</span
               >
             {/if}
@@ -267,7 +327,12 @@
     </div>
   {:else if el.type === 'video'}
     <div class="video" style:width="{outer.w ?? 0.3 * W}px" style:height="{outer.h ?? 0.3 * H}px">
-      {#if imgPath && /\.(png|jpe?g|svg|gif|webp)$/i.test(imgPath)}
+      {#if videoPath && /\.(mp4|webm)$/i.test(videoPath)}
+        {#key videoPath}
+          <!-- svelte-ignore a11y_media_has_caption -->
+          <video src={fileUrl(videoPath)} autoplay muted loop playsinline poster={imgPath ? fileUrl(imgPath) : undefined}></video>
+        {/key}
+      {:else if imgPath && /\.(png|jpe?g|svg|gif|webp)$/i.test(imgPath)}
         <img src={fileUrl(imgPath)} alt="" draggable="false" onload={onImgLoad} />
       {:else}
         <span>▶ video</span>
@@ -291,9 +356,9 @@
       {/each}
     </div>
   {:else if el.type === 'imagegrid' && grid}
-    {@const systemGrid = ed.view === 'system'}
+    {@const systemGrid = view === 'system'}
     {@const list = carousel.systems}
-    {@const cur = Math.max(0, list.findIndex((s) => s.name === ed.settings.system.name))}
+    {@const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name))}
     <div class="grid" style:grid-template-columns="repeat({grid.cols}, minmax(0, 1fr))" style:grid-template-rows="repeat({grid.rows}, minmax(0, 1fr))">
       {#each Array(grid.cols * grid.rows) as _, i}
         {@const sys = list[(cur + i) % Math.max(1, list.length)]}
@@ -302,7 +367,7 @@
           {#if logo}
             <img src={fileUrl(logo)} alt="" draggable="false" />
           {:else}
-            <span>{systemGrid ? (sys?.fullName ?? '') : MOCK_GAMES[i % MOCK_GAMES.length]}</span>
+            <span>{systemGrid ? (sys?.fullName ?? '') : (env.gameNames ?? MOCK_GAMES)[i % (env.gameNames ?? MOCK_GAMES).length]}</span>
           {/if}
         </div>
       {/each}
@@ -437,10 +502,16 @@
     font: 600 26px 'Segoe UI', sans-serif;
     overflow: hidden;
   }
-  .video img {
+  .video img,
+  .video video {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    display: block;
+  }
+  /* Locked layers can't be picked on the canvas; clicks go to what's underneath. */
+  .el.locked {
+    pointer-events: none;
   }
   .help {
     display: flex;

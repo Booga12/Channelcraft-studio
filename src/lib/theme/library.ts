@@ -347,6 +347,22 @@ export const LIBRARY: LibraryItem[] = [
   },
 ];
 
+/** Data bindings that stand in for RetroBat's own elements when they're copied as regular elements. */
+export const NATIVE_BINDINGS: Record<string, { prop: string; value: string }> = {
+  md_image: { prop: 'path', value: 'firstfile({game:image}, {game:thumbnail})' },
+  md_thumbnail: { prop: 'path', value: 'firstfile({game:thumbnail}, {game:image})' },
+  md_marquee: { prop: 'path', value: 'firstfile({game:marquee}, {game:wheel})' },
+  md_fanart: { prop: 'path', value: '{game:fanart}' },
+  md_video: { prop: 'path', value: '{game:video}' },
+  md_description: { prop: 'text', value: '{game:desc}' },
+  md_name: { prop: 'text', value: '{game:name}' },
+  md_developer: { prop: 'text', value: '{game:developer}' },
+  md_publisher: { prop: 'text', value: '{game:publisher}' },
+  md_genre: { prop: 'text', value: '{game:genre}' },
+  md_players: { prop: 'text', value: '{game:players}' },
+  logoText: { prop: 'text', value: '{system:fullName}' },
+};
+
 export function isGameScreen(view: string): boolean {
   return !['system', 'menu', 'screen', 'splash'].includes(view);
 }

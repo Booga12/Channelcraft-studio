@@ -1,5 +1,6 @@
 import { MOCK_GAME, type SystemInfo } from './systems';
 import type { Value } from './expr';
+import { gameBinding, type GameInfo } from './games';
 
 export type Ratio = '16/9' | '4/3' | '16/10';
 
@@ -22,6 +23,10 @@ export interface Environment {
   esHome: string;
   /** EmulationStation resources folder, for `:/` paths. */
   resourcesDir: string;
+  /** A real scraped game to preview with; sample data is used when missing. */
+  game?: GameInfo;
+  /** Names for the game list rows. */
+  gameNames?: string[];
 }
 
 export const ARCH = ['windows', 'win32', 'x86_64', 'x64', 'win64'];
@@ -115,6 +120,10 @@ export function bindingValue(name: string, env: Environment, subsets: Map<string
       return builtinVar(`system.${key}`, env, '', subsets) ?? builtinVar(`system.${key[0]?.toLowerCase()}${key.slice(1)}`, env, '', subsets) ?? '';
     }
     case 'game': {
+      if (env.game) {
+        const v = gameBinding(env.game, key);
+        return v === undefined ? '' : v;
+      }
       const g = MOCK_GAME as unknown as Record<string, Value>;
       const k = key.toLowerCase();
       if (k in g) return g[k];

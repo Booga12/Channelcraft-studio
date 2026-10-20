@@ -300,15 +300,51 @@ fn timestamp() -> String {
     format!("{y:04}{mo:02}{d:02}-{h:02}{m:02}{s:02}")
 }
 
-/// Zips a whole theme folder into the app's backups folder and returns the zip path.
+/// Zips a whole theme folder into the app's backups folder and returns the zip path. With `keep`,
+/// only that many of the newest backups of this theme are kept.
 #[tauri::command]
-pub fn backup_theme(app: AppHandle, dir: String) -> CmdResult<String> {
+pub fn backup_theme(app: AppHandle, dir: String, keep: Option<usize>) -> CmdResult<String> {
     let src = PathBuf::from(&dir);
     let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "theme".into());
     let backups = app.path().app_data_dir().map_err(err)?.join("backups");
     fs::create_dir_all(&backups).map_err(err)?;
     let zip_path = backups.join(format!("{name}-{}.zip", timestamp()));
-    let file = fs::File::create(&zip_path).map_err(err)?;
+    zip_dir(&src, &name, &zip_path)?;
+    if let Some(keep) = keep.filter(|k| *k > 0) {
+        let prefix = format!("{name}-");
+        let mut mine: Vec<PathBuf> = fs::read_dir(&backups)
+            .map_err(err)?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                let f = p.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                // "<name>-yyyymmdd-hhmmss.zip": the timestamp sorts by age.
+                f.starts_with(&prefix) && f.ends_with(".zip") && f.len() == prefix.len() + 19
+            })
+            .collect();
+        mine.sort();
+        let excess = mine.len().saturating_sub(keep);
+        for old in &mine[..excess] {
+            let _ = fs::remove_file(old);
+        }
+    }
+    Ok(zip_path.to_string_lossy().into_owned())
+}
+
+/// Zips a theme to a file the user chose, ready to share or copy to another RetroBat.
+#[tauri::command]
+pub fn export_theme(dir: String, dest: String) -> CmdResult<String> {
+    let src = PathBuf::from(&dir);
+    if !src.join("theme.xml").is_file() {
+        return Err(format!("{dir} is not a theme folder"));
+    }
+    let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "theme".into());
+    zip_dir(&src, &name, Path::new(&dest))?;
+    Ok(dest)
+}
+
+fn zip_dir(src: &Path, name: &str, zip_path: &Path) -> CmdResult<()> {
+    let file = fs::File::create(zip_path).map_err(err)?;
     let mut zip = zip::ZipWriter::new(file);
     let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for e in WalkDir::new(&src).into_iter().flatten() {
@@ -321,12 +357,176 @@ pub fn backup_theme(app: AppHandle, dir: String) -> CmdResult<String> {
         std::io::copy(&mut f, &mut zip).map_err(err)?;
     }
     zip.finish().map_err(err)?;
-    Ok(zip_path.to_string_lossy().into_owned())
+    Ok(())
 }
 
 #[tauri::command]
 pub fn backups_dir(app: AppHandle) -> CmdResult<String> {
     Ok(app.path().app_data_dir().map_err(err)?.join("backups").to_string_lossy().into_owned())
+}
+
+/// Writes binary data (base64) inside the themes folder, e.g. a preview.png or artwork.
+#[tauri::command]
+pub fn write_binary(roots: State<Roots>, path: String, base64: String) -> CmdResult<()> {
+    use base64::Engine;
+    let p = PathBuf::from(&path);
+    ensure_writable(&roots, &p)?;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(base64.as_bytes()).map_err(err)?;
+    if let Some(parent) = p.parent() {
+        fs::create_dir_all(parent).map_err(err)?;
+    }
+    fs::write(&p, bytes).map_err(err)
+}
+
+/// Copies every file of a folder (from any installed theme) into a theme's subfolder, keeping
+/// files that are already there. Returns how many files were copied.
+#[tauri::command]
+pub fn copy_folder_into_theme(roots: State<Roots>, src: String, theme_dir: String, dest_rel: String) -> CmdResult<usize> {
+    let root = roots.root()?;
+    let src_p = PathBuf::from(&src);
+    if !is_inside(&src_p, &themes_dir(&root)) {
+        return Err("Art can only be copied from installed themes".into());
+    }
+    let dest = PathBuf::from(&theme_dir).join(&dest_rel);
+    ensure_writable(&roots, &dest)?;
+    fs::create_dir_all(&dest).map_err(err)?;
+    let mut n = 0;
+    for e in fs::read_dir(&src_p).map_err(err)?.flatten() {
+        let p = e.path();
+        if !p.is_file() {
+            continue;
+        }
+        let target = dest.join(e.file_name());
+        if !target.exists() {
+            fs::copy(&p, &target).map_err(err)?;
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+fn recovery_path(app: &AppHandle, key: &str) -> CmdResult<PathBuf> {
+    let safe: String = key.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+    let dir = app.path().app_data_dir().map_err(err)?.join("recovery");
+    fs::create_dir_all(&dir).map_err(err)?;
+    Ok(dir.join(format!("{safe}.json")))
+}
+
+/// Keeps unsaved edits outside the theme, so they can be offered back after a crash.
+#[tauri::command]
+pub fn save_recovery(app: AppHandle, key: String, data: String) -> CmdResult<()> {
+    fs::write(recovery_path(&app, &key)?, data).map_err(err)
+}
+
+#[tauri::command]
+pub fn load_recovery(app: AppHandle, key: String) -> CmdResult<Option<String>> {
+    Ok(fs::read_to_string(recovery_path(&app, &key)?).ok())
+}
+
+#[tauri::command]
+pub fn clear_recovery(app: AppHandle, key: String) -> CmdResult<()> {
+    let p = recovery_path(&app, &key)?;
+    if p.exists() {
+        fs::remove_file(p).map_err(err)?;
+    }
+    Ok(())
+}
+
+/// Systems that have a scraped gamelist in RetroBat's roms folder.
+#[tauri::command]
+pub fn list_gamelists(roots: State<Roots>) -> CmdResult<Vec<String>> {
+    let roms = roots.root()?.join("roms");
+    let mut out: Vec<String> = fs::read_dir(&roms)
+        .map_err(err)?
+        .flatten()
+        .filter(|e| e.path().join("gamelist.xml").is_file())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    out.sort();
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn read_gamelist(roots: State<Roots>, system: String) -> CmdResult<Option<TextFile>> {
+    if system.contains(['\\', '/', ':']) || system.starts_with('.') {
+        return Err("Bad system name".into());
+    }
+    let p = roots.root()?.join("roms").join(&system).join("gamelist.xml");
+    Ok(read_text_file(&p).ok())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FontEntry {
+    name: String,
+    path: String,
+    source: String,
+}
+
+/// Fonts that can be copied into a theme: Windows fonts and the fonts of installed themes.
+#[tauri::command]
+pub fn list_fonts(roots: State<Roots>) -> CmdResult<Vec<FontEntry>> {
+    let mut out = Vec::new();
+    let is_font = |p: &Path| matches!(p.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref(), Some("ttf") | Some("otf"));
+    let stem = |p: &Path| p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    if let Ok(root) = roots.root() {
+        for e in WalkDir::new(themes_dir(&root)).max_depth(6).into_iter().flatten() {
+            if e.file_type().is_file() && is_font(e.path()) {
+                let theme = e.path().strip_prefix(themes_dir(&root)).ok().and_then(|r| r.components().next()).map(|c| c.as_os_str().to_string_lossy().into_owned()).unwrap_or_default();
+                out.push(FontEntry { name: stem(e.path()), path: e.path().to_string_lossy().into_owned(), source: format!("Theme: {theme}") });
+            }
+        }
+    }
+    let mut win_dirs = vec![PathBuf::from(std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into())).join("Fonts")];
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        win_dirs.push(PathBuf::from(local).join("Microsoft").join("Windows").join("Fonts"));
+    }
+    for d in win_dirs {
+        if let Ok(rd) = fs::read_dir(&d) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_file() && is_font(&p) {
+                    out.push(FontEntry { name: stem(&p), path: p.to_string_lossy().into_owned(), source: "Windows".into() });
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Copies a font file into the theme's fonts folder; returns its theme-relative path.
+#[tauri::command]
+pub fn add_font_to_theme(roots: State<Roots>, theme_dir: String, src: String) -> CmdResult<String> {
+    let src_p = PathBuf::from(&src);
+    let file_name = src_p.file_name().ok_or("No file name")?.to_string_lossy().into_owned();
+    let target = PathBuf::from(&theme_dir).join("_inc").join("fonts").join(&file_name);
+    ensure_writable(&roots, &target)?;
+    if !target.exists() {
+        fs::create_dir_all(target.parent().unwrap()).map_err(err)?;
+        fs::copy(&src_p, &target).map_err(err)?;
+    }
+    Ok(format!("_inc/fonts/{file_name}"))
+}
+
+/// Downloads an open-licence font from the Google Fonts repository into the theme.
+#[tauri::command]
+pub fn download_font(roots: State<Roots>, theme_dir: String, url: String, file_name: String) -> CmdResult<String> {
+    const ALLOWED: &str = "https://raw.githubusercontent.com/google/fonts/main/";
+    if !url.starts_with(ALLOWED) || file_name.contains(['\\', '/', ':']) {
+        return Err("Fonts can only be downloaded from the Google Fonts repository".into());
+    }
+    let target = PathBuf::from(&theme_dir).join("_inc").join("fonts").join(&file_name);
+    ensure_writable(&roots, &target)?;
+    if !target.exists() {
+        let resp = ureq::get(&url).call().map_err(|e| format!("Download failed: {e}"))?;
+        let mut bytes = Vec::new();
+        // Fonts are small; refuse anything over 20 MB.
+        let mut reader = std::io::Read::take(resp.into_reader(), 20 * 1024 * 1024);
+        std::io::Read::read_to_end(&mut reader, &mut bytes).map_err(err)?;
+        fs::create_dir_all(target.parent().unwrap()).map_err(err)?;
+        fs::write(&target, bytes).map_err(err)?;
+    }
+    Ok(format!("_inc/fonts/{file_name}"))
 }
 
 fn copy_dir(src: &Path, dest: &Path) -> CmdResult<()> {
@@ -413,7 +613,7 @@ pub fn delete_theme(app: AppHandle, roots: State<Roots>, dir: String) -> CmdResu
     if active_theme(&root).is_some_and(|a| a.eq_ignore_ascii_case(&name)) {
         return Err(format!("\"{name}\" is the theme RetroBat is using. Pick another theme in RetroBat (or use “Use in RetroBat” on another one) before deleting it."));
     }
-    let backup = backup_theme(app, dir.clone())?;
+    let backup = backup_theme(app, dir.clone(), None)?;
     trash::delete(&path).map_err(|e| format!("Couldn't move the theme to the Recycle Bin: {e}"))?;
     Ok(backup)
 }

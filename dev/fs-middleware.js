@@ -93,6 +93,21 @@ export function devFs() {
       return existsSync(p) ? readFileSync(p, 'utf8') : '';
     },
     backups_dir: () => '(browser preview)',
+    load_recovery: () => null,
+    save_recovery: () => null,
+    clear_recovery: () => null,
+    list_gamelists: () =>
+      readdirSync(join(root, 'roms'))
+        .filter((s) => existsSync(join(root, 'roms', s, 'gamelist.xml')))
+        .sort(),
+    read_gamelist: ({ system }) => {
+      const p = join(root, 'roms', system, 'gamelist.xml');
+      return existsSync(p) ? readText(p) : null;
+    },
+    list_fonts: () =>
+      walk(themesDir())
+        .filter((p) => /\.(ttf|otf)$/i.test(p))
+        .map((p) => ({ name: basename(p).replace(/\.[^.]+$/, ''), path: p, source: `Theme: ${relative(themesDir(), p).split(/[\\/]/)[0]}` })),
   };
 
   return {
