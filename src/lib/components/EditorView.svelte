@@ -13,9 +13,13 @@
   import Preview from './Preview.svelte';
   import PropertyPanel from './PropertyPanel.svelte';
   import SourceView from './SourceView.svelte';
+  import LibraryPanel from './LibraryPanel.svelte';
+  import PresetsPanel from './PresetsPanel.svelte';
 
   const bottomTabs = $derived([
     { id: 'elements', label: 'Layers', title: 'Everything drawn on this screen', count: ed.currentView?.elements.size },
+    { id: 'library', label: 'Add', title: 'Ready-made elements that show RetroBat’s game and system data' },
+    { id: 'presets', label: 'Presets', title: 'Layouts for this screen and colour palettes' },
     { id: 'variables', label: ed.simple ? 'Colours' : 'Variables', title: 'Colours and values shared across the theme' },
     { id: 'options', label: 'Options', title: 'Choices the theme offers inside RetroBat', count: ed.res?.subsets.length },
     ...(ed.simple ? [] : [{ id: 'files', label: 'Files', title: 'XML files in the theme' }]),
@@ -107,6 +111,10 @@
       <PanelGroup tabs={bottomTabs} bind:active={ed.leftTab} bind:collapsed={bottomCollapsed}>
         {#if ed.leftTab === 'elements'}
           <ElementList />
+        {:else if ed.leftTab === 'library'}
+          <LibraryPanel />
+        {:else if ed.leftTab === 'presets'}
+          <PresetsPanel />
         {:else if ed.leftTab === 'options'}
           <OptionsPanel />
         {:else if ed.leftTab === 'variables'}

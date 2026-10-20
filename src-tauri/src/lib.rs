@@ -20,6 +20,7 @@ pub fn run() {
             commands::backup_theme,
             commands::backups_dir,
             commands::copy_theme,
+            commands::delete_theme,
             commands::create_theme_from_starter,
             commands::import_asset,
             commands::read_themesettings,

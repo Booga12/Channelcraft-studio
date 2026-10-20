@@ -9,6 +9,8 @@ import { STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { patchRemoveNode } from './xml/cst';
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
+import type { LibraryItem } from './theme/library';
+import { LAYOUTS, layoutChanges, PALETTES, type LayoutPreset, type Palette } from './theme/presets';
 
 interface HistoryEntry {
   label: string;
@@ -64,7 +66,7 @@ class Editor {
   hidden = $state<Record<string, boolean>>({});
   sourceFile = $state<string | null>(null);
   sourceLine = $state<number | null>(null);
-  leftTab = $state<'elements' | 'options' | 'variables' | 'files'>('elements');
+  leftTab = $state<'elements' | 'library' | 'presets' | 'options' | 'variables' | 'files'>('elements');
   showSource = $state(false);
   toast = $state<Toast | null>(null);
   busy = $state(false);
@@ -234,6 +236,16 @@ class Editor {
     return dest;
   }
 
+  async deleteTheme(dir: string, name: string) {
+    try {
+      await api.deleteTheme(dir);
+      await this.refreshThemes();
+      this.notify(`“${name}” was moved to the Recycle Bin (a backup zip was saved too)`);
+    } catch (e) {
+      this.notify(String(e), 'error');
+    }
+  }
+
   async createTheme(name: string) {
     const dest = await api.createThemeFromStarter(name);
     await this.refreshThemes();
@@ -326,6 +338,67 @@ class Editor {
     const body = STARTER_PROPS[type] ?? '<pos>0.4 0.4</pos>\n<size>0.2 0.2</size>';
     this.commit(`adding ${typeLabel(type).toLowerCase()}`, [addElementChange(p, res, this.view, type, name, body)]);
     this.selected = name;
+  }
+
+  /**
+   * Adds a ready-made element that reads RetroBat's data. A native element that's already on the
+   * screen is selected (and shown, if hidden) instead of added twice.
+   */
+  addLibraryItem(item: LibraryItem) {
+    const p = this.project;
+    const res = this.res;
+    if (!p || !res) return;
+    const existing = this.currentView?.elements.get(item.name);
+    if (existing && item.native) {
+      this.selected = item.name;
+      const vis = existing.props.get('visible')?.value.trim().toLowerCase();
+      if (vis === 'false' || vis === '0') {
+        this.setProp(item.name, 'visible', 'true');
+        this.notify(`${item.label} was hidden on this screen; it's visible again`);
+      } else {
+        this.notify(`${item.label} is already on this screen, so it's selected`);
+      }
+      return;
+    }
+    const name = item.native ? item.name : uniqueName(res, this.view, item.name);
+    this.commit(`adding ${item.label.toLowerCase()}`, [addElementChange(p, res, this.view, item.type, name, item.body, !item.native)]);
+    this.selected = name;
+  }
+
+  /** Writes a layout preset into its own block at the end of theme.xml (replacing an earlier one). */
+  applyLayout(preset: LayoutPreset, views: string[]) {
+    const p = this.project;
+    const res = this.res;
+    if (!p || !res) return;
+    this.commit(`layout “${preset.label}”`, layoutChanges(p, res, preset, views));
+    this.selected = null;
+  }
+
+  /** Applies the choices from the New theme dialog to a freshly created theme and saves it. */
+  async applyStarter(choice: { game: string; system: string; palette: string }) {
+    const game = LAYOUTS.find((l) => l.id === choice.game);
+    const system = LAYOUTS.find((l) => l.id === choice.system);
+    const palette = PALETTES.find((p) => p.id === choice.palette);
+    if (system && this.viewNames.includes('system')) this.applyLayout(system, ['system']);
+    if (game) this.applyLayout(game, ['basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v)));
+    if (palette) this.applyPalette(palette);
+    await this.save();
+    // The starting point is the saved theme, not something to undo back past.
+    this.undoStack = [];
+    this.redoStack = [];
+    this.view = 'detailed';
+  }
+
+  /** Sets every colour of a palette that this theme has a variable for. Returns how many were set. */
+  applyPalette(palette: Palette): number {
+    const res = this.res;
+    if (!res) return 0;
+    const changes = Object.entries(palette.colors)
+      .map(([name, value]) => ({ def: res.vars.get(name), value }))
+      .filter((x) => x.def)
+      .map((x) => setTextChange(x.def!.file, x.def!.node, x.value));
+    if (changes.length) this.commit(`palette “${palette.label}”`, changes);
+    return changes.length;
   }
 
   /** Removes the definitions that belong to this element alone; shared blocks are left alone. */

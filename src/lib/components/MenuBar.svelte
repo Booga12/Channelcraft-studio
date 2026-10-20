@@ -70,6 +70,20 @@
       ],
     },
     {
+      id: 'insert',
+      label: 'Insert',
+      items: [
+        { label: 'Ready-made elements…', action: () => (ed.leftTab = 'library') },
+        { label: 'Layout presets…', action: () => (ed.leftTab = 'presets') },
+        { label: 'Colour palettes…', action: () => (ed.leftTab = 'presets') },
+        { separator: true },
+        { label: 'Picture', action: () => ed.addElement('image') },
+        { label: 'Text', action: () => ed.addElement('text') },
+        { label: 'Panel', action: () => ed.addElement('ninepatch') },
+        { label: 'Clock', action: () => ed.addElement('clock') },
+      ],
+    },
+    {
       id: 'view',
       label: 'View',
       items: [

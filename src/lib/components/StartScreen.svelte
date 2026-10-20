@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { open } from '@tauri-apps/plugin-dialog';
+  import { ask, open } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
   import { fileUrl, type ThemeInfo } from '$lib/api';
-  import NewThemeDialog from './NewThemeDialog.svelte';
+  import NewThemeDialog, { type StarterChoice } from './NewThemeDialog.svelte';
   import Icon from './Icon.svelte';
 
   let dialog = $state<{ mode: 'new' | 'duplicate'; source?: ThemeInfo } | null>(null);
@@ -13,6 +13,20 @@
   function openTheme(t: ThemeInfo) {
     if (ed.askCopy) choosing = t;
     else ed.openTheme(t.path);
+  }
+
+  async function removeTheme(t: ThemeInfo) {
+    if (ed.root?.activeTheme?.toLowerCase() === t.name.toLowerCase()) {
+      ed.notify(`“${t.name}” is the theme RetroBat is using, so it can’t be deleted. Use another theme in RetroBat first.`, 'error');
+      return;
+    }
+    const ok = await ask(`Delete “${t.name}”?\n\nThe folder goes to the Windows Recycle Bin, so you can restore it from there. A backup zip is saved first as well.`, {
+      title: 'Delete theme',
+      kind: 'warning',
+      okLabel: 'Move to Recycle Bin',
+      cancelLabel: 'Keep it',
+    });
+    if (ok) await ed.deleteTheme(t.path, t.name);
   }
 
   function chooseCopy() {
@@ -36,9 +50,10 @@
     if (typeof dir === 'string') await ed.setRoot(dir);
   }
 
-  async function created(path: string) {
+  async function created(path: string, starter?: StarterChoice) {
     dialog = null;
     await ed.openTheme(path);
+    if (starter) await ed.applyStarter(starter);
   }
 </script>
 
@@ -114,6 +129,7 @@
             <div class="meta">
               <div class="name" title={t.name}>{t.name}</div>
               <div class="actions">
+                <button class="small icon-btn" onclick={() => removeTheme(t)} title="Delete this theme (moves it to the Recycle Bin)" aria-label="Delete {t.name}"><Icon name="trash" size={14} /></button>
                 <button class="small" onclick={() => (dialog = { mode: 'duplicate', source: t })} title="Copy this theme to a new folder and edit the copy">Duplicate</button>
                 <button class="small primary" onclick={() => openTheme(t)} disabled={ed.loading}>Edit</button>
               </div>
@@ -394,6 +410,15 @@
   }
   .loading {
     margin-top: 16px;
+  }
+  .icon-btn {
+    background: transparent;
+    padding: 3px 5px;
+    color: var(--text-faint);
+  }
+  .icon-btn:hover:not(:disabled) {
+    color: var(--danger);
+    background: var(--raised);
   }
   .backdrop {
     position: fixed;

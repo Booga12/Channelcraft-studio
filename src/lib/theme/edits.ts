@@ -92,11 +92,11 @@ function escapeXml(s: string): string {
  * Where a new element goes in `view`: the last `<view>` block in theme.xml that names only this
  * view, or a new block at the end of theme.xml.
  */
-export function addElementChange(project: ThemeProject, res: Resolution, view: string, type: string, name: string, body: string): Change {
+export function addElementChange(project: ThemeProject, res: Resolution, view: string, type: string, name: string, body: string, extra = true): Change {
   const entry = project.entry!;
   const v = res.views.get(view);
   const blocks = (v?.defs ?? []).filter((d) => d.file === entry && splitNames(attr(d.node, 'name')).length === 1);
-  const markup = `<${type} name="${name}" extra="true">\n${body
+  const markup = `<${type} name="${name}"${extra ? ' extra="true"' : ''}>\n${body
     .split('\n')
     .map((l) => '  ' + l)
     .join('\n')}\n</${type}>`;

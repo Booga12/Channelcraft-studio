@@ -45,6 +45,8 @@ export const api = {
   backupTheme: (dir: string) => invoke<string>('backup_theme', { dir }),
   backupsDir: () => invoke<string>('backups_dir'),
   copyTheme: (src: string, name: string) => invoke<string>('copy_theme', { src, name }),
+  /** Zips a backup, then moves the folder to the Recycle Bin. Returns the backup path. */
+  deleteTheme: (dir: string) => invoke<string>('delete_theme', { dir }),
   createThemeFromStarter: (name: string) => invoke<string>('create_theme_from_starter', { name }),
   importAsset: (themeDir: string, src: string, destRelDir: string) =>
     invoke<string>('import_asset', { themeDir, src, destRelDir }),

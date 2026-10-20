@@ -24,6 +24,13 @@
     </button>
   {/each}
   <div class="sep"></div>
+  <button class="tool" class:open={ed.leftTab === 'library'} onclick={() => (ed.leftTab = 'library')} title="Add ready-made elements that show RetroBat’s game and system data">
+    <Icon name="sparkle" size={18} />
+  </button>
+  <button class="tool" class:open={ed.leftTab === 'presets'} onclick={() => (ed.leftTab = 'presets')} title="Layout presets and colour palettes">
+    <Icon name="grid" size={18} />
+  </button>
+  <div class="sep"></div>
   <button class="tool" onclick={() => ed.undo()} disabled={!ed.canUndo} title="Undo (Ctrl+Z)"><Icon name="undo" size={18} /></button>
   <button class="tool" onclick={() => ed.redo()} disabled={!ed.canRedo} title="Redo (Ctrl+Y)"><Icon name="redo" size={18} /></button>
   <div class="grow"></div>
@@ -58,6 +65,9 @@
   .tool.on {
     background: var(--hover);
     color: #fff;
+  }
+  .tool.open {
+    color: var(--accent);
   }
   .plus {
     position: absolute;

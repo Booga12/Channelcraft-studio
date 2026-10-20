@@ -26,6 +26,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 walkdir = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+trash = "5"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

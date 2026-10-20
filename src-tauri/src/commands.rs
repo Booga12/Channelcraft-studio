@@ -398,6 +398,26 @@ pub fn import_asset(roots: State<Roots>, theme_dir: String, src: String, dest_re
     Ok(rel)
 }
 
+/// Moves a theme folder to the Recycle Bin after zipping a backup of it. The theme RetroBat is
+/// currently using can't be deleted, so RetroBat always has a theme to start with.
+#[tauri::command]
+pub fn delete_theme(app: AppHandle, roots: State<Roots>, dir: String) -> CmdResult<String> {
+    let root = roots.root()?;
+    let path = PathBuf::from(&dir);
+    let themes = themes_dir(&root);
+    let is_direct_child = path.parent().map(|p| normalize(p).to_string_lossy().to_lowercase() == normalize(&themes).to_string_lossy().to_lowercase()).unwrap_or(false);
+    if !is_inside(&path, &themes) || !is_direct_child || !path.join("theme.xml").is_file() {
+        return Err(format!("{dir} is not a theme folder"));
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if active_theme(&root).is_some_and(|a| a.eq_ignore_ascii_case(&name)) {
+        return Err(format!("\"{name}\" is the theme RetroBat is using. Pick another theme in RetroBat (or use “Use in RetroBat” on another one) before deleting it."));
+    }
+    let backup = backup_theme(app, dir.clone())?;
+    trash::delete(&path).map_err(|e| format!("Couldn't move the theme to the Recycle Bin: {e}"))?;
+    Ok(backup)
+}
+
 /// Theme option choices RetroBat saved for this theme, as raw `key=value` text.
 #[tauri::command]
 pub fn read_themesettings(roots: State<Roots>, theme: String) -> CmdResult<String> {

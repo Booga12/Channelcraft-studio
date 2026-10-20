@@ -7,6 +7,8 @@
   import { MOCK_GAME, MOCK_GAMES, type SystemInfo } from '$lib/theme/systems';
   import { alphaOf, boxOf, familyFor, fontState, formatDate, imageSize, isWhite, opaque } from '$lib/preview.svelte';
   import { zOf } from '$lib/render';
+  import { isDataBound } from '$lib/theme/library';
+  import { elementLabel } from '$lib/friendly';
 
   let {
     el,
@@ -211,8 +213,9 @@
         ></div>
       {/if}
     {:else}
-      <div class="placeholder" style:min-width="{outer.w ?? 120}px" style:min-height="{outer.h ?? 60}px">
-        <span>{el.name}</span>
+      {@const data = isDataBound(el.props.get('path')?.value) || el.name.startsWith('md_')}
+      <div class="placeholder" class:data style:min-width="{outer.w ?? 120}px" style:min-height="{outer.h ?? 60}px">
+        <span>{elementLabel(el.name)}{data ? ' · RetroBat data' : ''}</span>
       </div>
     {/if}
   {:else if el.type === 'text' || el.type === 'datetime' || el.type === 'clock'}
@@ -361,8 +364,15 @@
     visibility: hidden;
   }
   .el.selected .placeholder span,
-  .el:hover .placeholder span {
+  .el:hover .placeholder span,
+  .placeholder.data span {
     visibility: visible;
+  }
+  /* Artwork RetroBat fills in per game: a blue frame with its name. */
+  .placeholder.data {
+    background: repeating-linear-gradient(45deg, rgba(55, 142, 240, 0.12) 0 14px, rgba(55, 142, 240, 0.2) 14px 28px);
+    border-color: rgba(55, 142, 240, 0.6);
+    color: #bfe0ff;
   }
   .text {
     display: flex;

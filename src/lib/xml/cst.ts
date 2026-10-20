@@ -372,15 +372,7 @@ export function patchInsertChild(doc: XDoc, parent: XElement, xml: string, opts:
   const kids = elements(parent);
   const anchor = opts.first ? kids[0] : kids[kids.length - 1];
   const childIndent = anchor ? lineIndent(src, anchor.start) || parentIndent + unit : parentIndent + unit;
-  const body = (ind: string) =>
-    xml
-      .replace(/\r\n/g, '\n')
-      .split('\n')
-      .map((line, k) => {
-        const m = line.match(/^((?: {2})*)(.*)$/)!;
-        return (k === 0 ? '' : ind) + unit.repeat(m[1].length / 2) + m[2];
-      })
-      .join(eol);
+  const body = (ind: string) => formatBlock(xml, ind, unit, eol);
 
   if (parent.selfClosing) {
     const tag = src.slice(parent.start, parent.openEnd).replace(/\s*\/>$/, '>');
@@ -403,6 +395,27 @@ export function patchInsertChild(doc: XDoc, parent: XElement, xml: string, opts:
     return { start: parent.openEnd, end: parent.closeStart, text: `${eol}${childIndent}${body(childIndent)}${eol}${parentIndent}` };
   }
   return { start: parent.closeStart, end: parent.closeStart, text: `${eol}${childIndent}${body(childIndent)}${eol}${parentIndent}` };
+}
+
+/**
+ * Re-indents markup written with two spaces per level: the first line gets no indent (it goes
+ * where the cursor already is), later lines get `indent` plus the file's own unit per level.
+ */
+export function formatBlock(xml: string, indent: string, unit: string, eol: string): string {
+  return xml
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line, k) => {
+      const m = line.match(/^((?: {2})*)(.*)$/)!;
+      return (k === 0 ? '' : indent) + unit.repeat(m[1].length / 2) + m[2];
+    })
+    .join(eol);
+}
+
+/** Replaces the span from `from` to `to` (inclusive nodes) with re-indented markup. */
+export function patchReplaceSpan(doc: XDoc, from: XNode, to: XNode, xml: string): Patch {
+  const indent = lineIndent(doc.src, from.start);
+  return { start: from.start, end: to.end, text: formatBlock(xml, indent, detectIndentUnit(doc.src), detectEol(doc.src)) };
 }
 
 /** Removes a node; when it sits alone on its line(s), the whole line goes with it. */
