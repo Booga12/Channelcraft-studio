@@ -85,6 +85,7 @@ class Editor {
   playAnimations = $state(false);
   contactSheet = $state(false);
   showSettings = $state(false);
+  showRestore = $state(false);
   showShortcuts = $state(false);
   showSearch = $state(false);
 
@@ -294,6 +295,9 @@ class Editor {
   async openTheme(dir: string) {
     this.loading = true;
     try {
+      // Locks the theme for this window and repairs a save or restore that was interrupted.
+      const { recovered } = await api.openProject(dir);
+      if (recovered) await ask(recovered, { title: 'Theme repaired', kind: 'info', okLabel: 'OK', cancelLabel: 'Close' });
       const project = await ThemeProject.load(dir, tauriFs);
       const subsets: Record<string, string> = {};
       try {
@@ -330,15 +334,83 @@ class Editor {
       this.view = views.includes('system') ? 'system' : (this.res?.defaultView ?? views[0] ?? 'system');
       await this.store?.set('lastTheme', dir);
     } catch (e) {
+      if (this.project?.dir !== dir) api.closeProject(dir).catch(() => {});
       this.notify(`Couldn't open the theme: ${e}`, 'error');
     } finally {
       this.loading = false;
     }
   }
 
+  /** Reads the theme from disk again, dropping unsaved edits (after asking the caller). */
+  async reloadFromDisk() {
+    const p = this.project;
+    if (!p) return;
+    await api.clearRecovery(this.recoveryKey(p.dir)).catch(() => {});
+    this.project = null;
+    await this.openTheme(p.dir);
+  }
+
+  private askedAbout = '';
+  /**
+   * When the window comes back into focus: if another program changed the theme's files, offer to
+   * reload them (asked once per set of changes).
+   */
+  async checkExternalChanges() {
+    const p = this.project;
+    if (!p || this.busy || this.loading) return;
+    let changed: string[];
+    try {
+      changed = await api.changedFiles(p.dir);
+    } catch {
+      return;
+    }
+    const sig = `${p.dir}|${changed.join('|')}`;
+    if (!changed.length || sig === this.askedAbout || this.project !== p) return;
+    this.askedAbout = sig;
+    const list = changed.slice(0, 6).join(', ') + (changed.length > 6 ? ` and ${changed.length - 6} more` : '');
+    const lose = this.dirtyCount ? ` Your ${this.dirtyCount} unsaved file(s) would be read from disk again, so those edits would be lost.` : '';
+    const reload = await ask(`Another program changed this theme's files: ${list}.
+
+Reload the theme to see those changes?${lose}`, {
+      title: 'Theme changed outside ChannelCraft',
+      kind: 'warning',
+      okLabel: 'Reload from disk',
+      cancelLabel: 'Keep what I have',
+    });
+    if (reload) await this.reloadFromDisk();
+    else this.notify('Kept your version. If you save a file that was changed elsewhere, you will be asked first.');
+  }
+
+  /** Puts the theme back exactly as it was in a backup (the current state is backed up first). */
+  async restoreBackup(zip: string): Promise<boolean> {
+    const p = this.project;
+    if (!p || this.busy) return false;
+    this.busy = true;
+    const dir = p.dir;
+    let ok = false;
+    // Close the editor view first so no picture or video of the theme is still in use.
+    this.project = null;
+    this.selection = [];
+    await new Promise((r) => setTimeout(r, 150));
+    try {
+      const before = await api.restoreBackup(dir, zip);
+      await api.clearRecovery(this.recoveryKey(dir)).catch(() => {});
+      this.backedUp.add(dir);
+      ok = true;
+      this.notify(`Backup restored. The version you had before was backed up too (${before.split(/[\/]/).pop()}).`);
+    } catch (e) {
+      this.notify(String(e), 'error');
+    } finally {
+      this.busy = false;
+    }
+    await this.openTheme(dir);
+    return ok;
+  }
+
   closeTheme() {
     // Closing on purpose (after the unsaved-changes question) discards the recovery copy.
     if (this.project) api.clearRecovery(this.recoveryKey(this.project.dir)).catch(() => {});
+    if (this.project) api.closeProject(this.project.dir).catch(() => {});
     this.project = null;
     this.selected = null;
     this.undoStack = [];
@@ -792,7 +864,7 @@ class Editor {
     const p = this.project;
     if (!p || this.backedUp.has(p.dir)) return;
     try {
-      await api.backupTheme(p.dir, prefs.v.backupsKeep);
+      await api.backupTheme(p.dir, prefs.v.backupsKeep, 'before saving');
       this.backedUp.add(p.dir);
     } catch {
       // Browser preview or no access: nothing gets written anyway.
@@ -1099,13 +1171,34 @@ class Editor {
     try {
       let backup = '';
       if (!this.backedUp.has(p.dir)) {
-        backup = await api.backupTheme(p.dir, prefs.v.backupsKeep);
+        backup = await api.backupTheme(p.dir, prefs.v.backupsKeep, 'before saving');
         this.backedUp.add(p.dir);
       }
-      for (const f of dirty) {
-        await api.writeText(f.abs, f.src, f.bom);
-        f.savedSrc = f.src;
-        f.dirty = false;
+      // What is written is exactly what was there when Save was pressed; edits made while
+      // saving stay unsaved.
+      const sent = dirty.map((f) => ({ file: f, src: f.src }));
+      const files = sent.map(({ file, src }) => ({ rel: file.rel, text: src, bom: file.bom }));
+      try {
+        await api.saveFiles(p.dir, files, false);
+      } catch (e) {
+        const msg = String(e);
+        if (!msg.startsWith('CHANGED_OUTSIDE:')) throw e;
+        const changed = JSON.parse(msg.slice('CHANGED_OUTSIDE:'.length)) as string[];
+        const overwrite = await ask(
+          `Another program changed ${changed.length === 1 ? 'this file' : 'these files'} since ChannelCraft read ${changed.length === 1 ? 'it' : 'them'}: ${changed.join(', ')}.
+
+Saving now replaces those changes with yours. (A backup of the theme was made when you first saved this session.)`,
+          { title: 'Files changed outside ChannelCraft', kind: 'warning', okLabel: 'Save mine anyway', cancelLabel: 'Don’t save' },
+        );
+        if (!overwrite) {
+          this.notify('Not saved. To see the other changes, use File → Reload from disk (your unsaved edits would be lost).');
+          return;
+        }
+        await api.saveFiles(p.dir, files, true);
+      }
+      for (const { file, src } of sent) {
+        file.savedSrc = src;
+        file.dirty = file.src !== src;
       }
       this.rev++;
       this.lastSave = Date.now();

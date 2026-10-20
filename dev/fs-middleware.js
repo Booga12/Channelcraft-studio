@@ -93,6 +93,12 @@ export function devFs() {
       return existsSync(p) ? readFileSync(p, 'utf8') : '';
     },
     backups_dir: () => '(browser preview)',
+    // Saving is the app's job; the browser preview only reads.
+    open_project: () => ({ recovered: null }),
+    close_project: () => null,
+    changed_files: () => [],
+    accept_changes: () => null,
+    list_backups: () => [],
     load_recovery: () => null,
     save_recovery: () => null,
     clear_recovery: () => null,

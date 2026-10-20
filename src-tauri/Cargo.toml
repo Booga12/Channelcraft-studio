@@ -29,6 +29,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 trash = "5"
 base64 = "0.22"
 ureq = "2"
+sha2 = "0.10"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

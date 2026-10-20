@@ -57,6 +57,19 @@
     ['files', 'Files'],
   ];
 
+  async function reload() {
+    if (ed.dirtyCount) {
+      const ok = await ask(`Read the theme from disk again? Your unsaved changes in ${ed.dirtyCount} file(s) will be lost.`, {
+        title: 'Reload from disk',
+        kind: 'warning',
+        okLabel: 'Reload',
+        cancelLabel: 'Keep editing',
+      });
+      if (!ok) return;
+    }
+    await ed.reloadFromDisk();
+  }
+
   function saveWorkspace() {
     const n = prefs.v.customWorkspaces.length + 1;
     const name = `My workspace ${n}`;
@@ -72,6 +85,9 @@
         { label: 'Save', shortcut: 'Ctrl+S', action: () => ed.save(), disabled: ed.dirtyCount === 0 },
         { label: 'Export as zip…', action: () => ed.exportZip() },
         { label: 'Make preview.png from this screen', action: () => ed.makePreviewImage() },
+        { separator: true },
+        { label: 'Restore a backup…', action: () => (ed.showRestore = true) },
+        { label: 'Reload from disk', action: reload },
         { separator: true },
         { label: isActive ? 'In use by RetroBat' : 'Use in RetroBat', action: () => ed.setActive(), disabled: isActive },
         { label: 'Launch RetroBat', action: launch },

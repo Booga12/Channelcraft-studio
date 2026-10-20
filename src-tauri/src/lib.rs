@@ -1,4 +1,5 @@
 mod commands;
+mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -7,6 +8,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .manage(commands::Roots::default())
+        .manage(storage::Projects::default())
         .invoke_handler(tauri::generate_handler![
             commands::detect_retrobat,
             commands::set_retrobat_root,
@@ -16,10 +18,10 @@ pub fn run() {
             commands::read_theme_xml,
             commands::read_text,
             commands::read_text_optional,
-            commands::write_text,
-            commands::backup_theme,
+            storage::write_text,
+            storage::backup_theme,
             commands::backups_dir,
-            commands::export_theme,
+            storage::export_theme,
             commands::write_binary,
             commands::copy_folder_into_theme,
             commands::save_recovery,
@@ -30,13 +32,20 @@ pub fn run() {
             commands::list_fonts,
             commands::add_font_to_theme,
             commands::download_font,
-            commands::copy_theme,
+            storage::copy_theme,
             commands::delete_theme,
-            commands::create_theme_from_starter,
+            storage::create_theme_from_starter,
             commands::import_asset,
             commands::read_themesettings,
             commands::set_active_theme,
             commands::launch_retrobat,
+            storage::open_project,
+            storage::close_project,
+            storage::changed_files,
+            storage::accept_changes,
+            storage::save_files,
+            storage::list_backups,
+            storage::restore_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

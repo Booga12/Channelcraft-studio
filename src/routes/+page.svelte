@@ -10,6 +10,7 @@
   import SettingsDialog from '$lib/components/SettingsDialog.svelte';
   import ShortcutsDialog from '$lib/components/ShortcutsDialog.svelte';
   import SearchPalette from '$lib/components/SearchPalette.svelte';
+  import RestoreDialog from '$lib/components/RestoreDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { api } from '$lib/api';
 
@@ -27,6 +28,12 @@
     ed.init();
     const win = getCurrentWindow();
     const unlisten = win.onCloseRequested(async (event) => {
+      if (ed.busy) {
+        // Never close in the middle of a save, backup or restore.
+        event.preventDefault();
+        ed.notify('ChannelCraft is still saving. Close it again in a moment.', 'error');
+        return;
+      }
       if (ed.dirtyCount === 0) return;
       const leave = await ask(`You have unsaved changes in ${ed.dirtyCount} file(s). Close without saving?`, {
         title: 'Unsaved changes',
@@ -38,8 +45,13 @@
       // Closing without saving on purpose: don't offer these changes back next time.
       else if (ed.project) await api.clearRecovery(ed.recoveryKey(ed.project.dir)).catch(() => {});
     });
+    // Coming back to the window: notice files another program changed.
+    const unfocus = win.onFocusChanged(({ payload: focused }) => {
+      if (focused) ed.checkExternalChanges();
+    });
     return () => {
       unlisten.then((f) => f());
+      unfocus.then((f) => f());
     };
   });
 
@@ -65,6 +77,9 @@
 {/if}
 {#if ed.showShortcuts}
   <ShortcutsDialog />
+{/if}
+{#if ed.showRestore && ed.project}
+  <RestoreDialog />
 {/if}
 {#if ed.showSearch && ed.project}
   <SearchPalette />

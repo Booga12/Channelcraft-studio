@@ -21,6 +21,18 @@ export interface FileEntry {
   size: number;
 }
 
+export interface BackupInfo {
+  path: string;
+  fileName: string;
+  /** Unix seconds. */
+  created: number;
+  note: string;
+  size: number;
+  files: number;
+  restorable: boolean;
+  problem: string | null;
+}
+
 export interface TextFile {
   path: string;
   text: string;
@@ -42,7 +54,18 @@ export const api = {
   readThemeXml: (dir: string) => invoke<TextFile[]>('read_theme_xml', { dir }),
   readText: (path: string) => invoke<TextFile>('read_text', { path }),
   writeText: (path: string, text: string, bom: boolean) => invoke<void>('write_text', { path, text, bom }),
-  backupTheme: (dir: string, keep?: number) => invoke<string>('backup_theme', { dir, keep }),
+  backupTheme: (dir: string, keep?: number, note?: string) => invoke<string>('backup_theme', { dir, keep, note }),
+  /** Locks the theme for this window, repairs an interrupted save/restore, remembers its files. */
+  openProject: (dir: string) => invoke<{ recovered: string | null }>('open_project', { dir }),
+  closeProject: (dir: string) => invoke<void>('close_project', { dir }),
+  /** XML files changed by another program since the theme was opened or saved. */
+  changedFiles: (dir: string) => invoke<string[]>('changed_files', { dir }),
+  acceptChanges: (dir: string) => invoke<void>('accept_changes', { dir }),
+  /** Saves all files as one transaction; fails with "CHANGED_OUTSIDE:[...]" unless forced. */
+  saveFiles: (dir: string, files: { rel: string; text: string; bom: boolean }[], force: boolean) => invoke<void>('save_files', { dir, files, force }),
+  listBackups: (dir: string) => invoke<BackupInfo[]>('list_backups', { dir }),
+  /** Restores a backup exactly; returns the backup made of the current state first. */
+  restoreBackup: (dir: string, zip: string) => invoke<string>('restore_backup', { dir, zip }),
   exportTheme: (dir: string, dest: string) => invoke<string>('export_theme', { dir, dest }),
   writeBinary: (path: string, base64: string) => invoke<void>('write_binary', { path, base64 }),
   copyFolderIntoTheme: (src: string, themeDir: string, destRel: string) => invoke<number>('copy_folder_into_theme', { src, themeDir, destRel }),

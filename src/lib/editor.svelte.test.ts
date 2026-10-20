@@ -4,7 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // The editor talks to Tauri for files and dialogs; these tests never need it.
 vi.mock('@tauri-apps/plugin-store', () => ({ load: async () => ({ get: async () => null, set: async () => {} }) }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ ask: async () => true, save: async () => null, open: async () => null }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke: async () => null, convertFileSrc: (p: string) => p }));
+const calls: { cmd: string; args: Record<string, unknown> }[] = [];
+let respond: (cmd: string, args: Record<string, unknown>) => unknown = () => null;
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: async (cmd: string, args: Record<string, unknown>) => {
+    calls.push({ cmd, args });
+    return respond(cmd, args);
+  },
+  convertFileSrc: (p: string) => p,
+}));
 
 const { ed } = await import('./editor.svelte');
 const { ThemeProject } = await import('./theme/project');
@@ -127,5 +135,28 @@ describe('editor operations (starter theme, in memory)', () => {
     await open();
     ed.commit('stale', [{ file: old.entry!, patch: { start: staleNode.node.start, end: staleNode.node.end, text: 'x' } }]);
     expect(ed.history.done.length).toBe(0);
+  });
+
+  it('saves every changed file in one call and asks before overwriting files changed elsewhere', async () => {
+    ed.setProps('md_image', { pos: '0.3 0.4' });
+    const expected = ed.project!.entry!.src;
+    calls.length = 0;
+    let first = true;
+    respond = (cmd) => {
+      if (cmd === 'save_files' && first) {
+        first = false;
+        throw 'CHANGED_OUTSIDE:["theme.xml"]';
+      }
+      return null;
+    };
+    await ed.save();
+    respond = () => null;
+    const saves = calls.filter((c) => c.cmd === 'save_files');
+    // Refused once because theme.xml changed elsewhere; the user agreed (mocked), so it was forced.
+    expect(saves.map((c) => c.args.force)).toEqual([false, true]);
+    expect(saves[1].args.files).toEqual([{ rel: 'theme.xml', text: expected, bom: false }]);
+    // The first save of the session makes a backup first.
+    expect(calls.findIndex((c) => c.cmd === 'backup_theme')).toBeLessThan(calls.findIndex((c) => c.cmd === 'save_files'));
+    expect(ed.dirtyCount).toBe(0);
   });
 });

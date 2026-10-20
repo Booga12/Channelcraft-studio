@@ -118,6 +118,12 @@
           <div><strong>Backups folder</strong></div>
           <button class="secondary small" onclick={showBackups}><Icon name="folder" size={13} /> Open</button>
         </div>
+        {#if ed.project}
+          <div class="row">
+            <div><strong>Restore a backup</strong><small>Put this theme back exactly as it was in one of its backups.</small></div>
+            <button class="secondary small" onclick={() => ((ed.showSettings = false), (ed.showRestore = true))}>Choose…</button>
+          </div>
+        {/if}
       {:else if section === 'look'}
         <h3>Appearance</h3>
         <div class="row">

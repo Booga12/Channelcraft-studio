@@ -1,18 +1,17 @@
 use serde::Serialize;
 use std::fs;
-use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
 use walkdir::WalkDir;
 
-type CmdResult<T> = Result<T, String>;
+pub(crate) type CmdResult<T> = Result<T, String>;
 
 // Every command is sync: Tauri then runs it on a worker thread instead of the window's thread,
 // so slow work (zipping backups, scanning folders, downloads) never freezes the window.
 
-fn err<E: std::fmt::Display>(e: E) -> String {
+pub(crate) fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
@@ -22,7 +21,7 @@ fn err<E: std::fmt::Display>(e: E) -> String {
 pub struct Roots(pub Mutex<Option<PathBuf>>);
 
 impl Roots {
-    fn root(&self) -> CmdResult<PathBuf> {
+    pub(crate) fn root(&self) -> CmdResult<PathBuf> {
         self.0.lock().unwrap().clone().ok_or_else(|| "RetroBat folder is not set".into())
     }
 }
@@ -31,12 +30,12 @@ fn es_home(root: &Path) -> PathBuf {
     root.join("emulationstation").join(".emulationstation")
 }
 
-fn themes_dir(root: &Path) -> PathBuf {
+pub(crate) fn themes_dir(root: &Path) -> PathBuf {
     es_home(root).join("themes")
 }
 
 /// Lexically normalizes a path (resolves `.` and `..`) without touching the disk.
-fn normalize(p: &Path) -> PathBuf {
+pub(crate) fn normalize(p: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for c in p.components() {
         match c {
@@ -50,14 +49,14 @@ fn normalize(p: &Path) -> PathBuf {
     out
 }
 
-fn is_inside(child: &Path, parent: &Path) -> bool {
+pub(crate) fn is_inside(child: &Path, parent: &Path) -> bool {
     let c = normalize(child).to_string_lossy().to_lowercase();
     let p = normalize(parent).to_string_lossy().to_lowercase();
     let p = p.trim_end_matches(['\\', '/']);
     c.len() > p.len() && c.starts_with(p) && matches!(c.as_bytes()[p.len()], b'\\' | b'/')
 }
 
-fn ensure_writable(roots: &Roots, path: &Path) -> CmdResult<()> {
+pub(crate) fn ensure_writable(roots: &Roots, path: &Path) -> CmdResult<()> {
     let root = roots.root()?;
     if is_inside(path, &themes_dir(&root)) {
         Ok(())
@@ -113,7 +112,7 @@ pub struct TextFile {
     bom: bool,
 }
 
-fn file_kind(path: &Path) -> &'static str {
+pub(crate) fn file_kind(path: &Path) -> &'static str {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     match ext.as_str() {
         "xml" => "xml",
@@ -141,7 +140,7 @@ fn read_text_file(path: &Path) -> CmdResult<TextFile> {
     Ok(TextFile { path: path.to_string_lossy().into_owned(), text, bom })
 }
 
-fn active_theme(root: &Path) -> Option<String> {
+pub(crate) fn active_theme(root: &Path) -> Option<String> {
     let cfg = fs::read_to_string(es_home(root).join("es_settings.cfg")).ok()?;
     let line = cfg.lines().find(|l| l.contains("name=\"ThemeSet\""))?;
     let start = line.find("value=\"")? + 7;
@@ -202,7 +201,8 @@ pub fn list_themes(roots: State<Roots>) -> CmdResult<Vec<ThemeInfo>> {
     let mut out = Vec::new();
     for entry in fs::read_dir(&dir).map_err(err)?.flatten() {
         let p = entry.path();
-        if !p.join("theme.xml").is_file() {
+        // Folders starting with "." are ChannelCraft's own work folders (or hidden ones).
+        if !p.join("theme.xml").is_file() || entry.file_name().to_string_lossy().starts_with('.') {
             continue;
         }
         let preview = ["preview.png", "preview.jpg", "_inc/images/preview.png", "screenshot.png"]
@@ -263,30 +263,7 @@ pub fn read_text_optional(path: String) -> CmdResult<Option<TextFile>> {
     Ok(read_text_file(Path::new(&path)).ok())
 }
 
-/// Writes through a temp file and rename, keeping the BOM state the file had.
-#[tauri::command(async)]
-pub fn write_text(roots: State<Roots>, path: String, text: String, bom: bool) -> CmdResult<()> {
-    let p = PathBuf::from(&path);
-    ensure_writable(&roots, &p)?;
-    if let Some(parent) = p.parent() {
-        fs::create_dir_all(parent).map_err(err)?;
-    }
-    let tmp = p.with_extension("ccs-tmp");
-    {
-        let mut f = fs::File::create(&tmp).map_err(err)?;
-        if bom {
-            f.write_all(&[0xEF, 0xBB, 0xBF]).map_err(err)?;
-        }
-        f.write_all(text.as_bytes()).map_err(err)?;
-        f.sync_all().map_err(err)?;
-    }
-    fs::rename(&tmp, &p).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        err(e)
-    })
-}
-
-fn timestamp() -> String {
+pub(crate) fn timestamp() -> String {
     let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     // UTC yyyymmdd-hhmmss without pulling in a date crate.
     let days = secs / 86400;
@@ -303,69 +280,6 @@ fn timestamp() -> String {
     format!("{y:04}{mo:02}{d:02}-{h:02}{m:02}{s:02}")
 }
 
-/// Zips a whole theme folder into the app's backups folder and returns the zip path. With `keep`,
-/// only that many of the newest backups of this theme are kept.
-#[tauri::command(async)]
-pub fn backup_theme(app: AppHandle, dir: String, keep: Option<usize>) -> CmdResult<String> {
-    let src = PathBuf::from(&dir);
-    let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "theme".into());
-    let backups = app.path().app_data_dir().map_err(err)?.join("backups");
-    fs::create_dir_all(&backups).map_err(err)?;
-    let zip_path = backups.join(format!("{name}-{}.zip", timestamp()));
-    zip_dir(&src, &name, &zip_path)?;
-    if let Some(keep) = keep.filter(|k| *k > 0) {
-        let prefix = format!("{name}-");
-        let mut mine: Vec<PathBuf> = fs::read_dir(&backups)
-            .map_err(err)?
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| {
-                let f = p.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-                // "<name>-yyyymmdd-hhmmss.zip": the timestamp sorts by age.
-                f.starts_with(&prefix) && f.ends_with(".zip") && f.len() == prefix.len() + 19
-            })
-            .collect();
-        mine.sort();
-        let excess = mine.len().saturating_sub(keep);
-        for old in &mine[..excess] {
-            let _ = fs::remove_file(old);
-        }
-    }
-    Ok(zip_path.to_string_lossy().into_owned())
-}
-
-/// Zips a theme to a file the user chose, ready to share or copy to another RetroBat.
-#[tauri::command(async)]
-pub fn export_theme(dir: String, dest: String) -> CmdResult<String> {
-    let src = PathBuf::from(&dir);
-    if !src.join("theme.xml").is_file() {
-        return Err(format!("{dir} is not a theme folder"));
-    }
-    let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "theme".into());
-    zip_dir(&src, &name, Path::new(&dest))?;
-    Ok(dest)
-}
-
-fn zip_dir(src: &Path, name: &str, zip_path: &Path) -> CmdResult<()> {
-    let file = fs::File::create(zip_path).map_err(err)?;
-    let mut zip = zip::ZipWriter::new(std::io::BufWriter::new(file));
-    let deflate = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    // Pictures, videos, sounds and fonts are already compressed: storing them is much faster.
-    let store = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    for e in WalkDir::new(src).into_iter().flatten() {
-        if !e.file_type().is_file() {
-            continue;
-        }
-        let rel = e.path().strip_prefix(src).map_err(err)?.to_string_lossy().replace('\\', "/");
-        let packed = matches!(file_kind(e.path()), "image" | "video" | "sound" | "font") && !rel.to_lowercase().ends_with(".svg");
-        zip.start_file(format!("{name}/{rel}"), if packed { store } else { deflate }).map_err(err)?;
-        let mut f = fs::File::open(e.path()).map_err(err)?;
-        std::io::copy(&mut f, &mut zip).map_err(err)?;
-    }
-    zip.finish().map_err(err)?;
-    Ok(())
-}
-
 #[tauri::command(async)]
 pub fn backups_dir(app: AppHandle) -> CmdResult<String> {
     Ok(app.path().app_data_dir().map_err(err)?.join("backups").to_string_lossy().into_owned())
@@ -378,10 +292,7 @@ pub fn write_binary(roots: State<Roots>, path: String, base64: String) -> CmdRes
     let p = PathBuf::from(&path);
     ensure_writable(&roots, &p)?;
     let bytes = base64::engine::general_purpose::STANDARD.decode(base64.as_bytes()).map_err(err)?;
-    if let Some(parent) = p.parent() {
-        fs::create_dir_all(parent).map_err(err)?;
-    }
-    fs::write(&p, bytes).map_err(err)
+    crate::storage::write_atomic(&p, &bytes)
 }
 
 /// Copies every file of a folder (from any installed theme) into a theme's subfolder, keeping
@@ -535,50 +446,13 @@ pub fn download_font(roots: State<Roots>, theme_dir: String, url: String, file_n
     Ok(format!("_inc/fonts/{file_name}"))
 }
 
-fn copy_dir(src: &Path, dest: &Path) -> CmdResult<()> {
-    for e in WalkDir::new(src).into_iter().flatten() {
-        let rel = e.path().strip_prefix(src).map_err(err)?;
-        let target = dest.join(rel);
-        if e.file_type().is_dir() {
-            fs::create_dir_all(&target).map_err(err)?;
-        } else {
-            fs::copy(e.path(), &target).map_err(err)?;
-        }
-    }
-    Ok(())
-}
-
-fn new_theme_path(roots: &Roots, name: &str) -> CmdResult<PathBuf> {
+pub(crate) fn new_theme_path(roots: &Roots, name: &str) -> CmdResult<PathBuf> {
     valid_theme_name(name)?;
     let dest = themes_dir(&roots.root()?).join(name.trim());
     if dest.exists() {
         return Err(format!("A theme folder named \"{}\" already exists", name.trim()));
     }
     Ok(dest)
-}
-
-#[tauri::command(async)]
-pub fn copy_theme(roots: State<Roots>, src: String, name: String) -> CmdResult<String> {
-    let dest = new_theme_path(&roots, &name)?;
-    copy_dir(Path::new(&src), &dest)?;
-    Ok(dest.to_string_lossy().into_owned())
-}
-
-#[tauri::command(async)]
-pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: String) -> CmdResult<String> {
-    let dest = new_theme_path(&roots, &name)?;
-    let starter = app
-        .path()
-        .resolve("starter-theme", tauri::path::BaseDirectory::Resource)
-        .map_err(err)?;
-    let starter = if starter.join("theme.xml").is_file() {
-        starter
-    } else {
-        // `tauri dev` runs from the source tree.
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("starter-theme")
-    };
-    copy_dir(&starter, &dest)?;
-    Ok(dest.to_string_lossy().into_owned())
 }
 
 /// Copies a file the user picked into the theme and returns its theme-relative path.
@@ -619,7 +493,7 @@ pub fn delete_theme(app: AppHandle, roots: State<Roots>, dir: String) -> CmdResu
     if active_theme(&root).is_some_and(|a| a.eq_ignore_ascii_case(&name)) {
         return Err(format!("\"{name}\" is the theme RetroBat is using. Pick another theme in RetroBat (or use “Use in RetroBat” on another one) before deleting it."));
     }
-    let backup = backup_theme(app, dir.clone(), None)?;
+    let backup = crate::storage::backup_theme(app, dir.clone(), None, Some("before delete".into()))?;
     trash::delete(&path).map_err(|e| format!("Couldn't move the theme to the Recycle Bin: {e}"))?;
     Ok(backup)
 }
@@ -690,24 +564,6 @@ mod tests {
         assert!(valid_theme_name("a/b").is_err());
         assert!(valid_theme_name("..").is_err());
         assert!(valid_theme_name(" ").is_err());
-    }
-
-    #[test]
-    fn zips_a_theme_storing_media_and_compressing_text() {
-        let base = std::env::temp_dir().join(format!("ccs-zip-test-{}", std::process::id()));
-        let theme = base.join("My Theme");
-        fs::create_dir_all(theme.join("_inc")).unwrap();
-        fs::write(theme.join("theme.xml"), "<theme>".repeat(200)).unwrap();
-        fs::write(theme.join("_inc").join("bg.png"), vec![7u8; 4096]).unwrap();
-        let zip_path = base.join("out.zip");
-        zip_dir(&theme, "My Theme", &zip_path).unwrap();
-        let mut archive = zip::ZipArchive::new(fs::File::open(&zip_path).unwrap()).unwrap();
-        let mut names: Vec<String> = (0..archive.len()).map(|i| archive.by_index(i).unwrap().name().to_string()).collect();
-        names.sort();
-        assert_eq!(names, vec!["My Theme/_inc/bg.png", "My Theme/theme.xml"]);
-        assert_eq!(archive.by_name("My Theme/_inc/bg.png").unwrap().compression(), zip::CompressionMethod::Stored);
-        assert_eq!(archive.by_name("My Theme/theme.xml").unwrap().compression(), zip::CompressionMethod::Deflated);
-        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
