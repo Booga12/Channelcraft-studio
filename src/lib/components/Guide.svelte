@@ -4,19 +4,19 @@
   const STEPS = [
     {
       title: 'Pick a screen',
-      text: 'Use “Screen” at the top to switch between the System menu (where you pick a console) and the game lists. “Preview as” changes which console is shown.',
+      text: 'The tabs above the preview switch between the System menu (where you pick a console) and the game lists. The console menu at the top right changes which console is shown.',
     },
     {
       title: 'Click something to change it',
-      text: 'Click any part of the preview, or pick it from the Elements list on the left. Its settings appear on the right.',
+      text: 'Click any part of the preview, or pick it in the Layers panel. Its settings appear in the Properties panel on the right, and the quick ones in the bar at the top.',
     },
     {
-      title: 'Move and restyle',
-      text: 'Drag the selected part to move it, or use the arrow keys for small steps. Change colours, fonts, sizes and pictures on the right.',
+      title: 'Move, restyle, add',
+      text: 'Drag the selected part to move it, or use the arrow keys for small steps. The tools on the left add pictures, text, panels and more.',
     },
     {
       title: 'Save and try it',
-      text: 'Press “Save changes”. A backup of the whole theme is made first. Then “Use in RetroBat” and “Launch” to see it for real.',
+      text: 'Press the blue Save button. A backup of the whole theme is made first. Then “Use in RetroBat” and “Launch” to see it for real.',
     },
   ];
 
@@ -28,10 +28,15 @@
   ];
 </script>
 
+<svelte:window onkeydown={(e) => e.key === 'Escape' && ed.closeGuide()} />
+
 <div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && ed.closeGuide()}>
   <div class="guide" role="dialog" aria-modal="true" aria-labelledby="guide-title">
     <h2 id="guide-title">Getting started</h2>
-    <p class="dim">You're editing <strong>{ed.project?.name}</strong>. Nothing is written to your theme until you save, and Ctrl+Z undoes any change.</p>
+    <p class="dim">
+      {#if ed.project}You're editing <strong>{ed.project.name}</strong>.{/if}
+      Nothing is written to a theme until you save, and Ctrl+Z undoes any change.
+    </p>
 
     <ol>
       {#each STEPS as s, i}

@@ -6,6 +6,8 @@
   import { fmtNum, parsePair } from '$lib/theme/schema';
   import { isCarouselPart, isVisible, zOf } from '$lib/render';
   import type { SystemInfo } from '$lib/theme/systems';
+  import { elementLabel } from '$lib/friendly';
+  import Icon from './Icon.svelte';
   import PreviewElement from './PreviewElement.svelte';
 
   let host: HTMLDivElement;
@@ -22,7 +24,22 @@
   });
 
   const dims = $derived(screenSize(ed.settings));
-  const scale = $derived(Math.max(0.05, Math.min((cw - 32) / dims.width, (ch - 32) / dims.height)));
+  // The host's padding is already outside contentRect.
+  const fitScale = $derived(Math.max(0.05, Math.min((cw - 2) / dims.width, (ch - 2) / dims.height)));
+  const scale = $derived(ed.zoom === 'fit' ? fitScale : ed.zoom);
+
+  const STEPS = [0.1, 0.15, 0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2];
+  function zoomBy(dir: 1 | -1) {
+    const cur = scale;
+    const next = dir > 0 ? STEPS.find((s) => s > cur + 0.001) : [...STEPS].reverse().find((s) => s < cur - 0.001);
+    ed.zoom = next ?? cur;
+  }
+
+  function onwheel(e: WheelEvent) {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 1 : -1);
+  }
 
   const exprEnv = $derived.by<ExprEnv>(() => {
     const subsets = new Map((ed.res?.subsets ?? []).map((s) => [s.name, s.selected]));
@@ -128,7 +145,8 @@
   const sel = $derived(ed.selectedElement);
 </script>
 
-<div class="host" bind:this={host}>
+<div class="canvas-area">
+<div class="host" role="presentation" bind:this={host} {onwheel} onpointerdown={(e) => e.target === e.currentTarget && (ed.selected = null)}>
   {#if ed.res}
     <div class="stage-wrap" style:width="{dims.width * scale}px" style:height="{dims.height * scale}px">
       <div
@@ -156,31 +174,82 @@
         {/if}
       </div>
     </div>
-    <div class="caption">
-      <span>{ed.currentView?.displayName ?? ed.view}</span>
-      <span class="faint">· {ed.settings.system.fullName} · {dims.width}×{dims.height} · {Math.round(scale * 100)}%</span>
-      {#if sel}
-        <span class="faint">· {sel.name} @ {sel.props.get('pos')?.value ?? '0 0'}</span>
-      {/if}
-      <span class="hint faint">Mock data. Videos, shaders and animations are not played.</span>
-    </div>
   {/if}
+</div>
+<footer class="status">
+  <div class="zoom" role="group" aria-label="Zoom">
+    <button onclick={() => zoomBy(-1)} title="Zoom out (Ctrl+−)"><Icon name="zoomOut" size={14} /></button>
+    <span class="pct" title="Zoom">{Math.round(scale * 100)}%</span>
+    <button onclick={() => zoomBy(1)} title="Zoom in (Ctrl++)"><Icon name="zoomIn" size={14} /></button>
+    <button class:on={ed.zoom === 'fit'} onclick={() => (ed.zoom = 'fit')} title="Fit to window (Ctrl+0)"><Icon name="fit" size={14} /></button>
+  </div>
+  <span class="faint">{dims.width} × {dims.height}</span>
+  <span class="faint">·</span>
+  <span class="faint">{ed.settings.system.fullName}</span>
+  {#if sel}
+    <span class="faint">·</span>
+    <span class="faint">Selected: {elementLabel(sel.name)}</span>
+  {/if}
+  <span class="hint faint">Sample games are shown. Videos and animations don't play here.</span>
+</footer>
 </div>
 
 <style>
-  .host {
-    position: relative;
+  .canvas-area {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     height: 100%;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
+    min-height: 0;
+  }
+  .host {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: auto;
+    background: var(--canvas);
+    padding: 24px;
   }
   .stage-wrap {
     position: relative;
-    box-shadow:
-      0 0 0 1px #2a2f38,
-      0 10px 40px rgba(0, 0, 0, 0.5);
+    margin: auto;
+    flex: none;
+    box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--frame);
+    border-top: 1px solid var(--line);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .zoom {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    margin-right: 6px;
+  }
+  .zoom button {
+    background: transparent;
+    padding: 3px 4px;
+    color: var(--text-dim);
+  }
+  .zoom button:hover {
+    color: var(--text);
+  }
+  .zoom button.on {
+    color: var(--accent);
+  }
+  .pct {
+    width: 40px;
+    text-align: center;
+    color: var(--text);
   }
   .stage {
     position: absolute;
@@ -191,17 +260,6 @@
     background: #000;
     user-select: none;
     touch-action: none;
-  }
-  .caption {
-    position: absolute;
-    left: 12px;
-    bottom: 6px;
-    right: 12px;
-    display: flex;
-    gap: 6px;
-    font-size: 11.5px;
-    color: var(--text-dim);
-    pointer-events: none;
   }
   .hint {
     margin-left: auto;

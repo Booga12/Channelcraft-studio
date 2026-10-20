@@ -1,8 +1,11 @@
 <script lang="ts">
+  // Layers panel: every element on the screen, top layer first, like Photoshop's Layers.
+  import { ask } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
   import { ADDABLE_TYPES, ELEMENT_LABELS } from '$lib/theme/schema';
-  import { elementLabel, TYPE_LABELS, typeLabel } from '$lib/friendly';
-  import { isVisible, TYPE_ICON, zOf } from '$lib/render';
+  import { elementLabel, TYPE_LABELS, typeLabel, viewLabel } from '$lib/friendly';
+  import { isVisible, zOf } from '$lib/render';
+  import Icon, { TYPE_ICONS } from './Icon.svelte';
 
   let filter = $state('');
   let adding = $state(false);
@@ -16,136 +19,150 @@
       .sort((a, b) => zOf(b) - zOf(a) || a.order - b.order);
   });
 
+  let listEl: HTMLUListElement;
+  // Keep the selected layer in view when it's picked on the canvas.
+  $effect(() => {
+    const name = ed.selected;
+    if (!name || !listEl) return;
+    queueMicrotask(() => listEl.querySelector('li.sel')?.scrollIntoView({ block: 'nearest' }));
+  });
+
   function add(type: string) {
     adding = false;
     ed.addElement(type);
   }
+
+  async function remove() {
+    const el = ed.selectedElement;
+    if (!el) return;
+    const ok = await ask(`Delete “${elementLabel(el.name)}” from ${viewLabel(ed.view)}? You can undo this with Ctrl+Z.`, { title: 'Delete element', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
+    if (!ok) return;
+    const r = ed.deleteElement(el.name);
+    if (!r.removed) ed.notify('This element is shared with other screens, so it can’t be deleted here. Hide it with the eye instead.', 'error');
+  }
 </script>
 
-<div class="wrap">
-  <div class="head">
-    <input placeholder="Filter elements…" bind:value={filter} />
+<div class="layers">
+  <div class="search">
+    <input placeholder="Find a layer…" bind:value={filter} />
+  </div>
+  <ul role="listbox" aria-label="Layers" bind:this={listEl}>
+    {#each list as el (el.name)}
+      {@const hidden = !isVisible(el)}
+      <li class:sel={ed.selected === el.name} class:off={hidden || ed.hidden[el.name]} role="option" aria-selected={ed.selected === el.name}>
+        <button
+          class="eye"
+          title={ed.hidden[el.name] ? 'Show in the preview' : 'Hide in the preview only (the theme is not changed)'}
+          onclick={() => (ed.hidden[el.name] = !ed.hidden[el.name])}
+        >
+          {#if !ed.hidden[el.name]}<Icon name="eye" size={14} />{/if}
+        </button>
+        <button class="row" onclick={() => (ed.selected = el.name)} title={el.name}>
+          <span class="thumb"><Icon name={TYPE_ICONS[el.type] ?? 'file'} size={15} /></span>
+          <span class="name">
+            {ed.simple ? elementLabel(el.name) : (ELEMENT_LABELS[el.name] ?? el.name)}
+            {#if !ed.simple && ELEMENT_LABELS[el.name]}<span class="faint mono">{el.name}</span>{/if}
+          </span>
+          {#if hidden}<span class="tag" title="Hidden on this screen in the theme">hidden</span>{/if}
+          {#if !ed.simple && el.conditional}<span class="tag" title="Some definitions only apply under conditions">if</span>{/if}
+          {#if !ed.simple && el.unknownConditions}<span class="tag warn" title="A condition couldn't be evaluated; it's shown as if true">?</span>{/if}
+          {#if !ed.simple}<span class="z mono" title="Layer (zIndex)">{zOf(el)}</span>{/if}
+        </button>
+      </li>
+    {:else}
+      <li class="empty faint">{filter ? 'No layers match.' : 'Nothing on this screen yet. Add something with the buttons below.'}</li>
+    {/each}
+  </ul>
+  <footer>
+    <span class="faint">{list.length} layer{list.length === 1 ? '' : 's'}</span>
+    <div class="spacer"></div>
     <div class="add">
-      <button class="small" onclick={() => (adding = !adding)} title="Add a picture, text or other element to this screen">＋ Add</button>
+      <button class="ic" onclick={() => (adding = !adding)} title="Add an element to this screen"><Icon name="plus" size={15} /></button>
       {#if adding}
         <div class="menu" role="menu">
           {#each ADDABLE_TYPES as t}
-            <button class="ghost item" role="menuitem" onclick={() => add(t)} title={TYPE_LABELS[t]?.help ?? ''}>
-              <span class="ic">{TYPE_ICON[t] ?? '•'}</span>
-              <span class="txt"><span>{typeLabel(t)}</span>{#if ed.simple && TYPE_LABELS[t]?.help}<small class="faint">{TYPE_LABELS[t].help}</small>{/if}</span>
+            <button class="item" role="menuitem" onclick={() => add(t)} title={TYPE_LABELS[t]?.help ?? ''}>
+              <Icon name={TYPE_ICONS[t] ?? 'file'} size={15} />
+              <span class="txt"><span>{typeLabel(t)}</span><small>{TYPE_LABELS[t]?.help ?? ''}</small></span>
             </button>
           {/each}
         </div>
       {/if}
     </div>
-  </div>
-  {#if !list.length}
-    <p class="faint empty">No elements in this view.</p>
-  {/if}
-  <ul>
-    {#each list as el (el.name)}
-      <li class:sel={ed.selected === el.name} class:off={!isVisible(el) || ed.hidden[el.name]}>
-        <button
-          class="eye ghost"
-          title={ed.hidden[el.name] ? 'Show in preview' : 'Hide in preview (does not change the theme)'}
-          onclick={() => (ed.hidden[el.name] = !ed.hidden[el.name])}>{ed.hidden[el.name] ? '◌' : '●'}</button
-        >
-        <button class="row ghost" onclick={() => (ed.selected = el.name)}>
-          <span class="ic" title={typeLabel(el.type)}>{TYPE_ICON[el.type] ?? '•'}</span>
-          <span class="name">
-            {ed.simple ? elementLabel(el.name) : (ELEMENT_LABELS[el.name] ?? el.name)}
-            {#if !ed.simple && ELEMENT_LABELS[el.name]}<span class="faint mono">{el.name}</span>{/if}
-          </span>
-          {#if !ed.simple && el.conditional}<span class="badge" title="Some definitions only apply under conditions">if</span>{/if}
-          {#if !ed.simple && el.unknownConditions}<span class="badge warn" title="A condition couldn't be evaluated; it's shown as if true">?</span>{/if}
-          {#if !isVisible(el)}<span class="badge" title="visible is false">hidden</span>{/if}
-          {#if !ed.simple}<span class="z faint mono" title="zIndex">{zOf(el)}</span>{/if}
-        </button>
-      </li>
-    {/each}
-  </ul>
+    <button class="ic" onclick={remove} disabled={!ed.selectedElement} title="Delete the selected element"><Icon name="trash" size={15} /></button>
+  </footer>
 </div>
 
 <style>
-  .wrap {
-    padding: 8px 6px;
-  }
-  .head {
+  .layers {
     display: flex;
-    gap: 6px;
-    padding: 0 4px 8px;
+    flex-direction: column;
+    height: 100%;
   }
-  .head input {
-    flex: 1;
+  .search {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
   }
-  .add {
-    position: relative;
-  }
-  .menu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 4px);
-    z-index: 20;
-    background: var(--panel-2);
-    border: 1px solid var(--line-strong);
-    border-radius: 8px;
-    padding: 4px;
-    display: grid;
-    min-width: 150px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  }
-  .menu {
-    min-width: 240px;
-  }
-  .menu .item {
-    display: flex;
-    gap: 6px;
-    align-items: flex-start;
-    text-align: left;
-  }
-  .txt {
-    display: grid;
-  }
-  .txt small {
-    font-size: 11px;
-    white-space: normal;
+  .search input {
+    width: 100%;
   }
   ul {
     list-style: none;
     margin: 0;
     padding: 0;
+    flex: 1;
+    overflow: auto;
   }
   li {
     display: flex;
     align-items: center;
-    border-radius: 5px;
+    height: 32px;
+    border-bottom: 1px solid #262626;
   }
   li.sel {
-    background: var(--accent-soft);
+    background: #474747;
   }
-  li.off .name {
-    color: var(--text-faint);
+  li.off .name,
+  li.off .thumb {
+    opacity: 0.45;
   }
   .eye {
-    padding: 3px 5px;
-    font-size: 9px;
-    color: var(--text-faint);
+    width: 28px;
+    height: 100%;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 0;
+    border-right: 1px solid #262626;
   }
   .row {
     flex: 1;
+    height: 100%;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    padding: 0 8px;
+    background: transparent;
+    border-radius: 0;
     text-align: left;
-    padding: 4px 6px;
     min-width: 0;
   }
-  li.sel .row {
-    color: var(--text);
+  .row:hover {
+    background: rgba(255, 255, 255, 0.04);
   }
-  .ic {
-    width: 16px;
-    text-align: center;
+  li.sel .row:hover {
+    background: transparent;
+  }
+  .thumb {
+    width: 24px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+    border: 1px solid #4a4a4a;
+    border-radius: 2px;
     color: var(--text-dim);
     flex: none;
   }
@@ -159,12 +176,85 @@
     font-size: 10.5px;
     margin-left: 4px;
   }
+  .tag {
+    font-size: 10px;
+    color: var(--text-faint);
+    border: 1px solid #555;
+    border-radius: 3px;
+    padding: 0 4px;
+  }
+  .tag.warn {
+    color: var(--warn);
+    border-color: var(--warn);
+  }
   .z {
     font-size: 10.5px;
-    min-width: 20px;
+    color: var(--text-faint);
+    min-width: 22px;
     text-align: right;
   }
   .empty {
-    padding: 10px;
+    height: auto;
+    padding: 14px 12px;
+    border: none;
+  }
+  footer {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 30px;
+    padding: 0 6px 0 10px;
+    border-top: 1px solid var(--line);
+    background: var(--frame);
+    font-size: 11px;
+    flex: none;
+  }
+  .spacer {
+    flex: 1;
+  }
+  .ic {
+    background: transparent;
+    padding: 4px;
+    color: var(--text-dim);
+  }
+  .ic:hover:not(:disabled) {
+    color: var(--text);
+  }
+  .add {
+    position: relative;
+  }
+  .menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    z-index: 50;
+    width: 260px;
+    background: #2f2f2f;
+    border: 1px solid #3f3f3f;
+    border-radius: 6px;
+    padding: 4px 0;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  }
+  .item {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 6px 12px;
+    background: transparent;
+    border-radius: 0;
+    text-align: left;
+    white-space: normal;
+  }
+  .item:hover {
+    background: var(--accent-strong);
+    color: #fff;
+  }
+  .txt {
+    display: grid;
+  }
+  .txt small {
+    font-size: 11px;
+    opacity: 0.7;
   }
 </style>

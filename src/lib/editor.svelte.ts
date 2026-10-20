@@ -71,6 +71,8 @@ class Editor {
   loading = $state(false);
   /** Theme options RetroBat has saved for the open theme (themesettings\<theme>.cfg). */
   savedSubsets: Record<string, string> = {};
+  /** Canvas zoom: fit the window, or a fixed scale (1 = actual pixels). */
+  zoom = $state<'fit' | number>('fit');
   /** Simple hides file names, line numbers and rarely used settings. */
   mode = $state<'simple' | 'advanced'>(readPref('ccs.mode') === 'advanced' ? 'advanced' : 'simple');
   /** Whether the getting-started guide is open. */

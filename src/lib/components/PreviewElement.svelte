@@ -356,6 +356,14 @@
     color: rgba(255, 255, 255, 0.6);
     font: 600 22px 'Segoe UI', sans-serif;
   }
+  /* Names of empty placeholders only show for the selected element, to keep the canvas clean. */
+  .placeholder span {
+    visibility: hidden;
+  }
+  .el.selected .placeholder span,
+  .el:hover .placeholder span {
+    visibility: visible;
+  }
   .text {
     display: flex;
     white-space: nowrap;

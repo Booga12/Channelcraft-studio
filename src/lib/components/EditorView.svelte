@@ -1,7 +1,11 @@
 <script lang="ts">
   import { ed } from '$lib/editor.svelte';
   import { fmtNum, parsePair } from '$lib/theme/schema';
-  import Toolbar from './Toolbar.svelte';
+  import MenuBar from './MenuBar.svelte';
+  import OptionsBar from './OptionsBar.svelte';
+  import ToolRail from './ToolRail.svelte';
+  import ScreenTabs from './ScreenTabs.svelte';
+  import PanelGroup from './PanelGroup.svelte';
   import ElementList from './ElementList.svelte';
   import OptionsPanel from './OptionsPanel.svelte';
   import VariablesPanel from './VariablesPanel.svelte';
@@ -9,22 +13,35 @@
   import Preview from './Preview.svelte';
   import PropertyPanel from './PropertyPanel.svelte';
   import SourceView from './SourceView.svelte';
-  import Guide from './Guide.svelte';
 
-  const tabs = $derived(
-    ed.simple
-      ? ([
-          { id: 'elements', label: 'Elements', title: 'Everything drawn on this screen' },
-          { id: 'options', label: 'Options', title: 'Choices the theme offers in RetroBat' },
-          { id: 'variables', label: 'Colours', title: 'Colours shared across the theme' },
-        ] as const)
-      : ([
-          { id: 'elements', label: 'Elements', title: 'Everything drawn in this view' },
-          { id: 'options', label: 'Options', title: 'Theme options (subsets)' },
-          { id: 'variables', label: 'Variables', title: 'Theme variables' },
-          { id: 'files', label: 'Files', title: 'XML files in the theme' },
-        ] as const),
-  );
+  const bottomTabs = $derived([
+    { id: 'elements', label: 'Layers', title: 'Everything drawn on this screen', count: ed.currentView?.elements.size },
+    { id: 'variables', label: ed.simple ? 'Colours' : 'Variables', title: 'Colours and values shared across the theme' },
+    { id: 'options', label: 'Options', title: 'Choices the theme offers inside RetroBat', count: ed.res?.subsets.length },
+    ...(ed.simple ? [] : [{ id: 'files', label: 'Files', title: 'XML files in the theme' }]),
+  ]);
+
+  let propTab = $state('properties');
+  let propCollapsed = $state(false);
+  let bottomCollapsed = $state(false);
+
+  // Height of the Properties panel as a share of the dock; drag the divider to change it.
+  let split = $state(0.56);
+  let dock: HTMLElement;
+  function startSplit(e: PointerEvent) {
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const r = dock.getBoundingClientRect();
+      split = Math.min(0.85, Math.max(0.2, (ev.clientY - r.top) / r.height));
+    };
+    const up = () => {
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', up);
+    };
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', up);
+  }
 
   function inField(t: EventTarget | null) {
     const el = t as HTMLElement | null;
@@ -33,15 +50,22 @@
 
   function onkeydown(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === 's') {
+    const k = e.key.toLowerCase();
+    if (mod && k === 's') {
       e.preventDefault();
       ed.save();
-    } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') {
+    } else if (mod && !e.shiftKey && k === 'z') {
       e.preventDefault();
       ed.undo();
-    } else if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+    } else if (mod && (k === 'y' || (e.shiftKey && k === 'z'))) {
       e.preventDefault();
       ed.redo();
+    } else if (mod && k === '0') {
+      e.preventDefault();
+      ed.zoom = 'fit';
+    } else if (mod && k === '1') {
+      e.preventDefault();
+      ed.zoom = 1;
     } else if (!inField(e.target) && ed.selectedElement && e.key.startsWith('Arrow')) {
       // Nudge the selected element; Shift moves ten times further.
       const pos = parsePair(ed.selectedElement.props.get('pos')?.value) ?? [0, 0];
@@ -59,121 +83,96 @@
 
 <svelte:window {onkeydown} />
 
-<div class="editor" class:with-source={ed.showSource}>
-  <Toolbar />
-  <aside class="left">
-    <nav class="tabs">
-      {#each tabs as t}
-        <button class="tab" class:on={ed.leftTab === t.id} onclick={() => (ed.leftTab = t.id)} title={t.title}>
-          {t.label}
-          {#if t.id === 'options' && ed.res?.subsets.length}<span class="count">{ed.res.subsets.length}</span>{/if}
-        </button>
-      {/each}
-    </nav>
-    <div class="tab-body">
-      {#if ed.leftTab === 'elements'}
-        <ElementList />
-      {:else if ed.leftTab === 'options'}
-        <OptionsPanel />
-      {:else if ed.leftTab === 'variables'}
-        <VariablesPanel />
-      {:else}
-        <FilesPanel />
-      {/if}
+<div class="editor">
+  <MenuBar />
+  <OptionsBar />
+  <ToolRail />
+  <main class="main" class:with-source={ed.showSource && !ed.simple}>
+    <ScreenTabs />
+    <div class="canvas"><Preview /></div>
+    {#if ed.showSource && !ed.simple}
+      <section class="source"><SourceView /></section>
+    {/if}
+  </main>
+  <aside class="dock" bind:this={dock}>
+    <div class="slot" style:flex={propCollapsed ? 'none' : bottomCollapsed ? '1' : `${split} 1 0`}>
+      <PanelGroup tabs={[{ id: 'properties', label: 'Properties' }]} bind:active={propTab} bind:collapsed={propCollapsed}>
+        <PropertyPanel />
+      </PanelGroup>
+    </div>
+    {#if !propCollapsed && !bottomCollapsed}
+      <div class="splitter" role="separator" aria-orientation="horizontal" title="Drag to resize" onpointerdown={startSplit}></div>
+    {/if}
+    <div class="slot" style:flex={bottomCollapsed ? 'none' : propCollapsed ? '1' : `${1 - split} 1 0`}>
+      <PanelGroup tabs={bottomTabs} bind:active={ed.leftTab} bind:collapsed={bottomCollapsed}>
+        {#if ed.leftTab === 'elements'}
+          <ElementList />
+        {:else if ed.leftTab === 'options'}
+          <OptionsPanel />
+        {:else if ed.leftTab === 'variables'}
+          <VariablesPanel />
+        {:else}
+          <FilesPanel />
+        {/if}
+      </PanelGroup>
     </div>
   </aside>
-  <main class="center">
-    <Preview />
-  </main>
-  <aside class="right">
-    <PropertyPanel />
-  </aside>
-  {#if ed.showSource}
-    <section class="bottom">
-      <SourceView />
-    </section>
-  {/if}
 </div>
-
-{#if ed.showGuide}
-  <Guide />
-{/if}
 
 <style>
   .editor {
     height: 100vh;
     display: grid;
-    grid-template-columns: 270px minmax(0, 1fr) 340px;
+    grid-template-columns: 44px minmax(0, 1fr) 330px;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'menu menu menu'
+      'opts opts opts'
+      'rail main dock';
+    background: var(--canvas);
+  }
+  .main {
+    grid-area: main;
+    display: grid;
     grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      'top top top'
-      'left center right';
+    min-width: 0;
+    min-height: 0;
   }
-  .editor.with-source {
-    grid-template-rows: auto minmax(0, 1fr) minmax(160px, 34vh);
-    grid-template-areas:
-      'top top top'
-      'left center right'
-      'left bottom right';
+  .main.with-source {
+    grid-template-rows: auto minmax(0, 1fr) minmax(150px, 32vh);
   }
-  .left {
-    grid-area: left;
+  .canvas {
+    min-height: 0;
+    min-width: 0;
+  }
+  .source {
+    min-height: 0;
+    border-top: 1px solid var(--line);
     background: var(--panel);
-    border-right: 1px solid var(--line);
+  }
+  .dock {
+    grid-area: dock;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--line);
+    border-left: 1px solid var(--line);
+  }
+  .slot {
     display: flex;
     flex-direction: column;
     min-height: 0;
   }
-  .tabs {
-    display: flex;
-    border-bottom: 1px solid var(--line);
-    padding: 0 6px;
-  }
-  .tab {
+  .slot > :global(.group) {
     flex: 1;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    padding: 9px 4px 7px;
-    color: var(--text-dim);
-    font-size: 12px;
   }
-  .tab:hover:not(:disabled) {
-    background: none;
-    color: var(--text);
+  .splitter {
+    height: 5px;
+    flex: none;
+    cursor: row-resize;
+    background: var(--line);
   }
-  .tab.on {
-    color: var(--text);
-    border-bottom-color: var(--accent);
-  }
-  .count {
-    font-size: 10px;
-    color: var(--text-faint);
-    margin-left: 2px;
-  }
-  .tab-body {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-  }
-  .center {
-    grid-area: center;
-    min-width: 0;
-    min-height: 0;
-    background: #0d0e11;
-  }
-  .right {
-    grid-area: right;
-    background: var(--panel);
-    border-left: 1px solid var(--line);
-    min-height: 0;
-    overflow: auto;
-  }
-  .bottom {
-    grid-area: bottom;
-    border-top: 1px solid var(--line);
-    min-height: 0;
-    background: var(--panel);
+  .splitter:hover {
+    background: var(--accent-strong);
   }
 </style>

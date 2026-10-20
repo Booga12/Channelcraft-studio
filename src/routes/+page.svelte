@@ -6,6 +6,7 @@
   import StartScreen from '$lib/components/StartScreen.svelte';
   import EditorView from '$lib/components/EditorView.svelte';
   import Toast from '$lib/components/Toast.svelte';
+  import Guide from '$lib/components/Guide.svelte';
 
   onMount(() => {
     if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window)) {
@@ -46,5 +47,8 @@
   <EditorView />
 {:else}
   <StartScreen />
+{/if}
+{#if ed.showGuide}
+  <Guide />
 {/if}
 <Toast />

@@ -3,6 +3,7 @@
   import { ed } from '$lib/editor.svelte';
   import { fileUrl, type ThemeInfo } from '$lib/api';
   import NewThemeDialog from './NewThemeDialog.svelte';
+  import Icon from './Icon.svelte';
 
   let dialog = $state<{ mode: 'new' | 'duplicate'; source?: ThemeInfo } | null>(null);
   let filter = $state('');
@@ -42,44 +43,59 @@
 </script>
 
 <div class="start">
-  <header>
+  <aside class="side">
     <div class="brand">
-      <div class="logo" aria-hidden="true">
-        <span></span><span></span><span></span><span></span>
-      </div>
+      <div class="mark" aria-hidden="true">Cc</div>
       <div>
-        <h1>ChannelCraft Studio</h1>
-        <p class="dim">Theme editor for RetroBat</p>
+        <div class="app">ChannelCraft Studio</div>
+        <div class="faint">Theme editor for RetroBat</div>
       </div>
     </div>
-    <div class="root">
-      {#if ed.root}
-        <span class="dim">RetroBat</span>
-        <span class="mono path" title={ed.root.root}>{ed.root.root}</span>
-        <button class="small" onclick={pickRoot}>Change…</button>
-      {/if}
-    </div>
-  </header>
+    <button class="primary create" onclick={() => (dialog = { mode: 'new' })} disabled={!ed.root}><Icon name="plus" size={14} /> New theme</button>
+    <nav>
+      <button class="nav on"><Icon name="home" size={16} /> Home</button>
+      <button class="nav" onclick={() => ed.refreshThemes()} disabled={!ed.root}><Icon name="redo" size={16} /> Refresh themes</button>
+    </nav>
+    <div class="grow"></div>
+    {#if ed.root}
+      <div class="rootbox">
+        <div class="faint label">RetroBat folder</div>
+        <div class="mono path" title={ed.root.root}>{ed.root.root}</div>
+        <button class="secondary small" onclick={pickRoot}><Icon name="folder" size={13} /> Change…</button>
+      </div>
+    {/if}
+  </aside>
 
   {#if !ed.root}
     <section class="empty">
+      <Icon name="folder" size={40} />
       <h2>Where is RetroBat installed?</h2>
       <p class="dim">Pick the folder that contains <span class="mono">RetroBat.exe</span>. Themes are read from its <span class="mono">emulationstation\.emulationstation\themes</span> folder.</p>
       <button class="primary" onclick={pickRoot}>Choose RetroBat folder…</button>
     </section>
   {:else}
     <section class="themes">
-      {#if ed.simple}
-        <div class="intro">
-          <strong>Welcome!</strong>
-          <span class="dim">Pick a theme below and click <em>Edit</em> to change its look, or start fresh with <em>New theme</em>. Your changes only reach RetroBat when you save, and a backup is made first.</span>
-        </div>
-      {/if}
+      <h1>Welcome to ChannelCraft Studio</h1>
+      <p class="dim lead">Change how RetroBat looks: colours, fonts, pictures and layouts, with a live preview. Nothing reaches RetroBat until you save, and a backup is made first.</p>
+
+      <div class="quick">
+        <button class="qcard" onclick={() => (dialog = { mode: 'new' })}>
+          <span class="qicon a"><Icon name="sparkle" size={22} /></span>
+          <span><strong>Start a new theme</strong><small>A simple starter with a light and a dark colour set</small></span>
+        </button>
+        <button class="qcard" onclick={() => ed.themes[0] && (dialog = { mode: 'duplicate', source: shown.find((t) => t.name.toLowerCase() === ed.root?.activeTheme?.toLowerCase()) ?? ed.themes[0] })}>
+          <span class="qicon b"><Icon name="copy" size={22} /></span>
+          <span><strong>Remix the theme you use</strong><small>Copy RetroBat's current theme and change the copy</small></span>
+        </button>
+        <button class="qcard" onclick={() => (ed.showGuide = true)}>
+          <span class="qicon c"><Icon name="help" size={22} /></span>
+          <span><strong>How it works</strong><small>Four steps, two minutes</small></span>
+        </button>
+      </div>
+
       <div class="bar">
-        <h2>Themes <span class="faint">{ed.themes.length}</span></h2>
-        <input placeholder="Filter…" bind:value={filter} />
-        <button class="ghost" onclick={() => ed.refreshThemes()} title="Reload the list">↻ Refresh</button>
-        <button class="primary" onclick={() => (dialog = { mode: 'new' })}>＋ New theme</button>
+        <h2>Your themes <span class="faint">{ed.themes.length}</span></h2>
+        <input placeholder="Find a theme…" bind:value={filter} />
       </div>
 
       <div class="grid">
@@ -143,71 +159,164 @@
   .start {
     height: 100vh;
     display: flex;
-    flex-direction: column;
     overflow: hidden;
+    background: var(--frame);
   }
-  header {
+  .side {
+    width: 230px;
+    flex: none;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 18px 28px;
-    border-bottom: 1px solid var(--line);
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px 14px;
     background: var(--panel);
+    border-right: 1px solid var(--line);
   }
   .brand {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
+    padding: 0 4px;
   }
-  .logo {
+  .mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #2680eb, #7e4bd6);
     display: grid;
-    grid-template-columns: repeat(2, 14px);
-    gap: 3px;
+    place-items: center;
+    font-weight: 800;
+    color: #fff;
   }
-  .logo span {
-    height: 10px;
-    border-radius: 3px;
-    background: var(--accent);
+  .app {
+    font-weight: 700;
+    font-size: 13px;
   }
-  .logo span:nth-child(2),
-  .logo span:nth-child(3) {
-    background: #8fb9ff;
-  }
-  h1 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-  }
-  h1 + p {
-    margin: 0;
-  }
-  .root {
+  .create {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-width: 0;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+  }
+  nav {
+    display: grid;
+    gap: 2px;
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    padding: 8px 10px;
+    text-align: left;
+    color: var(--text-dim);
+  }
+  .nav.on {
+    background: var(--raised);
+    color: var(--text);
+  }
+  .grow {
+    flex: 1;
+  }
+  .rootbox {
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    background: var(--bg);
+    border-radius: 6px;
+  }
+  .rootbox .label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .rootbox button {
+    justify-self: start;
+    display: flex;
+    gap: 5px;
+    align-items: center;
   }
   .path {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 380px;
   }
   .empty {
     margin: auto;
     max-width: 480px;
     text-align: center;
     padding: 24px;
+    display: grid;
+    justify-items: center;
+    color: var(--text-dim);
   }
   .empty h2 {
     font-size: 20px;
     font-weight: 600;
+    color: var(--text);
   }
   .themes {
     flex: 1;
     overflow: auto;
-    padding: 20px 28px 40px;
+    padding: 34px 40px 48px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+  }
+  .lead {
+    max-width: 640px;
+    font-size: 13px;
+    margin: 8px 0 22px;
+  }
+  .quick {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  .qcard {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    text-align: left;
+    white-space: normal;
+    background: var(--panel);
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .qcard:hover {
+    background: var(--panel-2);
+    border-color: #555;
+  }
+  .qcard strong {
+    display: block;
+    font-size: 13px;
+  }
+  .qcard small {
+    color: var(--text-faint);
+    font-size: 11.5px;
+  }
+  .qicon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    color: #fff;
+  }
+  .qicon.a {
+    background: linear-gradient(135deg, #2680eb, #5c3bd6);
+  }
+  .qicon.b {
+    background: linear-gradient(135deg, #d6458d, #e8733d);
+  }
+  .qicon.c {
+    background: linear-gradient(135deg, #2d9d78, #2680eb);
   }
   .bar {
     display: flex;
@@ -221,7 +330,7 @@
     margin: 0 auto 0 0;
   }
   .bar input {
-    width: 200px;
+    width: 220px;
   }
   .grid {
     display: grid;
@@ -285,15 +394,6 @@
   }
   .loading {
     margin-top: 16px;
-  }
-  .intro {
-    display: flex;
-    gap: 10px;
-    align-items: baseline;
-    background: var(--accent-soft);
-    border-radius: 10px;
-    padding: 12px 16px;
-    margin-bottom: 18px;
   }
   .backdrop {
     position: fixed;

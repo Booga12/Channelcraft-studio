@@ -1,24 +1,28 @@
+/* Neutral dark greys and a single blue accent, in the spirit of Adobe's Spectrum dark theme. */
 :root {
-  --bg: #121418;
-  --panel: #1a1d23;
-  --panel-2: #20242b;
-  --raised: #272c35;
-  --line: #2e333d;
-  --line-strong: #3b414d;
-  --text: #e7eaf0;
-  --text-dim: #9aa2b1;
-  --text-faint: #6b7280;
-  --accent: #5b9dff;
-  --accent-strong: #3d84f5;
-  --accent-soft: rgba(91, 157, 255, 0.14);
-  --warn: #f5b84d;
-  --danger: #ff6b6b;
-  --ok: #4ccf8d;
-  --radius: 6px;
+  --bg: #1e1e1e; /* inputs, wells */
+  --frame: #252525; /* menu bar, options bar, status bar */
+  --panel: #2d2d2d; /* docked panels */
+  --panel-2: #323232; /* panel headers */
+  --raised: #3a3a3a; /* buttons */
+  --hover: #444444;
+  --canvas: #1a1a1a; /* pasteboard around the screen */
+  --line: #161616; /* dividers between areas */
+  --line-strong: #4a4a4a; /* control borders */
+  --text: #e3e3e3;
+  --text-dim: #b3b3b3;
+  --text-faint: #858585;
+  --accent: #378ef0;
+  --accent-strong: #2680eb;
+  --accent-soft: rgba(55, 142, 240, 0.18);
+  --warn: #e8a33d;
+  --danger: #f05a5a;
+  --ok: #2d9d78;
+  --radius: 4px;
   --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
   color-scheme: dark;
   font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--text);
   background: var(--bg);
@@ -46,26 +50,41 @@ textarea {
 
 button {
   background: var(--raised);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius);
   padding: 5px 10px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.12s;
 }
 button:hover:not(:disabled) {
-  background: #313743;
+  background: var(--hover);
 }
 button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: default;
 }
+/* Call-to-action buttons are pills, like Spectrum's. */
 button.primary {
   background: var(--accent-strong);
-  border-color: var(--accent-strong);
   color: #fff;
+  border-radius: 16px;
+  padding: 5px 14px;
+  font-weight: 600;
 }
 button.primary:hover:not(:disabled) {
   background: var(--accent);
+}
+button.secondary {
+  background: transparent;
+  border: 2px solid #8a8a8a;
+  border-radius: 16px;
+  padding: 3px 12px;
+  font-weight: 600;
+}
+button.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #b3b3b3;
 }
 button.ghost {
   background: transparent;
