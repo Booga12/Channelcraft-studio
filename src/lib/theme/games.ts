@@ -5,6 +5,8 @@ import { join } from '../path';
 import { elements, parse, textOf } from '../xml/cst';
 
 export interface GameInfo {
+  /** The game's <path> in the gamelist (its id there). */
+  path: string;
   name: string;
   description: string;
   rating: number;
@@ -37,15 +39,18 @@ export function parseGamelist(text: string, systemDir: string): GameInfo[] {
   for (const g of elements(doc.root).filter((e) => e.name === 'game')) {
     const fields: Record<string, string> = {};
     const media: Record<string, string> = {};
+    let path = '';
     for (const c of elements(g)) {
       const v = textOf(doc, c).trim();
       if (!v) continue;
+      if (c.name === 'path') path = v;
       if (TEXT_TAGS.includes(c.name)) fields[c.name] = v;
       else if (c.name !== 'path' && /^(\.\.?[\\/]|~[\\/]|[A-Za-z]:[\\/]|\\\\)/.test(v) && /\.(png|jpe?g|gif|webp|svg|mp4|mkv|webm|avi)$/i.test(v)) media[c.name] = mediaPath(systemDir, v);
     }
     // RetroBat doesn't show hidden games, so neither does the preview.
     if (!fields.name || fields.hidden === 'true') continue;
     out.push({
+      path,
       name: fields.name,
       description: fields.desc ?? '',
       rating: Number(fields.rating ?? 0) || 0,

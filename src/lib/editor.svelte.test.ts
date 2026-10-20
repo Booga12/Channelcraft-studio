@@ -22,9 +22,10 @@ const { ANIMATIONS } = await import('./theme/animations');
 async function open() {
   const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
   ed.project = p;
+  ed.screenFile = 'theme.xml';
   ed.view = 'detailed';
   ed.selection = [];
-  ed.jumpTo(0);
+  ed.clearHistory();
   ed.rev++;
   return p;
 }
@@ -194,5 +195,50 @@ describe('editor operations (starter theme, in memory)', () => {
     ed.showScreen({ view: 'detailed', file: 'theme.xml' });
     expect(ed.currentView!.elements.has('md_image')).toBe(true);
     expect(p.entry!.rel).toBe('theme.xml');
+  });
+
+  it('features one real game per console: its video and cover together, per-console blocks, one undo step', async () => {
+    const game = (path: string, media: Record<string, string>) => ({ path, name: path.slice(2), description: '', rating: 0, releasedate: '', developer: '', publisher: '', genre: '', players: '', playcount: '', lastplayed: '', gametime: '', favorite: false, media });
+    ed.games = {
+      snes: [game('./NoVideo.sfc', { boxart: 'R:/snes/a.png' }), game('./Mario.sfc', { video: 'R:/snes/mario.mp4', image: 'R:/snes/mario.png' })],
+    };
+    respond = (cmd, args) => {
+      if (cmd === 'existing_files') return (args.paths as string[]).map(() => true);
+      if (cmd === 'copy_media_into_theme') return `_inc/ccs/featured/${String(args.src).split('/').pop()}`;
+      if (cmd === 'list_theme_files') return [];
+      return null;
+    };
+    const problems = await ed.applyFeatured({ snes: 'auto', nes: 'none' });
+    respond = () => null;
+    expect(problems).toEqual([]);
+    const p = ed.project!;
+    const featured = p.fileAt('_inc/ccs/featured.xml')!.src;
+    // The first game with both files, not the first game.
+    expect(featured).toContain(`if="\${system.theme} == 'snes'"`);
+    expect(featured).toContain('<path>./featured/mario.mp4</path>');
+    expect(featured).toContain('<path>./featured/mario.png</path>');
+    expect(ed.featured.pairs.snes).toMatchObject({ game: './Mario.sfc', theme: 'snes' });
+    // theme.xml: the two elements, hidden by default, then the include that shows them per console.
+    const theme = p.fileAt('theme.xml')!.src;
+    expect(theme.indexOf('ccs_featured_video')).toBeGreaterThan(0);
+    expect(theme.indexOf('<include>./_inc/ccs/featured.xml</include>')).toBeGreaterThan(theme.indexOf('ccs_featured_cover'));
+    ed.view = 'system';
+    ed.settings.system = { ...ed.settings.system, name: 'snes', theme: 'snes' };
+    ed.rev++;
+    const v = ed.currentView!.elements.get('ccs_featured_video')!;
+    expect(v.props.get('visible')!.value).toBe('true');
+    expect(v.props.get('path')!.value).toBe('./featured/mario.mp4');
+    ed.settings.system = { ...ed.settings.system, name: 'nes', theme: 'nes' };
+    ed.rev++;
+    expect(ed.currentView!.elements.get('ccs_featured_cover')!.props.get('visible')!.value).toBe('false');
+    // A chosen game without both files is reported, and its saved pair is kept.
+    respond = (cmd, args) => (cmd === 'existing_files' ? (args.paths as string[]).map(() => false) : cmd === 'list_theme_files' ? [] : null);
+    expect((await ed.applyFeatured({ snes: './Mario.sfc' }))[0]).toContain('needs both a video and a cover');
+    respond = () => null;
+    expect(ed.featured.pairs.snes.game).toBe('./Mario.sfc');
+    // One undo step per apply takes theme.xml back to how it was.
+    ed.undo(true);
+    ed.undo(true);
+    expect(p.fileAt('theme.xml')!.src).toBe(original);
   });
 });

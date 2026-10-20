@@ -26,6 +26,19 @@
   {#if !items.length}
     <p class="faint pad">Nothing to add on this screen.</p>
   {/if}
+  {#if ed.view === 'system' && ed.screenFile === 'theme.xml'}
+    <h4>Featured game</h4>
+    <div class="grid">
+      <button class="item" onclick={() => (ed.showFeatured = true)} title="One of your games per console: its video and its cover together">
+        <span class="ic"><Icon name="video" size={18} /></span>
+        <span class="txt">
+          <strong>Matching game video & cover</strong>
+          <small>Shows one real game per console: its video and cover side by side, always from the same game.</small>
+          <span class="tags"><span class="data">RetroBat data</span>{#if Object.keys(ed.featured.pairs).length}<span class="tag">{Object.keys(ed.featured.pairs).length} consoles set</span>{/if}</span>
+        </span>
+      </button>
+    </div>
+  {/if}
   {#each groups as [cat, list]}
     <h4>{cat}</h4>
     <div class="grid">

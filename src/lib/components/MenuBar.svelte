@@ -122,6 +122,7 @@
         { label: 'Design…', action: () => ed.showPanel('presets') },
         { label: 'Ready-made elements…', action: () => ed.showPanel('library') },
         { label: 'Layout presets…', action: () => ed.showPanel('presets') },
+        { label: 'Matching game video & cover…', action: () => (ed.showFeatured = true) },
         { separator: true },
         { label: 'Picture', action: () => ed.addElement('image') },
         { label: 'Text', action: () => ed.addElement('text') },

@@ -109,7 +109,14 @@
   const imgPath = $derived(el.type === 'image' || el.type === 'video' ? (asset('path') ?? exprAsset('path') ?? nativeMedia() ?? asset('default')) : null);
   /** A real game video to play in video elements. */
   // Only RetroBat's own game video plays without a path; any other video needs one, as in RetroBat.
-  const videoPath = $derived(el.type === 'video' && env.game ? (exprAsset('path') ?? (el.name === 'md_video' ? env.game.media.video : null) ?? null) : null);
+  const videoPath = $derived.by(() => {
+    if (el.type !== 'video') return null;
+    // A video file in the theme (e.g. a featured game's copied video) plays as it is.
+    const own = asset('path');
+    if (own && /\.(mp4|webm|mkv|avi)$/i.test(own)) return own;
+    if (!env.game) return null;
+    return exprAsset('path') ?? (el.name === 'md_video' ? env.game.media.video : null) ?? null;
+  });
   $effect(() => {
     imgPath;
     natural = null;

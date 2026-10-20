@@ -19,6 +19,7 @@ import { prefs } from './prefs.svelte';
 import { designChanges, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
 import { DESIGNS, designAssets, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
+import { COVER_EL, FEATURED_FILE, FEATURED_MEDIA, featuredXml, pickGame, readFeatured, VIDEO_EL, type Choice, type FeaturedState } from './theme/featured';
 
 /** RetroBat's loading screen files, read on their own (not through theme.xml). */
 export const SPLASH_FILES = ['splash.xml', 'gamesplash.xml'] as const;
@@ -174,6 +175,12 @@ class Editor {
 
   private undoStack = $state.raw<HistoryEntry[]>([]);
   private redoStack = $state.raw<HistoryEntry[]>([]);
+
+  /** Forgets undo history (it belongs to the theme it was made in). */
+  clearHistory() {
+    this.undoStack = [];
+    this.redoStack = [];
+  }
   private backedUp = new Set<string>();
   private store: Store | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -847,6 +854,79 @@ class Editor {
     const name = item.native ? item.name : uniqueName(res, this.view, item.name);
     this.commit(`adding ${item.label.toLowerCase()}`, [addElementChange(p, res, this.view, item.type, name, item.body, !item.native)]);
     this.selected = name;
+  }
+
+  // ---- featured games: one real game's video and cover together on the system screen ----
+
+  showFeatured = $state(false);
+
+  /** The featured-game choices and pairs saved in this theme. */
+  get featured(): FeaturedState {
+    this.rev;
+    return readFeatured(this.project?.fileAt(FEATURED_FILE)?.src);
+  }
+
+  /**
+   * For each console in `choices`: picks the game (automatic or chosen) whose video and cover both
+   * exist, copies the two files into the theme and writes featured.xml, plus the two elements and
+   * the include in theme.xml if they're missing. One undo step. Returns problems to show.
+   */
+  async applyFeatured(choices: Record<string, Choice>): Promise<string[]> {
+    const p = this.project;
+    if (!p) return [];
+    if (this.screenFile !== 'theme.xml') this.showScreen({ view: 'system', file: 'theme.xml' });
+    await this.ensureBackup();
+    const prev = readFeatured(p.fileAt(FEATURED_FILE)?.src);
+    const state: FeaturedState = { choices: { ...prev.choices, ...choices }, pairs: { ...prev.pairs } };
+    const problems: string[] = [];
+    for (const [sys, choice] of Object.entries(choices)) {
+      const info = this.systems.find((s) => s.name === sys);
+      const label = info?.fullName ?? sys;
+      if (choice === 'none') {
+        delete state.pairs[sys];
+        continue;
+      }
+      await this.loadGamesFor(sys);
+      const games = this.games[sys];
+      // The ROM folder can't be read (drive unplugged?): keep the pair saved earlier.
+      if (!games) continue;
+      const paths = [...new Set(games.flatMap((g) => [g.media.video, g.media.boxart, g.media.thumbnail, g.media.image].filter((x): x is string => !!x)))];
+      const found = await api.existingFiles(paths).catch(() => paths.map(() => false));
+      const exist = new Set(paths.filter((_, i) => found[i]));
+      const pick = pickGame(games, choice, (x) => exist.has(x));
+      if (!pick) {
+        if (choice === 'auto') delete state.pairs[sys];
+        else problems.push(`${label}: that game needs both a video and a cover that exist on disk. Pick another game, or Automatic.`);
+        continue;
+      }
+      try {
+        const video = await api.copyMediaIntoTheme(p.dir, pick.video, FEATURED_MEDIA);
+        const cover = await api.copyMediaIntoTheme(p.dir, pick.cover, FEATURED_MEDIA);
+        state.pairs[sys] = { theme: info?.theme ?? sys, game: pick.game.path, name: pick.game.name, video, cover };
+      } catch (e) {
+        problems.push(`${label}: couldn't copy its video and cover (${e}).`);
+      }
+    }
+    if (this.project !== p) return problems;
+    // Nothing could be set up (or changed): leave the theme as it is.
+    if (problems.length && JSON.stringify(state.pairs) === JSON.stringify(prev.pairs)) return problems;
+    p.setAssets(await api.listThemeFiles(p.dir));
+    const res = this.res;
+    const entry = p.fileAt('theme.xml');
+    if (!res || !entry?.doc.root) return problems;
+    const changes: Change[] = [];
+    const file = p.fileAt(FEATURED_FILE) ?? p.addFile(FEATURED_FILE, '<theme>\n</theme>\n');
+    changes.push({ file, patch: { start: 0, end: file.src.length, text: featuredXml(state) } });
+    // The include goes first in this list: inserts at the same spot land before the ones after
+    // them, so the elements' own definitions stay above the include that overrides them.
+    if (!res.usedFiles.has(file)) changes.push({ file: entry, patch: patchInsertChild(entry.doc, entry.doc.root, `<include>./${FEATURED_FILE}</include>`) });
+    const sys = res.views.get('system')?.elements;
+    if (!sys?.has(VIDEO_EL)) changes.push(addElementChange(p, res, 'system', 'video', VIDEO_EL, '<pos>0.25 0.5</pos>\n<origin>0.5 0.5</origin>\n<maxSize>0.36 0.36</maxSize>\n<delay>0.4</delay>\n<showSnapshotNoVideo>false</showSnapshotNoVideo>\n<visible>false</visible>\n<zIndex>24</zIndex>', true));
+    if (!sys?.has(COVER_EL)) changes.push(addElementChange(p, res, 'system', 'image', COVER_EL, '<pos>0.5 0.5</pos>\n<origin>0.5 0.5</origin>\n<maxSize>0.16 0.32</maxSize>\n<visible>false</visible>\n<zIndex>25</zIndex>', true));
+    this.commit('matching game video and cover', changes);
+    const n = Object.keys(state.pairs).length;
+    this.notify(`${n} console${n === 1 ? '' : 's'} now show${n === 1 ? 's' : ''} one game's video and cover together. Save to keep it.`);
+    return problems;
   }
 
   /** Writes a layout preset into its own block at the end of theme.xml (replacing an earlier one). */

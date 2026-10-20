@@ -132,6 +132,23 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
   - The preview now shows that case as RetroBat would. Checking it in RetroBat is still needed.
 - Tests: 79 frontend tests (profile, splash order and defaults from v5 read-only, splash editing goes to splash.xml, gamelist parsing, transition setting) and 16 Rust tests (adds ROM-folder resolution and es_settings reading).
 
+## Stage 3 — done (2026-10-20)
+
+- **Insert → Matching game video & cover…** (also in the Add panel on the System screen) opens a window listing every console with scraped games. Each console can be set to Off, Automatic, or one chosen game.
+- **Automatic** picks the first game (hidden games skipped) whose video and cover (box art, then thumbnail, then screenshot) actually exist on disk. A chosen game without both files gets a clear message, and nothing changes.
+- **Copying.** The two files are copied into `_inc/ccs/featured/` under their SHA-256 (each stored once), so the theme works without the games drive. The theme gets bigger, and these files must never go into the public program.
+- **Per-console blocks.** `_inc/ccs/featured.xml` holds one `<view name="system" if="${system.theme} == '…'">` block per console, setting `ccs_featured_video` and `ccs_featured_cover`.
+  - It is included at the end of theme.xml, after the two elements' own hidden definitions, so consoles without a pair show neither.
+  - RetroBat evaluates `${system.theme}` inside `if` itself (ThemeData.cpp `parseFilterAttributes`, MathExpr).
+- **Saved choices** sit in a comment at the top of featured.xml. If a console's ROM folder can't be read, its saved pair is kept.
+- **Undo.** One undo step per Apply. Nothing changes when every copy fails.
+- The preview plays a theme's own video files.
+- Tests:
+  - an editor test: automatic picking skips a game without video; the blocks and paths are right; the include comes after the elements; a paired console shows the pair and others hide it; a bad choice is reported and the old pair kept; undo
+  - a Rust test of hashed copies
+- Browser preview check: the window lists your real consoles and games (for example 8 GameCube games with a video and a cover). Copying itself only works in the app.
+- Not verified: RetroBat showing the pair natively.
+
 ## Verification status (honest)
 
 - Done:

@@ -108,6 +108,10 @@ export function devFs() {
     changed_files: () => [],
     accept_changes: () => null,
     list_backups: () => [],
+    existing_files: ({ paths }) => paths.map((p) => existsSync(p)),
+    copy_media_into_theme: () => {
+      throw 'The browser preview is read-only: copying videos and covers works in the app.';
+    },
     load_recovery: () => null,
     save_recovery: () => null,
     clear_recovery: () => null,

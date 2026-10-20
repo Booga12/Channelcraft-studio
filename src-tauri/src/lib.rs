@@ -46,6 +46,8 @@ pub fn run() {
             storage::save_files,
             storage::list_backups,
             storage::restore_backup,
+            storage::existing_files,
+            storage::copy_media_into_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

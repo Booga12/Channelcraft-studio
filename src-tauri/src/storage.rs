@@ -787,6 +787,43 @@ pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: Stri
     Ok(dest.to_string_lossy().into_owned())
 }
 
+// ---- game media copied into a theme --------------------------------------------------------
+
+/// Which of these files exist (game media named in gamelists often doesn't).
+#[tauri::command(async)]
+pub fn existing_files(paths: Vec<String>) -> Vec<bool> {
+    paths.iter().map(|p| Path::new(p).is_file()).collect()
+}
+
+/// Copies a file into `<theme>/<dest_rel_dir>/` named by its SHA-256, so the same picture or video
+/// is stored once and travels with the theme. Returns the path relative to the theme folder.
+fn copy_hashed(src: &Path, dir: &Path, dest_rel_dir: &str) -> CmdResult<String> {
+    safe_rel(dest_rel_dir)?;
+    let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).filter(|e| matches!(e.as_str(), "mp4" | "mkv" | "webm" | "avi" | "png" | "jpg" | "jpeg" | "webp" | "gif" | "svg")).ok_or_else(|| format!("{} is not a picture or video RetroBat can show", src.display()))?;
+    let mut hash = Sha256::new();
+    std::io::copy(&mut fs::File::open(src).map_err(|e| format!("{}: {e}", src.display()))?, &mut hash).map_err(err)?;
+    let name = format!("{}.{ext}", &hex(&hash.finalize())[..32]);
+    let rel = format!("{dest_rel_dir}/{name}");
+    let target = dir.join(&rel);
+    if !target.is_file() {
+        fs::create_dir_all(target.parent().unwrap()).map_err(err)?;
+        let tmp = target.with_extension(format!("{}.ccs-tmp", unique_id()));
+        let copied = fs::copy(src, &tmp).map_err(err).and_then(|_| fs::rename(&tmp, &target).map_err(err));
+        if copied.is_err() {
+            let _ = fs::remove_file(&tmp);
+        }
+        copied?;
+    }
+    Ok(rel)
+}
+
+#[tauri::command(async)]
+pub fn copy_media_into_theme(roots: State<Roots>, theme_dir: String, src: String, dest_rel_dir: String) -> CmdResult<String> {
+    let dir = PathBuf::from(&theme_dir);
+    ensure_writable(&roots, &dir.join(&dest_rel_dir).join("x"))?;
+    copy_hashed(Path::new(&src), &dir, &dest_rel_dir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1002,6 +1039,21 @@ mod tests {
         assert!(dest.join("_inc/systems/logos").is_dir());
         assert!(copy_dir_staged(&s.theme(), &dest).is_err(), "never copies over an existing folder");
         assert!(!s.leftovers().iter().any(|n| n.starts_with(WORK_PREFIX)));
+    }
+
+    #[test]
+    fn copies_game_media_once_under_its_hash() {
+        let s = Scratch::new("media");
+        let src = s.base.join("cover.PNG");
+        fs::write(&src, b"picture").unwrap();
+        let a = copy_hashed(&src, &s.theme(), "_inc/ccs/featured").unwrap();
+        let again = copy_hashed(&src, &s.theme(), "_inc/ccs/featured").unwrap();
+        assert_eq!(a, again);
+        assert!(a.starts_with("_inc/ccs/featured/") && a.ends_with(".png"));
+        assert_eq!(fs::read(s.theme().join(&a)).unwrap(), b"picture");
+        assert_eq!(fs::read_dir(s.theme().join("_inc/ccs/featured")).unwrap().count(), 1);
+        assert!(copy_hashed(&s.base.join("notes.txt"), &s.theme(), "_inc/ccs/featured").is_err());
+        assert!(copy_hashed(&src, &s.theme(), "../outside").is_err());
     }
 
     #[test]

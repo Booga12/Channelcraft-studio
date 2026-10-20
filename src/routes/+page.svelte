@@ -11,6 +11,7 @@
   import ShortcutsDialog from '$lib/components/ShortcutsDialog.svelte';
   import SearchPalette from '$lib/components/SearchPalette.svelte';
   import RestoreDialog from '$lib/components/RestoreDialog.svelte';
+  import FeaturedDialog from '$lib/components/FeaturedDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { api } from '$lib/api';
 
@@ -77,6 +78,9 @@
 {/if}
 {#if ed.showShortcuts}
   <ShortcutsDialog />
+{/if}
+{#if ed.showFeatured && ed.project}
+  <FeaturedDialog />
 {/if}
 {#if ed.showRestore && ed.project}
   <RestoreDialog />
