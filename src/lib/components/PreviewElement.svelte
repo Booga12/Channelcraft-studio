@@ -22,7 +22,7 @@
   }
   import { alphaOf, boxOf, familyFor, fontState, formatDate, imageSize, isWhite, opaque, stretchedSvg, svgState } from '$lib/preview.svelte';
   import { zOf } from '$lib/render';
-  import { isDataBound } from '$lib/theme/library';
+  import { isDataBound, usesGameData } from '$lib/theme/library';
   import { elementLabel } from '$lib/friendly';
 
   let {
@@ -98,6 +98,9 @@
     for (const k of keys) if (env.game.media[k]) return env.game.media[k];
     return null;
   };
+
+  /** Game data on the console screen, where RetroBat has no game: it draws nothing there. */
+  const emptyInRetrobat = $derived(ed.view === 'system' && (el.type === 'image' || el.type === 'video') && usesGameData(val('path')));
 
   const box = $derived(boxOf(el, W, H));
   let natural = $state<{ w: number; h: number } | null>(null);
@@ -373,6 +376,10 @@
           style="mask-image:url(&quot;{url}&quot;);-webkit-mask-image:url(&quot;{url}&quot;);mask-size:{val('tile') === 'true' ? 'auto' : '100% 100%'};-webkit-mask-size:{val('tile') === 'true' ? 'auto' : '100% 100%'};background:{tintEnd ? `linear-gradient(${val('gradientType') === 'horizontal' ? 'to right' : 'to bottom'}, ${opaque(tint)}, ${opaque(tintEnd)})` : opaque(tint)};opacity:{alphaOf(tint)}"
         ></div>
       {/if}
+    {:else if emptyInRetrobat}
+      <div class="placeholder empty" style:min-width="{outer.w ?? 120}px" style:min-height="{outer.h ?? 60}px" title="This uses the current game's picture, but the console screen has no game, so RetroBat shows nothing here. Select it to switch to a random game's picture.">
+        <span>{elementLabel(el.name)} · empty in RetroBat</span>
+      </div>
     {:else}
       {@const data = isDataBound(el.props.get('path')?.value) || el.name.startsWith('md_')}
       <div class="placeholder" class:data style:min-width="{outer.w ?? 120}px" style:min-height="{outer.h ?? 60}px">
@@ -453,6 +460,8 @@
         {/key}
       {:else if imgPath && /\.(png|jpe?g|svg|gif|webp)$/i.test(imgPath)}
         <img src={fileUrl(imgPath)} alt="" draggable="false" onload={onImgLoad} />
+      {:else if emptyInRetrobat}
+        <div class="placeholder empty" title="This plays the current game's video, but the console screen has no game, so RetroBat shows nothing here. Select it to switch to a random game's video."><span>▶ {elementLabel(el.name)} · empty in RetroBat</span></div>
       {:else}
         <span>▶ video</span>
       {/if}
@@ -564,6 +573,17 @@
   .el.selected .placeholder span,
   .el:hover .placeholder span,
   .placeholder.data span {
+    visibility: visible;
+  }
+  /* Nothing will show here in RetroBat: a red frame that says so. */
+  .placeholder.empty {
+    background: rgba(230, 70, 70, 0.08);
+    border: 2px dashed rgba(230, 90, 90, 0.6);
+    color: rgba(255, 200, 200, 0.85);
+    font-size: 16px;
+    text-align: center;
+  }
+  .placeholder.empty span {
     visibility: visible;
   }
   /* Artwork RetroBat fills in per game: a blue frame with its name. */

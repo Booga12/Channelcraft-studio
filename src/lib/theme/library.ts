@@ -393,6 +393,25 @@ export function itemsFor(view: string): LibraryItem[] {
 }
 
 /** True when a value reads RetroBat data (shown as a labelled placeholder in the preview). */
+/** Uses the current game's data, which RetroBat doesn't have on the console screen. */
+export function usesGameData(value: string | undefined): boolean {
+  return !!value && /\{game[:.]/i.test(value);
+}
+
+/**
+ * What a picture or video path that uses the current game's data becomes on the console screen:
+ * a random game of that console, which is what RetroBat offers there (SystemView.cpp gives
+ * extras whose path starts with "{random" a random-game playlist). Null when there's no match.
+ */
+export function consoleScreenPath(type: string, value: string): string | null {
+  if (!usesGameData(value)) return null;
+  if (type === 'video') return '{random}';
+  if (type !== 'image') return null;
+  const first = value.match(/\{game[:.](\w+)\}/i)?.[1]?.toLowerCase() ?? 'image';
+  const kind = first === 'thumbnail' || first === 'boxart' ? 'thumbnail' : first === 'marquee' || first === 'wheel' ? 'marquee' : first === 'fanart' ? 'fanart' : first === 'titleshot' ? 'titleshot' : 'image';
+  return `{random:${kind}}`;
+}
+
 export function isDataBound(value: string | undefined): boolean {
   return !!value && /\{(game|system)[:.]/.test(value);
 }

@@ -78,6 +78,17 @@ describe('editor operations (starter theme, in memory)', () => {
     expect(el.props.get('pos')!.value).toBe('0.28 0.4');
   });
 
+  it('turns game artwork pasted onto the console screen into a random game’s', () => {
+    ed.view = 'video';
+    ed.selection = ['md_video'];
+    ed.copy();
+    ed.view = 'system';
+    ed.paste();
+    const pasted = ed.currentView!.elements.get(ed.selection[0])!;
+    expect(pasted.type).toBe('video');
+    expect(pasted.props.get('path')!.value).toBe('{random}');
+  });
+
   it('duplicates, renames and deletes an element, and undoes it all', () => {
     ed.selection = ['md_image'];
     ed.duplicate();

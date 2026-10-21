@@ -8,6 +8,7 @@
   import { assetExists, resolveAsset } from '$lib/theme/resolver';
   import { fmtNum, parsePair } from '$lib/theme/schema';
   import { isCarouselPart, isVisible, zOf } from '$lib/render';
+  import { usesGameData } from '$lib/theme/library';
   import type { SystemInfo } from '$lib/theme/systems';
   import { elementLabel } from '$lib/friendly';
   import { fontState } from '$lib/preview.svelte';
@@ -89,8 +90,10 @@
     const project = ed.project!;
     const media = new Set(Object.values(env.game?.media ?? {}).map((p) => pathKey(p)));
     const sysLogo = carousel.logoFor(ed.settings.system) ?? '';
+    const onConsoles = ed.view === 'system';
     return {
-      binding: (n) => (n === 'system:logo' || n === 'system.logo' ? sysLogo : bindingValue(n, env, subsets)),
+      // RetroBat's console screen has no current game: {game:...} stays empty there (SystemView.cpp).
+      binding: (n) => (n === 'system:logo' || n === 'system.logo' ? sysLogo : onConsoles && /^game[:.]/i.test(n) ? '' : bindingValue(n, env, subsets)),
       exists: (p) => media.has(pathKey(p)) || assetExists(p, project, env),
     };
   });
@@ -111,6 +114,9 @@
   /** RetroBat's loading screens (splash.xml, gamesplash.xml) follow their own drawing rules. */
   const splash = $derived(ed.screenFile !== 'theme.xml' && ed.project?.entry ? splashScene(ed.currentView, ed.project.entry, join(ed.root?.resourcesDir ?? '', 'splash.svg')) : null);
   const bar = $derived(splash?.bar);
+
+  /** Pictures and videos on the console screen that use the current game's data (none there in RetroBat). */
+  const emptyOnConsoles = $derived(ed.view === 'system' && ed.currentView ? [...ed.currentView.elements.values()].filter((e) => (e.type === 'image' || e.type === 'video') && usesGameData(e.props.get('path')?.value) && isVisible(e)) : []);
 
   const drawn = $derived.by(() => {
     if (splash) return splash.elements.filter((e) => !ed.hidden[e.name]);
@@ -629,6 +635,11 @@
       </div>
     {:else}
       <span class="faint" title="This console has no scraped games in RetroBat, so made-up sample details are shown. Scrape it in RetroBat to preview your own games.">Sample game (made-up details)</span>
+    {/if}
+    {#if emptyOnConsoles.length}
+      <button class="warn-note ghost small" title="These use the current game's pictures or video, but RetroBat's console screen has no game, so they stay empty: {emptyOnConsoles.map((e) => e.name).join(', ')}. Click to select the first one and fix it." onclick={() => (ed.selection = [emptyOnConsoles[0].name])}>
+        ⚠ {emptyOnConsoles.length} element{emptyOnConsoles.length === 1 ? '' : 's'} will be empty in RetroBat
+      </button>
     {/if}
     {#if splash?.ignored.length}
       <span class="warn-note" title="On a loading screen RetroBat only draws its background, label and progress bar, plus elements marked extra=&quot;true&quot;. Not drawn: {splash.ignored.join(', ')}">

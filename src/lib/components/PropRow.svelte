@@ -11,6 +11,7 @@
   import { humanize, propHelp, propLabel } from '$lib/friendly';
   import { supportsProperty } from '$lib/theme/retrobatProfile';
   import { consoleOf } from '$lib/theme/consoles';
+  import { consoleScreenPath, usesGameData } from '$lib/theme/library';
 
   let { el, spec, def }: { el: ResolvedElement; spec: PropSpec; def: PropDef } = $props();
 
@@ -23,6 +24,9 @@
   const line = $derived(lineOf(def.file.src, def.node.start));
 
   let editAnyway = $state(false);
+  /** Game data on the console screen, where RetroBat has no current game, so it stays empty. */
+  const noGameHere = $derived(ed.view === 'system' && usesGameData(editValue));
+  const randomFix = $derived(noGameHere && spec.name === 'path' ? consoleScreenPath(el.type, editValue) : null);
   /** This console has its own value here (the property's, or the linked colour's). */
   const own = $derived.by(() => {
     if (varDef && consoleOf(varDef.node) === ed.consoleTheme) return { kind: 'var' as const, name: varName!, def: varDef };
@@ -89,6 +93,17 @@
     </div>
   {/if}
 
+  {#if noGameHere}
+    <div class="nogame">
+      <span>The console screen has no current game, so RetroBat leaves this empty{el.type === 'text' ? '' : ' and shows nothing'}.</span>
+      {#if randomFix}
+        <button class="small" onclick={() => set(randomFix!)} title="RetroBat shows a random game of the console here instead">Use a random game's {el.type === 'video' ? 'video' : 'picture'}</button>
+      {:else}
+        <span class="faint">Console details work here instead: {'{system:fullName}'}, {'{system:total}'}, {'{system:releaseYear}'}…</span>
+      {/if}
+    </div>
+  {/if}
+
   <div class="editor">
     {#if dynamic && ed.simple && !editAnyway}
       <div class="auto">
@@ -131,6 +146,18 @@
 </div>
 
 <style>
+  .nogame {
+    display: grid;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(230, 70, 70, 0.1);
+    border: 1px solid rgba(230, 90, 90, 0.4);
+    font-size: 11px;
+  }
+  .nogame button {
+    justify-self: start;
+  }
   .row {
     display: grid;
     gap: 5px;

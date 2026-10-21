@@ -15,7 +15,7 @@ import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/syste
 import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
 import { shaderOf, shadowXml } from './theme/shadow';
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
-import { NATIVE_BINDINGS, type LibraryItem } from './theme/library';
+import { consoleScreenPath, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
 import { designChanges, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
 import { DESIGNS, designAssets, type Design } from './theme/designs';
@@ -791,6 +791,8 @@ class Editor {
       for (let i = 2; used.has(name); i++) name = `${base}${i}`;
       used.add(name);
       const props = { ...item.props };
+      // The console screen has no current game: game artwork becomes a random game's (as RetroBat offers there).
+      if (this.view === 'system' && props.path) props.path = consoleScreenPath(item.type, props.path) ?? props.path;
       const pos = parsePair(props.pos);
       if (pos) props.pos = `${fmtNum(Math.round((pos[0] + offset) * 1000) / 1000)} ${fmtNum(Math.round((pos[1] + offset) * 1000) / 1000)}`;
       const body = Object.entries(props)
