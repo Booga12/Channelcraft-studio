@@ -289,7 +289,9 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
         re = { name, type: el.name, extra: null, defs: [], props: new Map(), history: new Map(), complex: [], conditional: false, unknownConditions: 0, order: order++ };
         view.elements.set(name, re);
       }
-      re.type = el.name;
+      // <control name="a, b"> changes shared settings of elements without changing their type
+      // (ThemeData::parseElement); it only names the type when nothing else has defined it yet.
+      if (el.name !== 'control' || re.type === 'control') re.type = el.name;
       re.defs.push({ node: el, file });
       const extra = attr(el, 'extra');
       if (extra !== undefined) re.extra = extra;

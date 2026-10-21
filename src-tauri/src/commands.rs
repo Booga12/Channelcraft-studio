@@ -285,6 +285,50 @@ pub fn read_theme_xml(dir: String) -> CmdResult<Vec<TextFile>> {
     Ok(out)
 }
 
+#[derive(Serialize)]
+pub struct LoadedTheme {
+    entries: Vec<FileEntry>,
+    xml: Vec<TextFile>,
+}
+
+/// Lists a theme's files and reads its XML in one walk of the folder, reading the XML files on
+/// several threads (big themes have thousands of them, and a slow drive makes one-by-one reads
+/// the slowest part of opening a theme).
+#[tauri::command(async)]
+pub fn load_theme(dir: String) -> CmdResult<LoadedTheme> {
+    let base = PathBuf::from(&dir);
+    let mut entries = Vec::new();
+    let mut xml_paths = Vec::new();
+    for e in WalkDir::new(&base).into_iter().flatten() {
+        if !e.file_type().is_file() {
+            continue;
+        }
+        let rel = e.path().strip_prefix(&base).map_err(err)?.to_string_lossy().replace('\\', "/");
+        let kind = file_kind(e.path());
+        if kind == "xml" {
+            xml_paths.push(e.path().to_path_buf());
+        }
+        entries.push(FileEntry { kind, size: e.metadata().map(|m| m.len()).unwrap_or(0), rel });
+    }
+    let xml = read_parallel(&xml_paths)?;
+    Ok(LoadedTheme { entries, xml })
+}
+
+/// Reads text files on a few threads, keeping their order.
+fn read_parallel(paths: &[PathBuf]) -> CmdResult<Vec<TextFile>> {
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 8);
+    let chunk = paths.len().div_ceil(threads).max(1);
+    let parts: Vec<CmdResult<Vec<TextFile>>> = std::thread::scope(|s| {
+        let handles: Vec<_> = paths.chunks(chunk).map(|part| s.spawn(move || part.iter().map(|p| read_text_file(p)).collect::<CmdResult<Vec<_>>>())).collect();
+        handles.into_iter().map(|h| h.join().unwrap_or_else(|_| Err("A file reader stopped unexpectedly".into()))).collect()
+    });
+    let mut out = Vec::with_capacity(paths.len());
+    for p in parts {
+        out.extend(p?);
+    }
+    Ok(out)
+}
+
 #[tauri::command(async)]
 pub fn read_text(path: String) -> CmdResult<TextFile> {
     read_text_file(Path::new(&path))
@@ -662,6 +706,43 @@ pub fn launch_retrobat(roots: State<Roots>) -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn load_theme_matches_listing_and_reading_separately() {
+        let dir = std::env::temp_dir().join(format!("ccs-load-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        for i in 0..40 {
+            let sub = dir.join(format!("_inc/{}", i % 5));
+            fs::create_dir_all(&sub).unwrap();
+            fs::write(sub.join(format!("f{i}.xml")), format!("<theme>{i}</theme>")).unwrap();
+            fs::write(sub.join(format!("p{i}.png")), b"\x89PNG").unwrap();
+        }
+        fs::write(dir.join("theme.xml"), "<theme/>").unwrap();
+        let d = dir.to_string_lossy().into_owned();
+        let all = load_theme(d.clone()).unwrap();
+        let list = list_theme_files(d.clone()).unwrap();
+        let xml = read_theme_xml(d).unwrap();
+        assert_eq!(all.entries.iter().map(|e| &e.rel).collect::<Vec<_>>(), list.iter().map(|e| &e.rel).collect::<Vec<_>>());
+        assert_eq!(all.xml.iter().map(|f| (&f.path, &f.text)).collect::<Vec<_>>(), xml.iter().map(|f| (&f.path, &f.text)).collect::<Vec<_>>());
+        assert_eq!(all.xml.len(), 41);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Read-only timing on a real theme: CCS_REAL_THEME=<theme folder> cargo test -- --ignored timing --nocapture
+    #[test]
+    #[ignore]
+    fn timing_on_a_real_theme() {
+        let Ok(d) = std::env::var("CCS_REAL_THEME") else { return };
+        let t = std::time::Instant::now();
+        let a = list_theme_files(d.clone()).unwrap();
+        let b = read_theme_xml(d.clone()).unwrap();
+        let old = t.elapsed();
+        let t = std::time::Instant::now();
+        let all = load_theme(d).unwrap();
+        let new = t.elapsed();
+        assert_eq!((a.len(), b.len()), (all.entries.len(), all.xml.len()));
+        println!("{} files, {} xml: separately {:?}, together {:?}", a.len(), b.len(), old, new);
+    }
 
     #[test]
     fn inside_checks() {

@@ -27,7 +27,7 @@ export class ThemeProject {
 
   static async load(dir: string, fs: ThemeFs): Promise<ThemeProject> {
     const p = new ThemeProject(join(dir), basename(dir));
-    const [entries, xml] = await Promise.all([fs.listFiles(dir), fs.readXmlFiles(dir)]);
+    const { entries, xml } = fs.loadAll ? await fs.loadAll(dir) : await Promise.all([fs.listFiles(dir), fs.readXmlFiles(dir)]).then(([entries, xml]) => ({ entries, xml }));
     p.setAssets(entries);
     for (const f of xml) {
       const abs = join(f.path);

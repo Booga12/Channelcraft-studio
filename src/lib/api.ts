@@ -45,6 +45,8 @@ export interface TextFile {
 export interface ThemeFs {
   listFiles(dir: string): Promise<FileEntry[]>;
   readXmlFiles(dir: string): Promise<TextFile[]>;
+  /** Both in one walk of the folder, when the file system can (much faster on big themes). */
+  loadAll?(dir: string): Promise<{ entries: FileEntry[]; xml: TextFile[] }>;
 }
 
 export interface ImportPlan {
@@ -64,6 +66,7 @@ export const api = {
   listThemes: () => invoke<ThemeInfo[]>('list_themes'),
   listThemeFiles: (dir: string) => invoke<FileEntry[]>('list_theme_files', { dir }),
   readThemeXml: (dir: string) => invoke<TextFile[]>('read_theme_xml', { dir }),
+  loadTheme: (dir: string) => invoke<{ entries: FileEntry[]; xml: TextFile[] }>('load_theme', { dir }),
   readText: (path: string) => invoke<TextFile>('read_text', { path }),
   writeText: (path: string, text: string, bom: boolean) => invoke<void>('write_text', { path, text, bom }),
   backupTheme: (dir: string, keep?: number, note?: string) => invoke<string>('backup_theme', { dir, keep, note }),
@@ -116,6 +119,7 @@ export const api = {
 export const tauriFs: ThemeFs = {
   listFiles: api.listThemeFiles,
   readXmlFiles: api.readThemeXml,
+  loadAll: api.loadTheme,
 };
 
 const urlCache = new Map<string, string>();

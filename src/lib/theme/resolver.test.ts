@@ -80,3 +80,22 @@ describe.skipIf(!existsSync(THEMES))('resolver on installed themes (read-only)',
     expect(systems.length).toBeGreaterThan(50);
   });
 });
+
+describe('control blocks', () => {
+  it('change shared settings without changing the element type, as RetroBat does', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'ccs-control-'));
+    writeFileSync(
+      join(dir, 'theme.xml'),
+      '<theme><formatVersion>7</formatVersion><view name="detailed"><image name="art" extra="true"><path>a.png</path></image><text name="t" extra="true"><text>x</text></text><control name="art, t, newone"><pos>0.1 0.2</pos></control></view></theme>',
+    );
+    const p = await ThemeProject.load(dir, nodeFs);
+    const v = resolveTheme(p, env()).views.get('detailed')!;
+    expect(v.elements.get('art')!.type).toBe('image');
+    expect(v.elements.get('t')!.type).toBe('text');
+    expect(v.elements.get('art')!.props.get('pos')!.value).toBe('0.1 0.2');
+    expect(v.elements.get('newone')!.type).toBe('control');
+  });
+});

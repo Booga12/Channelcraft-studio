@@ -85,6 +85,7 @@ pub fn run() {
             commands::list_themes,
             commands::list_theme_files,
             commands::read_theme_xml,
+            commands::load_theme,
             commands::read_text,
             commands::read_text_optional,
             storage::write_text,
