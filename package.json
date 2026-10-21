@@ -1,7 +1,7 @@
 {
   "name": "channelcraft-studio",
   "version": "0.1.0",
-  "description": "",
+  "description": "Theme editor for RetroBat",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -10,7 +10,9 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "notices": "node scripts/third-party-notices.mjs",
+    "release:check": "node scripts/check-release.mjs"
   },
   "license": "MIT",
   "dependencies": {

@@ -5,6 +5,10 @@
   import { ACCENTS, prefs } from '$lib/prefs.svelte';
   import { api } from '$lib/api';
   import Icon from './Icon.svelte';
+  import { getVersion } from '@tauri-apps/api/app';
+
+  let version = $state('');
+  getVersion().then((v) => (version = v)).catch(() => {});
 
   const SECTIONS = [
     { id: 'general', label: 'General', icon: 'settings' },
@@ -12,12 +16,21 @@
     { id: 'saving', label: 'Saving & backups', icon: 'save' },
     { id: 'look', label: 'Appearance', icon: 'palette' },
     { id: 'preview', label: 'Preview', icon: 'monitor' },
+    { id: 'about', label: 'About', icon: 'help' },
   ] as const;
   let section = $state<(typeof SECTIONS)[number]['id']>('general');
 
   async function pickRoot() {
     const dir = await open({ directory: true, title: 'Choose your RetroBat folder (the one with RetroBat.exe)' });
     if (typeof dir === 'string') await ed.setRoot(dir);
+  }
+
+  async function showNotices() {
+    try {
+      await revealItemInDir(await api.noticesPath());
+    } catch (e) {
+      ed.notify(String(e), 'error');
+    }
   }
 
   async function showBackups() {
@@ -142,6 +155,18 @@
             <option value="1.1">Large (110%)</option>
             <option value="1.25">Extra large (125%)</option>
           </select>
+        </div>
+      {:else if section === 'about'}
+        <h3>About</h3>
+        <div class="row">
+          <div><strong>ChannelCraft Studio {version}</strong><small>A theme editor for RetroBat. Not made by or affiliated with the RetroBat team.</small></div>
+        </div>
+        <div class="row">
+          <div><strong>Your files stay on your computer</strong><small>Themes, games and settings are only read and written on this PC. The only time the app goes online is when you download a free font, which comes from the Google Fonts collection on GitHub.</small></div>
+        </div>
+        <div class="row">
+          <div><strong>Open-source licences</strong><small>The open-source software this app is built with, and their licences.</small></div>
+          <button class="secondary small" onclick={showNotices}>Show file</button>
         </div>
       {:else}
         <h3>Preview</h3>

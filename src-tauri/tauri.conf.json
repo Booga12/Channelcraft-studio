@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ChannelCraft Studio",
   "version": "0.1.0",
-  "identifier": "com.fatbo.channelcraft-studio",
+  "identifier": "com.channelcraft.studio",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -29,9 +29,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis"
+    ],
     "resources": {
-      "resources/starter-theme/": "starter-theme/"
+      "resources/starter-theme/": "starter-theme/",
+      "resources/THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt"
     },
     "icon": [
       "icons/32x32.png",
@@ -39,6 +42,20 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "ChannelCraft Studio",
+    "copyright": "ChannelCraft Studio contributors",
+    "category": "Utility",
+    "shortDescription": "Theme editor for RetroBat",
+    "longDescription": "Edit and create RetroBat (EmulationStation) themes with a live preview. Saves are backed up first and can be restored.",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

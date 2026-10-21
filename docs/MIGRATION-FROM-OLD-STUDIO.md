@@ -225,12 +225,46 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
 - Browser preview: the Import card and dialog render. Picking files needs the app window, because the browser has no file picker.
 - Still to do: imported file names aren't checked against RetroBat's own reserved folders, and a theme's fonts aren't licence-checked (stage 7).
 
+## Stage 7 — done (2026-10-20)
+
+- **Nothing personal in the build.**
+  - App id changed from `com.fatbo.channelcraft-studio` to `com.channelcraft.studio`. On the first start, the old data folders (Roaming: backups, settings, recovery, journals; Local: the window's saved preferences) are copied to the new name, minus lock files and web caches. The old folders are left as they are. The old folder is found by pattern (`com.*.channelcraft-studio`), so no user name is built into the program.
+  - Publisher, copyright and descriptions are neutral ("ChannelCraft Studio"); Cargo no longer says "A Tauri App" by "you".
+  - Release builds no longer contain the source-folder fallback for bundled files (`dev_resource` is debug-only). `pnpm release:check` builds with the home, Cargo, rustup and project folders remapped (`--remap-path-prefix`).
+  - Test names that used a personal theme name are neutral now.
+- **`pnpm release:check`** (`scripts/check-release.mjs`):
+  - It builds the installer and runs the licence check.
+  - It scans the installer, the program, the bundled resources and the web files for this PC's user name and home folder, the git name and e-mail, and the words in the untracked `.release-private-words` (personal theme and brand names, the RetroBat drive path). It searches for each both as UTF-8 and as UTF-16.
+  - It fails on any bundled file other than the starter theme and the notices, or on any game, media or RetroBat data file.
+- First run: the installer is 4.1 MB and passed. As a cross-check, the debug program contains the user name 389 times; the release program and the installer contain it 0 times. The installer is compressed, so the real proof is the scan of the release program and bundled files, which are what it contains.
+- **Licences** (`pnpm notices`, `scripts/third-party-notices.mjs`):
+  - 289 packages are compiled into the app: 255 Rust crates for Windows (no build or dev dependencies) and 34 npm packages in the window's code.
+  - All are permissive (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode, MPL-2.0, CDLA-Permissive), and the script fails on anything else.
+  - `THIRD-PARTY-NOTICES.txt` has every licence text. It is installed with the app and opened from Settings → About.
+  - Nine packages ship no licence file of their own, so their entry names the standard licence and links to the source.
+- **Fonts.**
+  - A downloaded free font now comes with its `‹family›-OFL.txt`. If the licence can't be downloaded, the font isn't added. All 20 catalogue fonts were checked to have one.
+  - A font downloaded by an older version gets its licence the next time it's picked (best effort).
+  - The "On this PC" font list says Windows fonts often can't be shared.
+- **Icon.** A new Cc icon replaces Tauri's logo (source in `src-tauri/icons/source/icon.svg`). Template SVGs are removed.
+- **Installer.**
+  - One NSIS installer that installs for the current user, so no admin rights are needed.
+  - WebView2 comes from the embedded bootstrapper, which installs it silently when missing but needs the internet. `offlineInstaller` is the alternative; it adds about 130 MB.
+- **Settings → About.** It shows the version, says the app isn't made by the RetroBat team, explains that files stay on the PC (the only time it goes online is a free-font download), and opens the licences.
+- **`docs/CLEAN-WINDOWS-TEST.md`.** A test plan for three VMs (Windows 11; Windows 10 not updated; Windows 10 offline without WebView2), covering install, first start, every stage, RetroBat itself, uninstall and upgrade.
+- Still open:
+  - The installer isn't code-signed, so SmartScreen will warn.
+  - The app's own licence isn't chosen: package.json still says the template's "MIT", and there's no LICENSE file.
+  - A Content-Security-Policy isn't set yet (`csp: null`).
+
 ## Verification status (honest)
 
 - Done:
   - Read the old source, its docs and git state; compared it with this app's code; confirmed the zip matches the folder; checked the RetroBat version.
-  - Stages 1–6, with automated tests (87 front end, 20 Rust) and browser-preview checks (read-only).
+  - Stages 1–7, with automated tests (87 front end, 22 Rust) and browser-preview checks (read-only).
 - Not done:
+  - The clean-Windows plan hasn't been run (no VM here).
+  - The data-folder copy to the new app id hasn't been seen on a real start yet.
   - Theme import hasn't been run from the native app window (its file pickers).
   - Nothing from these stages has been tried in RetroBat itself: per-console values, retuned storyboards and the shadow shader are written to match RetroBat's source, not seen on screen.
   - The native app window hasn't been tested by hand for the new safety features.

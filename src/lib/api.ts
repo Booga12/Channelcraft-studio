@@ -97,6 +97,7 @@ export const api = {
   addFontToTheme: (themeDir: string, src: string) => invoke<string>('add_font_to_theme', { themeDir, src }),
   downloadFont: (themeDir: string, url: string, fileName: string) => invoke<string>('download_font', { themeDir, url, fileName }),
   backupsDir: () => invoke<string>('backups_dir'),
+  noticesPath: () => invoke<string>('notices_path'),
   copyTheme: (src: string, name: string) => invoke<string>('copy_theme', { src, name }),
   /** Zips a backup, then moves the folder to the Recycle Bin. Returns the backup path. */
   deleteTheme: (dir: string) => invoke<string>('delete_theme', { dir }),

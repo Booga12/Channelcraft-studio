@@ -317,6 +317,29 @@ pub fn backups_dir(app: AppHandle) -> CmdResult<String> {
     Ok(app.path().app_data_dir().map_err(err)?.join("backups").to_string_lossy().into_owned())
 }
 
+/// A bundled resource in the source tree, for `tauri dev`. Release builds never look there, so the
+/// developer's folder path isn't built into the app.
+pub(crate) fn dev_resource(rel: &str) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    return Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join(rel));
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = rel;
+        None
+    }
+}
+
+/// The open-source licences file installed with the app.
+#[tauri::command(async)]
+pub fn notices_path(app: AppHandle) -> CmdResult<String> {
+    let installed = app.path().resolve("THIRD-PARTY-NOTICES.txt", tauri::path::BaseDirectory::Resource).map_err(err)?;
+    let p = if installed.is_file() { installed } else { dev_resource("THIRD-PARTY-NOTICES.txt").unwrap_or_default() };
+    if !p.is_file() {
+        return Err("The licences file is missing from this copy of the app.".into());
+    }
+    Ok(p.to_string_lossy().into_owned())
+}
+
 /// Writes binary data (base64) inside the themes folder, e.g. a preview.png or artwork.
 #[tauri::command(async)]
 pub fn write_binary(roots: State<Roots>, path: String, base64: String) -> CmdResult<()> {
@@ -508,6 +531,10 @@ pub fn download_font(roots: State<Roots>, theme_dir: String, url: String, file_n
     }
     let target = PathBuf::from(&theme_dir).join("_inc").join("fonts").join(&file_name);
     ensure_writable(&roots, &target)?;
+    // The Open Font License must travel with the font: OFL.txt from the font's folder goes next to it.
+    let (dir_url, _) = url.rsplit_once('/').ok_or("Bad font address")?;
+    let family = dir_url.rsplit('/').next().unwrap_or("font");
+    let licence = target.with_file_name(format!("{family}-OFL.txt"));
     if !target.exists() {
         let resp = ureq::get(&url).call().map_err(|e| format!("Download failed: {e}"))?;
         let mut bytes = Vec::new();
@@ -515,10 +542,26 @@ pub fn download_font(roots: State<Roots>, theme_dir: String, url: String, file_n
         let mut reader = std::io::Read::take(resp.into_reader(), 20 * 1024 * 1024);
         std::io::Read::read_to_end(&mut reader, &mut bytes).map_err(err)?;
         crate::importing::check_content(&file_name, crate::importing::Kind::Font, &bytes[..bytes.len().min(8192)], bytes.len() as u64).map_err(|r| format!("The download isn't a usable font: {r}."))?;
-        fs::create_dir_all(target.parent().unwrap()).map_err(err)?;
-        fs::write(&target, bytes).map_err(err)?;
+        if !licence.exists() {
+            fetch_ofl(dir_url, &licence).map_err(|e| format!("{e}, so the font wasn't added."))?;
+        }
+        crate::storage::write_atomic(&target, &bytes)?;
+    } else if !licence.exists() {
+        // A font downloaded by an older version: add its licence when we can.
+        let _ = fetch_ofl(dir_url, &licence);
     }
     Ok(format!("_inc/fonts/{file_name}"))
+}
+
+fn fetch_ofl(dir_url: &str, dest: &Path) -> CmdResult<()> {
+    let resp = ureq::get(&format!("{dir_url}/OFL.txt")).call().map_err(|e| format!("The font's licence couldn't be downloaded ({e})"))?;
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut std::io::Read::take(resp.into_reader(), 256 * 1024), &mut text).map_err(err)?;
+    if !text.to_ascii_uppercase().contains("SIL OPEN FONT LICENSE") {
+        return Err("The font's licence file isn't the Open Font License".into());
+    }
+    fs::create_dir_all(dest.parent().ok_or("No folder")?).map_err(err)?;
+    crate::storage::write_atomic(dest, text.as_bytes())
 }
 
 pub(crate) fn new_theme_path(roots: &Roots, name: &str) -> CmdResult<PathBuf> {
@@ -632,7 +675,7 @@ mod tests {
 
     #[test]
     fn theme_names() {
-        assert!(valid_theme_name("Booga's WiiTheme v6").is_ok());
+        assert!(valid_theme_name("Jane's Theme v6").is_ok());
         assert!(valid_theme_name("a/b").is_err());
         assert!(valid_theme_name("..").is_err());
         assert!(valid_theme_name(" ").is_err());
@@ -642,10 +685,10 @@ mod tests {
     fn reads_es_settings_values() {
         let cfg = "<config>
 	<bool name=\"ClockMode12\" value=\"true\" />
-	<string name=\"ThemeSet\" value=\"Booga&apos;s\" />
+	<string name=\"ThemeSet\" value=\"Jane&apos;s\" />
 </config>";
         assert_eq!(es_value(cfg, "ClockMode12").as_deref(), Some("true"));
-        assert_eq!(es_value(cfg, "ThemeSet").as_deref(), Some("Booga's"));
+        assert_eq!(es_value(cfg, "ThemeSet").as_deref(), Some("Jane's"));
         assert_eq!(es_value(cfg, "DrawClock"), None);
     }
 

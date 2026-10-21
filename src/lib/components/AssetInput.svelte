@@ -127,10 +127,11 @@
               <small class="faint">{f.style}</small>
             </button>
           {/each}
-          <p class="faint lic">Free fonts (Open Font License) from Google Fonts, downloaded into the theme when picked.</p>
+          <p class="faint lic">Free fonts (Open Font License) from Google Fonts, downloaded into the theme when picked, with their licence file next to them so the theme can be shared.</p>
         </div>
       {:else if kind === 'font' && fontTab === 'pc'}
         <div class="items">
+          <p class="faint lic">Fonts that come with Windows or other programs are often not allowed to be shared. They're fine for your own theme; pick a free font instead if you'll share it.</p>
           {#each pcFonts.filter((f) => !filter || f.name.toLowerCase().includes(filter.toLowerCase())).slice(0, 300) as f (f.path)}
             <button class="item ghost font" onclick={() => pickPc(f.path)} disabled={busy}>
               <span>{f.name}</span>

@@ -777,12 +777,7 @@ pub fn copy_theme(roots: State<Roots>, src: String, name: String) -> CmdResult<S
 pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: String) -> CmdResult<String> {
     let dest = new_theme_path(&roots, &name)?;
     let starter = app.path().resolve("starter-theme", tauri::path::BaseDirectory::Resource).map_err(err)?;
-    let starter = if starter.join("theme.xml").is_file() {
-        starter
-    } else {
-        // `tauri dev` runs from the source tree.
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("starter-theme")
-    };
+    let starter = if starter.join("theme.xml").is_file() { starter } else { crate::commands::dev_resource("starter-theme").ok_or("The starter theme is missing from this copy of the app.")? };
     copy_dir_staged(&starter, &dest)?;
     Ok(dest.to_string_lossy().into_owned())
 }
