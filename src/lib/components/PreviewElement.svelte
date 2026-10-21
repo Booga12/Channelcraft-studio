@@ -772,7 +772,7 @@
   .tile :global(img[data-failed]) {
     display: none;
   }
-  .tile :global(img:not([data-failed])) + .fallback {
+  .tile :global(img:not([data-failed]) + .fallback) {
     display: none;
   }
   .tile img {
