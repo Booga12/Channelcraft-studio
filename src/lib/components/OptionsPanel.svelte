@@ -30,6 +30,7 @@
   </section>
 
   <p class="dim intro">These are the choices RetroBat offers under <em>UI Settings › Theme configuration</em>. Changing them here only affects the preview.</p>
+  <button class="secondary small add" onclick={() => (ed.showMenuOptions = true)} title="Choose styles, colour sets and motion to switch between in RetroBat's menu">{ed.menuState ? 'Change RetroBat menu options…' : 'Add options to RetroBat’s menu…'}</button>
   {#if !ed.res?.subsets.length}
     <p class="faint">This theme has no options.</p>
   {:else}
@@ -48,6 +49,9 @@
 </div>
 
 <style>
+  .add {
+    margin: 0 0 10px;
+  }
   .wrap {
     padding: 10px 12px;
     display: grid;

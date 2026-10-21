@@ -300,6 +300,14 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
         if (!cc.pass) continue;
         const raw = textOf(file.doc, child).trim();
         const def: PropDef = { name: child.name, raw, value: subst(raw), node: child, file, conditional: cc.conditional };
+        if (child.name === 'storyboard') {
+          // RetroBat keeps one storyboard per event: a later one replaces it, an empty one removes it
+          // (ThemeData::parseElement).
+          const event = attr(child, 'event') ?? '';
+          re.complex = re.complex.filter((c) => c.name !== 'storyboard' || (attr(c.node, 'event') ?? '') !== event);
+          if (hasElementChildren(child)) re.complex.push(def);
+          continue;
+        }
         if (hasElementChildren(child)) {
           re.complex.push(def);
           continue;

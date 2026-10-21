@@ -17,7 +17,8 @@ import { shaderOf, shadowXml } from './theme/shadow';
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { consoleScreenPath, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
-import { designChanges, designVarsChange, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
+import { appliedDesign, appliedSystemLayout, designChanges, designVarsChange, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
+import { planMenuOptions, readMenuState, type MenuChoices, type MenuState } from './theme/menuOptions';
 import { DESIGNS, designAssets, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
@@ -1052,6 +1053,7 @@ class Editor {
 
   /** Writes a layout preset into its own block at the end of theme.xml (replacing an earlier one). */
   async applyLayout(preset: LayoutPreset, views: string[], style: Design | null = null, hideOwn = true) {
+    if (this.menuGuard()) return;
     const p = this.project;
     if (!p) return;
     // A system layout can come dressed in a design: its background, colours, fonts and the
@@ -1135,6 +1137,7 @@ class Editor {
   async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string } = {}) {
     const p = this.project;
     if (!p) return;
+    if (this.menuGuard()) return;
     // Designs style theme.xml's screens, not the loading screens.
     if (this.screenFile !== 'theme.xml') this.showScreen({ view: this.viewNames.includes('system') ? 'system' : (this.viewNames[0] ?? 'system'), file: 'theme.xml' });
     const artRel = `_inc/ccs/${design.id}`;
@@ -1163,6 +1166,71 @@ class Editor {
     const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
     if (opts.systemLayout) return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to the System screen.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
     this.notify(wrote ? `Design “${design.label}” applied.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `Design “${design.label}” applied in the preview only (files can’t be written here).`);
+  }
+
+  // ---- RetroBat menu options: choices RetroBat shows in its Theme Configuration menu ----
+
+  /** With menu options, styles are chosen there: a design or layout applied directly would override them. */
+  private menuGuard(): boolean {
+    if (!this.project || !readMenuState(this.project)) return false;
+    this.notify('This theme’s styles are RetroBat menu options now. Add or change styles in RetroBat menu options.');
+    this.showMenuOptions = true;
+    return true;
+  }
+
+  showMenuOptions = $state(false);
+
+  /** The design and console-screen layout menu options are built from, if the theme has one. */
+  get menuBase(): { design: Design; systemLayout: string } | null {
+    const p = this.project;
+    if (!p) return null;
+    const state = readMenuState(p);
+    const design = state ? DESIGNS.find((d) => d.id === state.design) : (appliedDesign(p, 'detailed') ?? appliedDesign(p, 'system'));
+    if (!design) return null;
+    return { design, systemLayout: state?.systemViews[0] ?? appliedSystemLayout(p) ?? design.system };
+  }
+
+  get menuState(): MenuState | null {
+    return this.project ? readMenuState(this.project) : null;
+  }
+
+  /**
+   * Writes the choices as RetroBat theme options (see menuOptions.ts) in one undo step: option
+   * files, colour sets, artwork per design and colour set, and the options include in theme.xml.
+   */
+  async applyMenuOptions(choices: MenuChoices): Promise<boolean> {
+    const p = this.project;
+    const base = this.menuBase;
+    if (!p || !base) return false;
+    if (this.screenFile !== 'theme.xml') this.showScreen({ view: 'system', file: 'theme.xml' });
+    await this.ensureBackup();
+    // Fonts first: the option files point at them.
+    const fontIds = new Set<string>();
+    for (const id of [base.design.id, ...choices.gameDesigns]) {
+      const d = DESIGNS.find((x) => x.id === id);
+      if (d) [d.font, d.titleFont].forEach((f) => f && fontIds.add(f));
+    }
+    const fonts: Record<string, string | null> = {};
+    for (const id of fontIds) fonts[id] = await this.ensureFont(id);
+    if (this.project !== p) return false;
+    const res = this.themeRes;
+    if (!res) return false;
+    const plan = planMenuOptions(p, res, choices, base.design, base.systemLayout, fonts);
+    let wrote = true;
+    for (const a of plan.art) {
+      if (p.assets.some((x) => x.rel.toLowerCase().startsWith(`${a.dir.toLowerCase()}/`))) continue;
+      wrote = (await this.writeArt(a.dir, designAssets({ ...a.design, palette: a.palette }))) && wrote;
+    }
+    if (this.project !== p) return false;
+    const changes: Change[] = plan.changes(p);
+    for (const [rel, xml] of Object.entries(plan.files)) {
+      const f = p.fileAt(rel) ?? p.addFile(rel, '');
+      changes.push({ file: f, patch: { start: 0, end: f.src.length, text: xml } });
+    }
+    this.commit('RetroBat menu options', changes);
+    this.selected = null;
+    this.notify(wrote ? 'RetroBat menu options added. Save, then look in RetroBat under Main menu → UI settings → Theme configuration. Ctrl+Z undoes it.' : 'Menu options were added in the preview only (files can’t be written here).');
+    return true;
   }
 
   /**

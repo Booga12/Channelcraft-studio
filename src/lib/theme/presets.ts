@@ -3,7 +3,7 @@
 // theme.xml, marked with a comment, so it overrides the theme without touching its other files
 // and can be swapped for another preset later.
 
-import { attr, patchInsertChild, patchReplaceSpan, type XNode } from '../xml/cst';
+import { attr, patchInsertChild, patchReplaceSpan, type XElement, type XNode } from '../xml/cst';
 import { DESIGNS, designElements, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext } from './designs';
 import type { Change } from './edits';
 import type { ThemeProject } from './project';
@@ -363,7 +363,8 @@ const VARS_MARK = 'ChannelCraft design colours';
 export function designVarsChange(project: ThemeProject, design: Design): Change {
   const entry = project.entry!;
   const root = entry.doc.root!;
-  const body = Object.entries(designVars(design.palette)).map(([k, v]) => `  <${k}>${v}</${k}>`);
+  // designArtSet names the colour set whose artwork the menu options use (see menuOptions.ts).
+  const body = [`  <designArtSet>d-${design.id}</designArtSet>`, ...Object.entries(designVars(design.palette)).map(([k, v]) => `  <${k}>${v}</${k}>`)];
   const markup = [`<!-- ${VARS_MARK} (${design.label}). The design's parts use these; change them in the Colours tab. -->`, '<variables>', ...body, '</variables>'].join('\n');
   const kids = root.children;
   for (let i = 0; i < kids.length; i++) {
@@ -379,7 +380,13 @@ export function designVarsChange(project: ThemeProject, design: Design): Change 
   return { file: entry, patch: patchInsertChild(entry.doc, root, markup, { first: true }) };
 }
 
-function findBlock(children: XNode[], src: string, view: string) {
+/** ChannelCraft's design or layout block for a view in theme.xml (its comment and <view>), if any. */
+export function designBlock(project: ThemeProject, view: string): { comment: XNode; view: XElement } | null {
+  const entry = project.entry;
+  return entry?.doc.root ? findBlock(entry.doc.root.children, entry.src, view) : null;
+}
+
+function findBlock(children: XNode[], src: string, view: string): { comment: XNode; view: XElement } | null {
   for (let i = 0; i < children.length; i++) {
     const n = children[i];
     if (n.kind !== 'comment' || !src.slice(n.start, n.end).includes(MARK(view))) continue;

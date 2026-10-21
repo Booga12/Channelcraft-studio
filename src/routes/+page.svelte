@@ -13,6 +13,7 @@
   import RestoreDialog from '$lib/components/RestoreDialog.svelte';
   import FeaturedDialog from '$lib/components/FeaturedDialog.svelte';
   import MediaCheckDialog from '$lib/components/MediaCheckDialog.svelte';
+  import MenuOptionsDialog from '$lib/components/MenuOptionsDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { api } from '$lib/api';
 
@@ -79,6 +80,9 @@
 {/if}
 {#if ed.showShortcuts}
   <ShortcutsDialog />
+{/if}
+{#if ed.showMenuOptions && ed.project}
+  <MenuOptionsDialog />
 {/if}
 {#if ed.showMediaCheck && ed.project}
   <MediaCheckDialog />
