@@ -250,11 +250,14 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
 - **Installer.**
   - One NSIS installer that installs for the current user, so no admin rights are needed.
   - WebView2 comes from the embedded bootstrapper, which installs it silently when missing but needs the internet. `offlineInstaller` is the alternative; it adds about 130 MB.
+- **Licence: MIT** (`LICENSE`, "ChannelCraft Studio contributors").
+  - The installer shows it as its licence page and installs it as `LICENSE.txt`.
+  - Settings → About shows it in full.
+  - The release check fails if it's missing or not bundled.
 - **Settings → About.** It shows the version, says the app isn't made by the RetroBat team, explains that files stay on the PC (the only time it goes online is a free-font download), and opens the licences.
 - **`docs/CLEAN-WINDOWS-TEST.md`.** A test plan for three VMs (Windows 11; Windows 10 not updated; Windows 10 offline without WebView2), covering install, first start, every stage, RetroBat itself, uninstall and upgrade.
 - Still open:
   - The installer isn't code-signed, so SmartScreen will warn.
-  - The app's own licence isn't chosen: package.json still says the template's "MIT", and there's no LICENSE file.
   - A Content-Security-Policy isn't set yet (`csp: null`).
 
 ## Verification status (honest)

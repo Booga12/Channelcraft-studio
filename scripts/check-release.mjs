@@ -8,7 +8,8 @@
 // - nothing personal is inside the installer, the program or the bundled files: this computer's
 //   user name and home folder, the git name and e-mail, and any words listed (one per line) in
 //   the untracked file .release-private-words (for example a personal theme or brand name);
-// - the only theme bundled is the starter theme.
+// - the only theme bundled is the starter theme;
+// - the app's own LICENSE is bundled and is the MIT licence.
 // The program is built with this computer's folders mapped away (--remap-path-prefix), so source
 // paths compiled into Rust panic messages don't name the user.
 
@@ -82,7 +83,7 @@ const installers = filesUnder(join(RELEASE, 'bundle', 'nsis')).filter((f) => f.e
 const exe = join(RELEASE, 'channelcraft-studio.exe');
 if (!installers.length) problems.push('No installer found in src-tauri/target/release/bundle/nsis. Build first.');
 if (!existsSync(exe)) problems.push('No program found at src-tauri/target/release/channelcraft-studio.exe.');
-const shipped = [...installers, ...(existsSync(exe) ? [exe] : []), ...filesUnder(join(TAURI, 'resources')), ...filesUnder(join(ROOT, 'build')), join(TAURI, 'tauri.conf.json')];
+const shipped = [...installers, ...(existsSync(exe) ? [exe] : []), ...filesUnder(join(TAURI, 'resources')), ...filesUnder(join(ROOT, 'build')), join(TAURI, 'tauri.conf.json'), join(ROOT, 'LICENSE')];
 for (const f of shipped) scan(f);
 
 // Only the starter theme may be bundled.
@@ -92,6 +93,9 @@ for (const f of filesUnder(join(TAURI, 'resources'))) {
   if (/\.(mp4|mkv|avi|webm|zip|7z|rar|iso|bin|cue|chd|nes|sfc|smc|gba|gb|gbc|n64|z64|nds|3ds|wbfs|rvz)$/i.test(rel)) problems.push(`Game or media file bundled: resources/${rel}`);
   if (/gamelist\.xml$|es_settings\.cfg$|themesettings/i.test(rel)) problems.push(`RetroBat data bundled: resources/${rel}`);
 }
+
+if (!/^MIT License/.test(readFileSync(join(ROOT, 'LICENSE'), 'utf8'))) problems.push('LICENSE is missing or is not the MIT licence.');
+if (!JSON.parse(readFileSync(join(TAURI, 'tauri.conf.json'), 'utf8')).bundle?.resources?.['../LICENSE']) problems.push('LICENSE is not bundled with the app.');
 
 const size = (f) => `${(statSync(f).size / 1048576).toFixed(1)} MB`;
 console.log('\nRelease check');

@@ -34,7 +34,8 @@
     ],
     "resources": {
       "resources/starter-theme/": "starter-theme/",
-      "resources/THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt"
+      "resources/THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt",
+      "../LICENSE": "LICENSE.txt"
     },
     "icon": [
       "icons/32x32.png",
@@ -56,6 +57,8 @@
       "nsis": {
         "installMode": "currentUser"
       }
-    }
+    },
+    "license": "MIT",
+    "licenseFile": "../LICENSE"
   }
 }

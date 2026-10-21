@@ -6,6 +6,11 @@
   import { api } from '$lib/api';
   import Icon from './Icon.svelte';
   import { getVersion } from '@tauri-apps/api/app';
+  import LICENSE from '../../../LICENSE?raw';
+
+  let showLicence = $state(false);
+  // One line per paragraph, so it wraps to the panel instead of at 80 columns.
+  const licenceText = LICENSE.split(/\r?\n\r?\n/).map((p) => p.replace(/\s*\r?\n\s*/g, ' ')).join('\n\n');
 
   let version = $state('');
   getVersion().then((v) => (version = v)).catch(() => {});
@@ -165,6 +170,11 @@
           <div><strong>Your files stay on your computer</strong><small>Themes, games and settings are only read and written on this PC. The only time the app goes online is when you download a free font, which comes from the Google Fonts collection on GitHub.</small></div>
         </div>
         <div class="row">
+          <div><strong>Licence: MIT</strong><small>Free to use, copy, change and share, including the changes you make. It comes without any warranty.</small></div>
+          <button class="secondary small" onclick={() => (showLicence = !showLicence)}>{showLicence ? 'Hide' : 'Read it'}</button>
+        </div>
+        {#if showLicence}<pre class="licence">{licenceText}</pre>{/if}
+        <div class="row">
           <div><strong>Open-source licences</strong><small>The open-source software this app is built with, and their licences.</small></div>
           <button class="secondary small" onclick={showNotices}>Show file</button>
         </div>
@@ -181,6 +191,18 @@
 </div>
 
 <style>
+  .licence {
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    max-height: 220px;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-size: 11px;
+    line-height: 1.45;
+    background: var(--bg);
+    border: 1px solid #333;
+    border-radius: 8px;
+  }
   .backdrop {
     position: fixed;
     inset: 0;

@@ -28,3 +28,7 @@ The tests read the themes in `M:\Retrobat` (read-only) and are skipped if that f
 - `src/lib/components/`: UI
 - `src-tauri/src/commands.rs`: file access; writes are limited to the RetroBat themes folder
 - `src-tauri/resources/starter-theme/`: template for new themes
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). Open-source software it is built with is listed in `src-tauri/resources/THIRD-PARTY-NOTICES.txt` (`pnpm notices` regenerates it).
