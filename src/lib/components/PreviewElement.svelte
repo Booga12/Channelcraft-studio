@@ -9,6 +9,7 @@
   import type { Environment } from '$lib/theme/context';
   import { animationCss, screenOf } from '$lib/theme/animations';
   import { shaderOf, shadowCss, SHADOW_TYPES } from '$lib/theme/shadow';
+  import { frameOf, FRAME_TYPES, roundPx, shaderPx } from '$lib/theme/frame';
 
   function relativeDate(iso: string): string {
     const d = new Date(`${iso.slice(0, 4)}-${iso.slice(4, 6)}-${iso.slice(6, 8)}T00:00:00`);
@@ -235,6 +236,26 @@
     return s.join(';');
   });
 
+  // Rounded corners (roundCorners), or RetroBat's border shader: rounded border and a shadow.
+  const framing = $derived.by(() => {
+    if (!FRAME_TYPES.has(el.type)) return { radius: '', shadow: '' };
+    const w = outer.w ?? box.w ?? 0;
+    const h = outer.h ?? box.h ?? 0;
+    const f = frameOf(el)?.frame;
+    const colour = (v: string) => {
+      const m = v.match(/^\$\{([^}]+)\}$/);
+      return cssColor(m ? res.vars.get(m[1])?.value : v, 'transparent');
+    };
+    if (!f) {
+      const rr = roundPx(num('roundCorners', 0), w, h, H);
+      return { radius: rr ? `${rr}px` : '', shadow: '' };
+    }
+    const b = shaderPx(f.border, h, H);
+    const sh = shaderPx(f.shadow, h, H);
+    const shadow = [b ? `0 0 0 ${b}px ${colour(f.borderColor)}` : '', sh ? `0 ${sh * 0.25}px ${sh}px ${sh * 0.2}px ${colour(f.shadowColor)}` : ''].filter(Boolean).join(', ');
+    return { radius: `${shaderPx(f.corners, h, H)}px`, shadow };
+  });
+
   const tint = $derived(val('color'));
   const tintEnd = $derived(val('colorEnd'));
 
@@ -332,11 +353,23 @@
       const c = els?.get(name)?.props.get('color')?.value;
       return c && c.length === 8 ? parseInt(c.slice(6), 16) / 255 : d;
     };
+    // The tile's own picture (a nine-patch, tinted with backgroundColor), as RetroBat draws it.
+    const art = (t: typeof tile) => {
+      if (!t || !ed.project) return null;
+      const path = resolveAssetWithFallbacks(t, 'backgroundImage', res, ed.project, env);
+      if (!path) return null;
+      const c = parsePair(t.props.get('backgroundCornerSize')?.value) ?? [16, 16];
+      const np = `url("${fileUrl(path)}") ${c[1]} ${c[0]} fill / ${c[1]}px ${c[0]}px stretch`;
+      const colour = t.props.get('backgroundCenterColor')?.value ?? t.props.get('backgroundColor')?.value;
+      return { np, c, colour };
+    };
     return {
       cols,
       rows: rowsN,
       tile,
       sel,
+      art: art(tile),
+      selArt: art(sel) ?? art(tile),
       gapX: margin[0] * W,
       gapY: margin[1] * H,
       zoom,
@@ -369,6 +402,8 @@
           style:width={outer.w !== null ? `${outer.w}px` : undefined}
           style:height={outer.h !== null ? `${outer.h}px` : undefined}
           style:opacity={alphaOf(tint)}
+          style:border-radius={framing.radius || undefined}
+          style:box-shadow={framing.shadow || undefined}
           style:transform={`scale(${val('flipX') === 'true' ? -1 : 1}, ${val('flipY') === 'true' ? -1 : 1})`}
           onload={onImgLoad}
         />
@@ -455,7 +490,7 @@
       </div>
     </div>
   {:else if el.type === 'video'}
-    <div class="video" style:width="{outer.w ?? 0.3 * W}px" style:height="{outer.h ?? 0.3 * H}px">
+    <div class="video" style:width="{outer.w ?? 0.3 * W}px" style:height="{outer.h ?? 0.3 * H}px" style:border-radius={framing.radius || undefined} style:box-shadow={framing.shadow || undefined} style:overflow={framing.radius ? 'hidden' : undefined}>
       {#if videoPath && /\.(mp4|webm)$/i.test(videoPath)}
         {#key videoPath}
           <!-- svelte-ignore a11y_media_has_caption -->
@@ -501,16 +536,23 @@
         {@const on = i === grid.selIndex}
         {@const sys = list[(cur + i - grid.selIndex + list.length * 10) % Math.max(1, list.length)]}
         {@const logo = systemGrid && sys ? logoFor(sys) : null}
+        {@const art = on ? grid.selArt : grid.art}
         <div
           class="tile"
           class:on
-          style:background={cssColor((on ? grid.sel : grid.tile)?.props.get('backgroundColor')?.value, on ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.12)')}
-          style:border-radius="{on ? grid.selRadius : grid.radius}px"
+          style:background={art ? 'transparent' : cssColor((on ? grid.sel : grid.tile)?.props.get('backgroundColor')?.value, on ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.12)')}
+          style:border-radius={art ? '0' : `${on ? grid.selRadius : grid.radius}px`}
           style:transform={on && grid.zoom !== 1 ? `scale(${grid.zoom})` : undefined}
           style:z-index={on ? 2 : 1}
         >
+          {#if art}
+            <div class="fill" style="border-style:solid;border-width:{art.c[1]}px {art.c[0]}px;border-image:{art.np};opacity:{alphaOf(art.colour)}"></div>
+            {#if !isWhite(art.colour)}<div class="fill tint" style="background:{opaque(art.colour)};-webkit-mask-box-image:{art.np};opacity:{alphaOf(art.colour)}"></div>{/if}
+          {/if}
           {#if logo}
-            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} />
+            <!-- A logo that can't be loaded shows the console's name, as RetroBat does without a logo. -->
+            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} onerror={(e) => (e.currentTarget.dataset.failed = '1')} />
+            <span class="fallback">{sys?.fullName ?? ''}</span>
           {:else}
             <span>{systemGrid ? (sys?.fullName ?? '') : (env.gameNames ?? MOCK_GAMES)[i % (env.gameNames ?? MOCK_GAMES).length]}</span>
           {/if}
@@ -719,6 +761,19 @@
     padding: 6px;
     min-height: 0;
     overflow: hidden;
+  }
+  .tile {
+    position: relative;
+  }
+  .tile img,
+  .tile span {
+    position: relative;
+  }
+  .tile img[data-failed] {
+    display: none;
+  }
+  .tile img:not([data-failed]) + .fallback {
+    display: none;
   }
   .tile img {
     width: 82%;

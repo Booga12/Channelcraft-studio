@@ -14,6 +14,10 @@ import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, retune, screenOf, STILL_TYPE
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
 import { shaderOf, shadowXml } from './theme/shadow';
+import { frameOf, frameXml, type Frame } from './theme/frame';
+
+/** A number with at most four decimals, as theme files write them. */
+const r4 = (v: number) => String(Math.round(v * 10000) / 10000);
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { consoleScreenPath, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
@@ -949,6 +953,56 @@ class Editor {
     const target = insertTarget(el, this.view);
     if (!target) return;
     this.commit(`shadow on ${elementLabel(name)}`, [{ file: target.file, patch: patchInsertChild(target.file.doc, target.node, xml) }]);
+  }
+
+  /**
+   * Adds, changes or removes (null) a frame (RetroBat's border shader) on a picture or video.
+   * Its corners take over from `roundCorners`, and go back to it when the frame is removed.
+   */
+  setFrame(name: string, frame: Frame | null, coalesce?: string) {
+    const el = this.currentView?.elements.get(name);
+    if (!el) return;
+    const now = frameOf(el);
+    const sh = shaderOf(el);
+    if (sh && !now) {
+      this.notify(sh.shadow ? 'Remove the soft shadow first: a picture can have one RetroBat shader, and the frame has its own shadow.' : 'This picture already uses another RetroBat shader, so it can’t have a frame. Remove that shader in Advanced mode first.', 'error');
+      return;
+    }
+    const round = el.props.get('roundCorners');
+    if (!frame) {
+      if (!now) return;
+      const { file, node } = now.def;
+      const corners = now.frame.corners > 0 ? r4(now.frame.corners) : null;
+      // The frame's corners stay as roundCorners: in place of the shader, or in the existing setting.
+      const changes: Change[] =
+        corners && !round
+          ? [{ file, patch: patchReplaceSpan(file.doc, node, node, `<roundCorners>${corners}</roundCorners>`) }]
+          : [{ file, patch: patchRemoveNode(file.doc, node) }, ...(corners && round ? [setTextChange(round.file, round.node, corners)] : [])];
+      this.commit(`removing the frame of ${elementLabel(name)}`, changes);
+      return;
+    }
+    const xml = frameXml(frame);
+    if (now) {
+      this.commit(`frame of ${elementLabel(name)}`, [{ file: now.def.file, patch: patchReplaceSpan(now.def.file.doc, now.def.node, now.def.node, xml) }], coalesce);
+      return;
+    }
+    const target = insertTarget(el, this.view);
+    if (!target) return;
+    // The frame's corners replace roundCorners (both at once would round twice): the shader goes
+    // in its place, as one edit.
+    const own = round && round.file === target.file && round.node.parent === target.node;
+    const change: Change = own ? { file: round.file, patch: patchReplaceSpan(round.file.doc, round.node, round.node, xml) } : { file: target.file, patch: patchInsertChild(target.file.doc, target.node, xml) };
+    this.commit(`frame on ${elementLabel(name)}`, [change]);
+  }
+
+  /** Sets rounded corners: in the frame when there is one, else RetroBat's roundCorners (0 removes). */
+  setCorners(name: string, corners: number, coalesce?: string) {
+    const el = this.currentView?.elements.get(name);
+    if (!el) return;
+    const f = frameOf(el);
+    if (f) return this.setFrame(name, { ...f.frame, corners }, coalesce);
+    if (corners <= 0) return el.props.get('roundCorners') ? this.removeProp(name, 'roundCorners') : undefined;
+    this.setProp(name, 'roundCorners', r4(corners), { coalesce });
   }
 
   /**

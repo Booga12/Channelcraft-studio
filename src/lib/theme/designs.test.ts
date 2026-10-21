@@ -53,7 +53,10 @@ describe('designs on the starter theme (in memory)', () => {
       if (systemLayout(d.system)!.grid) {
         expect(sys.get('imagegrid')!.props.get('autoLayout')).toBeTruthy();
         expect(sys.get('selected')!.type).toBe('gridtile');
-        expect(sys.get('default')!.props.get('backgroundImage')!.value).toContain(`ccs/${d.id}/panel.svg`);
+        expect(sys.get('default')!.props.get('backgroundImage')!.value).toContain(`ccs/${d.id}/tile.svg`);
+        // The selected tile is a ring and glow in the accent colour, not a flat fill.
+        expect(sys.get('selected')!.props.get('backgroundImage')!.value).toContain(`ccs/${d.id}/tile-selected.svg`);
+        expect(designAssets(d)['tile-selected.svg']).toContain('stroke-width="5"');
       } else {
         expect(sys.has('systemcarousel')).toBe(true);
       }

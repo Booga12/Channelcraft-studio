@@ -7,6 +7,7 @@
 import type { AnimPreset } from './animations';
 import { ANIMATIONS, screenOf, storyboardXml } from './animations';
 import { systemLayout, type SystemLayout } from './systemLayouts';
+import { frameXml, type Frame } from './frame';
 
 export interface Palette6 {
   bg: string;
@@ -429,6 +430,24 @@ export function designAssets(d: Design): Record<string, string> {
       ? svg(96, 96, `<path d="M8 0H88V8H96V88H88V96H8V88H0V8H8Z" fill="#ffffff"/><path d="M8 4H88V8H92V88H88V92H8V88H4V8H8Z" fill="none" stroke="#000" stroke-opacity="0.35" stroke-width="4"/>`)
       : svg(Math.max(96, r * 3), Math.max(96, r * 3), `<rect x="1" y="1" width="${Math.max(96, r * 3) - 2}" height="${Math.max(96, r * 3) - 2}" rx="${r}" fill="#ffffff"/>`);
 
+  // Console tiles: a tile with a soft inner edge, and the selected tile with a ring and a glow
+  // (white, tinted by the theme). Both leave the same margin round the tile for the glow.
+  const T = tileGeometry(d);
+  const shape = (inset: number, attrs: string) => {
+    const x = T.margin - inset;
+    const w = T.size - 2 * x;
+    const rr = Math.max(0, T.radius + inset);
+    if (d.id !== 'pixel') return `<rect x="${x}" y="${x}" width="${w}" height="${w}" rx="${rr}" ${attrs}/>`;
+    const k = Math.max(4, Math.round(rr / 2));
+    return `<path d="M${x + k} ${x}H${x + w - k}V${x + k}H${x + w}V${x + w - k}H${x + w - k}V${x + w}H${x + k}V${x + w - k}H${x}V${x + k}H${x + k}Z" ${attrs}/>`;
+  };
+  const tile = svg(T.size, T.size, `${shape(0, 'fill="#ffffff"')}${shape(-2, 'fill="none" stroke="#000000" stroke-opacity="0.22" stroke-width="3"')}`);
+  const tileSelected = svg(
+    T.size,
+    T.size,
+    `${shape(8, 'fill="none" stroke="#ffffff" stroke-opacity="0.2" stroke-width="4"')}${shape(5, 'fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="3"')}${shape(0, 'fill="#ffffff" fill-opacity="0.3"')}${shape(-2.5, 'fill="none" stroke="#ffffff" stroke-width="5"')}`,
+  );
+
   const fade = svg(
     W,
     H,
@@ -437,10 +456,26 @@ export function designAssets(d: Design): Record<string, string> {
 
   // RetroBat's SVG renderer can't draw patterns and blends gradients differently, so full-screen
   // art is written as PNG (given here as SVG source; the editor rasterizes it when writing).
-  const out: Record<string, string> = { 'background.png': bg, 'panel.svg': panel, 'fade.png': fade };
+  const out: Record<string, string> = { 'background.png': bg, 'panel.svg': panel, 'fade.png': fade, 'tile.svg': tile, 'tile-selected.svg': tileSelected };
   if (d.scanlines) out['scanlines.svg'] = svg(4, 4, `<rect width="4" height="2" fill="#000" fill-opacity="0.35"/>`);
   if (d.radius >= 20) out['bezel.svg'] = svg(W, H, `<rect x="18" y="18" width="${W - 36}" height="${H - 36}" rx="80" fill="none" stroke="#000" stroke-width="40" stroke-opacity="0.55"/>`);
   return out;
+}
+
+/** Size, glow margin and corner radius of a design's tile pictures, in pixels. */
+export function tileGeometry(d: Design): { size: number; margin: number; radius: number; corner: number } {
+  const radius = d.id === 'pixel' ? 8 : Math.max(6, Math.min(d.radius, 28));
+  const margin = 10;
+  return { size: 128, margin, radius, corner: margin + radius + 6 };
+}
+
+/**
+ * The frame round a design's screenshots and videos (RetroBat's border shader): rounded unless
+ * the design is square or pixel-cornered, a thin light border, and a soft drop shadow.
+ */
+export function designFrame(d: Design, accent = `${d.palette.accent.slice(0, 6)}FF`): Frame {
+  const square = d.id === 'pixel' || d.radius === 0;
+  return { corners: square ? 0 : Math.min(0.06, Math.max(0.02, d.radius / 500)), border: d.id === 'pixel' ? 4 : 2, borderColor: d.id === 'pixel' ? accent : 'FFFFFF55', shadow: 12, shadowColor: '00000088' };
 }
 
 // ---- layouts -------------------------------------------------------------------------------
@@ -450,6 +485,8 @@ export interface DesignEl {
   name: string;
   props: Record<string, string | string[]>;
   anim?: string;
+  /** Nested blocks written as they are (a <shader>, for example). */
+  blocks?: string[];
 }
 
 export interface DesignContext {
@@ -566,8 +603,11 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
     props: { pos, origin: extra.origin ?? '0.5 0.5', maxSize: max, visible: 'true', zIndex: String(z), ...extra },
     anim,
   });
-  const boxart = (pos: string, max: string, z = 32, extra: Record<string, string> = {}) => art('ccs_boxart', pos, max, z, { path: 'firstfile({game:boxart}, {game:thumbnail}, {game:image})', ...extra }, d.anims?.art);
-  const screenshot = (pos: string, max: string, extra: Record<string, string> = {}) => (video ? art('md_video', pos, max, 31, { delay: '0.8', showSnapshotNoVideo: 'true', ...extra }) : art('md_image', pos, max, 31, extra));
+  // Covers get rounded corners; screenshots and videos a frame with a border and soft shadow.
+  const round: Record<string, string> = d.id === 'pixel' || d.radius === 0 ? {} : { roundCorners: '0.025' };
+  const boxart = (pos: string, max: string, z = 32, extra: Record<string, string> = {}) => art('ccs_boxart', pos, max, z, { path: 'firstfile({game:boxart}, {game:thumbnail}, {game:image})', ...round, ...extra }, d.anims?.art);
+  const framed = (e: DesignEl): DesignEl => ({ ...e, blocks: [frameXml(designFrame(d, K(d, c, 'designAccent')))] });
+  const screenshot = (pos: string, max: string, extra: Record<string, string> = {}) => framed(video ? art('md_video', pos, max, 31, { delay: '0.8', showSnapshotNoVideo: 'true', ...extra }) : art('md_image', pos, max, 31, extra));
   const fanart = (opacityHex: string) => ({ type: 'image', name: 'ccs_fanart', props: { pos: '0 0', size: '1 1', path: 'firstfile({game:fanart}, {game:image})', color: `FFFFFF${opacityHex}`, zIndex: '1' } }) as DesignEl;
   const systemLogo = (pos: string, origin: string, max: string): DesignEl => ({
     type: 'image',
@@ -700,12 +740,13 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
 
   if (l.grid) {
     // Tiles in the design's colours, logos washed out until selected.
-    const corner = Math.max(8, d.radius);
-    const faint = p.surface.length === 8 && parseInt(p.surface.slice(6), 16) < 0x30;
+    const { corner, margin } = tileGeometry(d);
+    const pad = String(margin + 20);
     els.push(
-      { type: 'imagegrid', name: 'imagegrid', props: { autoLayoutSelectedZoom: '1.06', animateSelection: 'true', padding: '0.012 0.012 0.012 0.012', scrollLoop: 'false', scrollbarColor: '00000000', zIndex: '30', ...l.grid } },
-      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designTile'), imageColor: 'FFFFFFFF', padding: '24 24 24 24', selectionMode: 'full', imageSizeMode: 'maxSize' } },
-      { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designAccent'), imageColor: 'FFFFFFFF', padding: '24 24 24 24' } },
+      { type: 'imagegrid', name: 'imagegrid', props: { autoLayoutSelectedZoom: '1.08', animateSelection: 'true', padding: '0.012 0.012 0.012 0.012', scrollLoop: 'false', scrollbarColor: '00000000', zIndex: '30', ...l.grid } },
+      // The selected tile gets a ring and glow in the accent colour over a lightly tinted fill.
+      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/tile.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designTile'), imageColor: 'FFFFFFFF', padding: `${pad} ${pad} ${pad} ${pad}`, selectionMode: 'full', imageSizeMode: 'maxSize' } },
+      { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/tile-selected.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designAccent'), imageColor: 'FFFFFFFF', padding: `${pad} ${pad} ${pad} ${pad}` } },
       { type: 'text', name: 'gridtile', props: { visible: 'false', size: '0 0' } },
       { type: 'image', name: 'gridtile.image', props: { color: 'FFFFFFAA' } },
       { type: 'image', name: 'gridtile.image:selected', props: { color: 'FFFFFFFF' } },
@@ -748,10 +789,11 @@ export function elementsMarkup(els: DesignEl[], extraNames: Set<string>, view: s
     const extra = extraNames.has(e.name) ? ' extra="true"' : '';
     lines.push(`  <${e.type} name="${e.name}"${extra}>`);
     for (const [k, v] of Object.entries(e.props)) for (const one of Array.isArray(v) ? v : [v]) lines.push(`    <${k}>${esc(one)}</${k}>`);
+    for (const b of e.blocks ?? []) for (const l of b.split('\n')) lines.push(`    ${l}`);
     const preset = e.anim ? ANIMATIONS.find((a: AnimPreset) => a.id === e.anim) : undefined;
     if (preset) {
       const pos = String(e.props.pos ?? '0 0').split(' ').map(Number) as [number, number];
-      for (const l of storyboardXml(preset, pos).split('\n')) lines.push(`    ${l}`);
+      for (const l of storyboardXml(preset, pos, 1, 1, screenOf(view)).split('\n')) lines.push(`    ${l}`);
     }
     lines.push(`  </${e.type}>`);
   }
