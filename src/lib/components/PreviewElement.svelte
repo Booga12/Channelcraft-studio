@@ -8,6 +8,7 @@
   import type { Resolution } from '$lib/theme/resolver';
   import type { Environment } from '$lib/theme/context';
   import { animationCss } from '$lib/theme/animations';
+  import { shaderOf, shadowCss, SHADOW_TYPES } from '$lib/theme/shadow';
 
   function relativeDate(iso: string): string {
     const d = new Date(`${iso.slice(0, 4)}-${iso.slice(4, 6)}-${iso.slice(6, 8)}T00:00:00`);
@@ -219,6 +220,8 @@
     const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${z ?? Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
     const anim = animate ? animationCss(el, W, H, base) : null;
     if (anim) s.push(`animation:${anim}`);
+    const shader = SHADOW_TYPES.has(el.type) ? shaderOf(el) : null;
+    if (shader?.shadow) s.push(`filter:${shadowCss(shader.offset, H)}`);
     if (outer.w !== null) s.push(`width:${outer.w}px`);
     if (outer.h !== null) s.push(`height:${outer.h}px`);
     const op = num('opacity', 1);

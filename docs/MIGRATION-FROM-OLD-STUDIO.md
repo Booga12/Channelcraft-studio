@@ -160,11 +160,38 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
 - Your library: 134 games on 14 consoles in about 0.5 s. 32 findings (16 no video, 9 no cover, 7 no description), no broken paths.
 - A file being there doesn't prove its video plays in RetroBat; the window says so.
 
+## Stage 5 — done (2026-10-20)
+
+- **Per-console colours, pictures and settings.** The Properties, Colours and Presets tabs have an "All consoles / Only ‹console›" switch.
+  - With "Only", an edit is written as a second definition right after the shared one, with `if="${system.theme} == 'snes'"`. Variables and single properties both work.
+  - RetroBat honours `if` on single variables (`ThemeData::parseVariable`) and on single properties (`parseElement`), and the later definition wins.
+  - Palettes, colour edits, positions and pictures all follow the switch. A per-console background is: select the background, choose "Only", pick a picture.
+  - "‹console› has N own values" lists them, with Reset for each or all. Rows show a "This console only" badge.
+  - A shared edit that the shown console overrides changes the shared value and says why the preview didn't move.
+  - Caveat: a colour that lives in a colour-set file (for example "Color set: Dark") gets its console value in that same file, so it applies only with that colour set.
+- **Resolver fix.** Each file's `<variables>` are now read before the rest of that file, as RetroBat's `appendFile` does.
+- **Motion amount and speed.** Each animation has "How much it moves" (25–300 %) and "Time for one move" (0.2–20 s).
+  - These change the storyboard's from, to and duration in place, so extras such as `begin` and lower-case `autoreverse` stay.
+  - Hand-written bobs of the same shape are recognised (for example Booga's v4).
+  - "Use this for all N … here" matches every element on the screen that has the same animation.
+  - `duration` can't use variables in RetroBat (`ThemeStoryboard.cpp` reads it as a number), so the speed is written on each animation.
+  - Videos only get entrance animations, never loops.
+  - The preview now accepts RetroBat's spellings: `autoreverse` or `autoReverse`, `mode` or `easingMode` in any case, and its cubic, quint and bump easings.
+- **Shape shadows.** Pictures have "Soft shadow under the shape" with a distance from 1 to 24 px, written as `<shader><path>:/shaders/shadow.glsl</path><shadowOffset>N</shadowOffset></shader>`.
+  - Read from RetroBat's own `shadow.glsl`: it is always black at half strength and moves down-right, with a default of 6 px. Its `blur` value is never used, so it isn't offered.
+  - A picture that already has another shader is left alone.
+  - The preview uses a CSS drop-shadow, which is close but not exact.
+- Checked in the browser preview (read-only, in memory):
+  - Neon palette applied to SNES only: SNES accent FF2BD6, N64 kept 4C8DFF.
+  - Float at 200 % with 3 s per move.
+  - 4 px shadow drawn.
+  - No console errors.
+
 ## Verification status (honest)
 
 - Done:
   - Read the old source, its docs and git state; compared it with this app's code; confirmed the zip matches the folder; checked the RetroBat version.
-  - Stages 1 and 2, with automated tests and browser-preview checks (read-only).
+  - Stages 1–5, with automated tests (87 passing) and browser-preview checks (read-only).
 - Not done:
-  - Nothing from these stages has been tried in RetroBat itself.
+  - Nothing from these stages has been tried in RetroBat itself: per-console values, retuned storyboards and the shadow shader are written to match RetroBat's source, not seen on screen.
   - The native app window hasn't been tested by hand for the new safety features.

@@ -2,6 +2,8 @@
   import { ed } from '$lib/editor.svelte';
   import { COLOR_RE } from '$lib/theme/schema';
   import ColorInput from './ColorInput.svelte';
+  import ConsoleScope from './ConsoleScope.svelte';
+  import { consoleOf } from '$lib/theme/consoles';
   import { humanize } from '$lib/friendly';
 
   let filter = $state('');
@@ -40,6 +42,7 @@
   {:else}
     <p class="dim intro">Values defined in <span class="mono">&lt;variables&gt;</span> and used as <span class="mono">${'{name}'}</span>. Editing one changes every element that uses it.</p>
   {/if}
+  <div class="scope"><ConsoleScope /></div>
   <div class="head">
     <input placeholder={ed.simple ? 'Find a colour…' : 'Filter variables…'} bind:value={filter} />
     {#if !ed.simple}<label class="chk"><input type="checkbox" bind:checked={onlyColors} /> Colours</label>{/if}
@@ -47,9 +50,12 @@
   {#each vars as v (v.name)}
     <div class="var">
       <div class="top">
+        {#if consoleOf(v.node) === ed.consoleTheme}
+          <span class="badge accent" title="Only {ed.consoleName} uses this value">This console only</span>
+        {/if}
         {#if ed.simple}
           <span class="name" title={v.name}>{humanize(v.name)}</span>
-          {#if v.conditional}<span class="badge" title="This colour depends on the console being shown">per console</span>{/if}
+          {#if v.conditional && consoleOf(v.node) !== ed.consoleTheme}<span class="badge" title="This colour depends on the console being shown">per console</span>{/if}
         {:else}
           <span class="name mono" title={v.name}>{v.name}</span>
           {#if v.conditional}<span class="badge" title="This value only applies under a condition (for example the current system)">if</span>{/if}
@@ -79,6 +85,9 @@
   .intro {
     font-size: 12px;
     margin: 0 0 8px;
+  }
+  .scope {
+    margin: 0 -10px 8px;
   }
   .head {
     display: flex;

@@ -113,6 +113,50 @@ describe('editor operations (starter theme, in memory)', () => {
     expect(ANIMATIONS.length).toBeGreaterThan(5);
   });
 
+  it('changes how much and how fast an animation moves, in place, and keeps videos still', async () => {
+    const { tuningOf } = await import('./theme/animations');
+    const el = () => ed.currentView!.elements.get('md_image')!;
+    const sbText = () => {
+      const sb = el().complex.find((c) => c.name === 'storyboard')!;
+      return ed.project!.entry!.src.slice(sb.node.start, sb.node.end);
+    };
+    ed.setAnimation('md_image', 'float');
+    expect(tuningOf(el())).toMatchObject({ amount: 1, speed: 1, duration: 3000 });
+    // Twice the travel, half the speed: from/to/duration change, nothing else.
+    ed.tuneAnimation('md_image', 2, 0.5, { coalesce: 'tune' });
+    ed.tuneAnimation('md_image', 2, 0.5, { coalesce: 'tune' });
+    expect(sbText()).toContain('from="0.38" to="0.364" duration="6000"');
+    expect(tuningOf(el())).toMatchObject({ preset: { id: 'float' }, amount: 2, duration: 6000 });
+    // A theme's own bob written by hand (lower-case autoreverse, a begin delay) is recognised and keeps its extras.
+    ed.setAnimation('md_image', null);
+    const target = el().defs[el().defs.length - 1];
+    const { patchInsertChild } = await import('./xml/cst');
+    ed.commit('hand-written', [{ file: target.file, patch: patchInsertChild(target.file.doc, target.node, '<storyboard>\n  <animation property="y" from="0.38" to="0.372" begin="350" duration="2400" mode="easeInOut" autoreverse="true" repeat="forever"/>\n</storyboard>') }]);
+    expect(tuningOf(el())).toMatchObject({ preset: { id: 'float' }, amount: 1, duration: 2400 });
+    ed.tuneAnimation('md_image', 0.5, 1);
+    expect(sbText()).toContain('to="0.376" begin="350" duration="3000"');
+    expect(sbText()).toContain('autoreverse="true"');
+    // Videos get entrances but never loops.
+    ed.view = 'video';
+    ed.setAnimation('md_video', 'float');
+    expect(ed.currentView!.elements.get('md_video')!.complex.some((c) => c.name === 'storyboard')).toBe(false);
+  });
+
+  it('adds, changes and removes RetroBat’s drop shadow on a picture', async () => {
+    const { shaderOf } = await import('./theme/shadow');
+    const before = ed.project!.entry!.src;
+    ed.setShadow('md_image', 4);
+    let sh = shaderOf(ed.currentView!.elements.get('md_image')!)!;
+    expect(sh).toMatchObject({ shadow: true, offset: 4 });
+    expect(ed.project!.entry!.src).toMatch(/<shader>\s*<path>:\/shaders\/shadow\.glsl<\/path>\s*<shadowOffset>4<\/shadowOffset>\s*<\/shader>/);
+    ed.setShadow('md_image', 9);
+    sh = shaderOf(ed.currentView!.elements.get('md_image')!)!;
+    expect(sh.offset).toBe(9);
+    ed.setShadow('md_image', null);
+    expect(shaderOf(ed.currentView!.elements.get('md_image')!)).toBeNull();
+    expect(ed.project!.entry!.src).toBe(before);
+  });
+
   it('aligns and spaces elements using their measured boxes', () => {
     ed.rects = {
       md_image: { x: 0.1, y: 0.2, w: 0.2, h: 0.2 },
@@ -240,5 +284,45 @@ describe('editor operations (starter theme, in memory)', () => {
     ed.undo(true);
     ed.undo(true);
     expect(p.fileAt('theme.xml')!.src).toBe(original);
+  });
+
+  it('gives one console its own colour and position, the way RetroBat reads them', async () => {
+    const p = await open();
+    const colors = p.fileAt('_inc/colors/dark.xml')!;
+    const before = { theme: p.entry!.src, colors: colors.src };
+    const show = (theme: string) => {
+      ed.settings.system = { ...ed.settings.system, name: theme, theme, fullName: theme.toUpperCase() };
+      ed.rev++;
+    };
+    const accent = () => ed.res!.vars.get('accentColor')!.value;
+    try {
+      show('snes');
+      ed.consoleOnly = true;
+      ed.setVar('accentColor', 'E2382EFF');
+      expect(colors.src).toContain(`<accentColor>4C8DFFFF</accentColor>\n    <accentColor if="\${system.theme} == 'snes'">E2382EFF</accentColor>`.replace(/\n/g, colors.src.includes('\r\n') ? '\r\n' : '\n'));
+      ed.setProps('md_image', { pos: '0.5 0.5' });
+      expect(accent()).toBe('E2382EFF');
+      expect(pos('md_image')).toBe('0.5 0.5');
+      expect(ed.consoleValues.map((v) => v.name).sort()).toEqual(['accentColor', 'pos']);
+      show('nes');
+      expect(accent()).toBe('4C8DFFFF');
+      expect(pos('md_image')).toBe('0.26 0.38');
+      // Shared edits made while SNES is shown go to the shared value; SNES keeps its own.
+      show('snes');
+      ed.consoleOnly = false;
+      ed.setVar('accentColor', '00AA00FF');
+      expect(accent()).toBe('E2382EFF');
+      show('nes');
+      expect(accent()).toBe('00AA00FF');
+      show('snes');
+      ed.clearConsoleValues(ed.consoleValues);
+      expect(accent()).toBe('00AA00FF');
+      expect(pos('md_image')).toBe('0.26 0.38');
+      ed.jumpTo(0);
+      expect(colors.src).toBe(before.colors);
+      expect(p.entry!.src).toBe(before.theme);
+    } finally {
+      ed.consoleOnly = false;
+    }
   });
 });

@@ -7,18 +7,20 @@ import { parseGamelist, type GameInfo } from './theme/games';
 import { screenSize, type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
 import { ThemeProject, type ThemeFile } from './theme/project';
-import { resolveTheme, type ResolvedElement, type Resolution } from './theme/resolver';
+import { resolveTheme, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
-import { ANIMATIONS, storyboardXml } from './theme/animations';
+import { ANIMATIONS, retune, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
-import { attr, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr } from './xml/cst';
+import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
+import { shaderOf, shadowXml } from './theme/shadow';
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
 import { designChanges, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
 import { DESIGNS, designAssets, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
+import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
 import { COVER_EL, FEATURED_FILE, FEATURED_MEDIA, featuredXml, pickGame, readFeatured, VIDEO_EL, type Choice, type FeaturedState } from './theme/featured';
 
 /** RetroBat's loading screen files, read on their own (not through theme.xml). */
@@ -100,6 +102,8 @@ class Editor {
   /** On-screen boxes of drawn elements in screen fractions, measured by the preview. */
   rects = $state.raw<Record<string, { x: number; y: number; w: number; h: number }>>({});
   playAnimations = $state(false);
+  /** Edits of colours and properties go to the preview console's own values (RetroBat `if` on ${system.theme}). */
+  consoleOnly = $state(false);
   contactSheet = $state(false);
   showSettings = $state(false);
   showRestore = $state(false);
@@ -544,21 +548,81 @@ class Editor {
     const el = this.currentView?.elements.get(elementName);
     const res = this.res;
     if (!el || !res) return;
-    const def = el.props.get(prop);
-    const key = opts.coalesce ?? `${elementName}.${prop}`;
-    if (def) {
-      const v = varRef(def.raw);
-      const vdef = v ? res.vars.get(v) : undefined;
-      if (vdef && !opts.literal) {
-        this.commit(`change of ${humanize(v!)}`, [setTextChange(vdef.file, vdef.node, value)], `var.${v}`);
-      } else {
-        this.commit(`${propLabel(prop).toLowerCase()} of ${elementLabel(elementName)}`, [setTextChange(def.file, def.node, value)], key);
-      }
+    const history = el.history.get(prop);
+    // Outside "only this console", the shared definition is the one to follow (or link through).
+    const basis = this.consoleOnly ? el.props.get(prop) : (sharedIn(history) ?? el.props.get(prop));
+    const scope = this.consoleOnly ? `@${this.consoleTheme}` : '';
+    const forConsole = this.consoleOnly ? ` for ${this.consoleName}` : '';
+    const v = basis ? varRef(basis.raw) : null;
+    if (v && res.vars.has(v) && !opts.literal) {
+      const change = this.varChange(v, value);
+      if (!change) return;
+      this.commit(`change of ${humanize(v)}${forConsole}`, [change], `var.${v}${scope}`);
+      this.warnShadowed(res.varHistory.get(v));
       return;
     }
+    const change = this.propChange(el, prop, value);
+    if (!change) return;
+    this.commit(`${propLabel(prop).toLowerCase()} of ${elementLabel(elementName)}${forConsole}`, [change], (opts.coalesce ?? `${elementName}.${prop}`) + scope);
+    this.warnShadowed(history);
+  }
+
+  get consoleTheme(): string {
+    return this.settings.system.theme || this.settings.system.name;
+  }
+
+  get consoleName(): string {
+    return this.settings.system.fullName || this.consoleTheme;
+  }
+
+  /** The change that sets a variable: the shared value, or the preview console's own one. */
+  private varChange(name: string, value: string): Change | null {
+    const res = this.res;
+    if (!res) return null;
+    const history = res.varHistory.get(name);
+    if (this.consoleOnly) {
+      const own = overrideIn(history, this.consoleTheme);
+      return own ? setTextChange(own.file, own.node, value) : addConsoleVar(res, name, this.consoleTheme, value);
+    }
+    const shared = sharedIn(history) ?? res.vars.get(name);
+    return shared ? setTextChange(shared.file, shared.node, value) : null;
+  }
+
+  /** The change that sets a property literally: the shared value, or the preview console's own one. */
+  private propChange(el: ResolvedElement, prop: string, value: string): Change | null {
+    const history = el.history.get(prop);
+    if (this.consoleOnly) {
+      const own = overrideIn(history, this.consoleTheme);
+      return own ? setTextChange(own.file, own.node, value) : addConsoleProp(el, this.view, prop, this.consoleTheme, value);
+    }
+    const shared = sharedIn(history);
+    if (shared) return setTextChange(shared.file, shared.node, value);
     const target = insertTarget(el, this.view);
-    if (!target) return;
-    this.commit(`${propLabel(prop).toLowerCase()} of ${elementLabel(elementName)}`, [addPropChange(target, prop, value)]);
+    if (!target) return null;
+    // Only a console's own value exists: the shared one goes first, so the console's still wins.
+    if (history?.length) return { file: target.file, patch: patchInsertChild(target.file.doc, target.node, `<${prop}>${value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</${prop}>`, { first: true }) };
+    return addPropChange(target, prop, value);
+  }
+
+  /** Tells the user when a shared edit doesn't show because the preview console has its own value. */
+  private warnShadowed(history: Source[] | undefined) {
+    if (!this.consoleOnly && overrideIn(history, this.consoleTheme)) {
+      this.notify(`${this.consoleName} has its own value here, so it still looks the same on ${this.consoleName}. Every other console changed.`);
+    }
+  }
+
+  /** Everything the preview console has its own value for (colours, and properties on this screen). */
+  get consoleValues(): ConsoleValue[] {
+    return this.res ? consoleValues(this.res, this.view, this.consoleTheme) : [];
+  }
+
+  /** Removes console-only values, so the console goes back to the shared ones. */
+  clearConsoleValues(values: ConsoleValue[]) {
+    if (!values.length) return;
+    this.commit(
+      values.length === 1 ? `${this.consoleName}'s own ${values[0].kind === 'var' ? humanize(values[0].name) : propLabel(values[0].name).toLowerCase()}` : `${this.consoleName}'s own values`,
+      values.map((v) => ({ file: v.def.file, patch: patchRemoveNode(v.def.file.doc, v.def.node) })),
+    );
   }
 
   /** Changes built for setting `props` on an element (literal values, never through variables). */
@@ -566,11 +630,9 @@ class Editor {
     const el = this.currentView?.elements.get(elementName);
     if (!el) return [];
     const changes: Change[] = [];
-    const target = insertTarget(el, this.view);
     for (const [prop, value] of Object.entries(props)) {
-      const def = el.props.get(prop);
-      if (def) changes.push(setTextChange(def.file, def.node, value));
-      else if (target) changes.push(addPropChange(target, prop, value));
+      const c = this.propChange(el, prop, value);
+      if (c) changes.push(c);
     }
     return changes;
   }
@@ -787,6 +849,10 @@ class Editor {
       if (existing.length) this.commit('removing animation', removeAll(existing));
       return;
     }
+    if (preset.kind === 'loop' && STILL_TYPES.has(el.type)) {
+      this.notify('Videos stay still: looping motion makes them stutter. Animate the frame around the video instead.', 'error');
+      return;
+    }
     const pos = parsePair(el.props.get('pos')?.value) ?? [0, 0];
     const xml = storyboardXml(preset, pos);
     // Replace the first storyboard in place (others go); otherwise add one.
@@ -794,6 +860,57 @@ class Editor {
       ? [{ file: existing[0].file, patch: patchReplaceSpan(existing[0].file.doc, existing[0].node, existing[0].node, xml) }, ...removeAll(existing.slice(1))]
       : [{ file: target.file, patch: patchInsertChild(target.file.doc, target.node, xml) }];
     this.commit(`animation “${preset.label}”`, changes);
+    this.playAnimations = true;
+  }
+
+  /** Adds, changes or removes (null) RetroBat's drop shadow on a picture. */
+  setShadow(name: string, offset: number | null, coalesce?: string) {
+    const el = this.currentView?.elements.get(name);
+    if (!el) return;
+    const sh = shaderOf(el);
+    if (sh && !sh.shadow) {
+      this.notify('This picture already uses another RetroBat shader, so a shadow can’t be added. Remove that shader in Advanced mode first.', 'error');
+      return;
+    }
+    if (offset === null) {
+      if (sh) this.commit(`removing the shadow of ${elementLabel(name)}`, [{ file: sh.def.file, patch: patchRemoveNode(sh.def.file.doc, sh.def.node) }]);
+      return;
+    }
+    const xml = shadowXml(offset);
+    if (sh) {
+      const off = elements(sh.def.node).find((n) => n.name === 'shadowOffset');
+      const change: Change = off ? setTextChange(sh.def.file, off, String(Math.round(offset))) : { file: sh.def.file, patch: patchReplaceSpan(sh.def.file.doc, sh.def.node, sh.def.node, xml) };
+      this.commit(`shadow of ${elementLabel(name)}`, [change], coalesce);
+      return;
+    }
+    const target = insertTarget(el, this.view);
+    if (!target) return;
+    this.commit(`shadow on ${elementLabel(name)}`, [{ file: target.file, patch: patchInsertChild(target.file.doc, target.node, xml) }]);
+  }
+
+  /**
+   * Makes an element's animation bigger or smaller and faster or slower, editing its storyboard's
+   * from/to/duration in place (other attributes such as `begin` stay). With `all`, every element
+   * on this screen with the same kind of animation gets the same size and speed.
+   */
+  tuneAnimation(name: string, amount: number, speed: number, opts: { all?: boolean; coalesce?: string } = {}) {
+    const view = this.currentView;
+    const el = view?.elements.get(name);
+    const mine = el ? tuningOf(el) : null;
+    if (!view || !mine) return;
+    const targets = opts.all ? [...view.elements.values()].filter((e) => tuningOf(e)?.preset.id === mine.preset.id) : [el!];
+    const changes: Change[] = [];
+    const seen = new Set<XElement>();
+    for (const e of targets) {
+      const t = tuningOf(e)!;
+      if (seen.has(t.storyboard)) continue;
+      seen.add(t.storyboard);
+      const def = e.complex.find((c) => c.node === t.storyboard)!;
+      const pos = parsePair(e.props.get('pos')?.value) ?? [0, 0];
+      for (const a of retune(t, pos, amount, speed)) changes.push({ file: def.file, patch: patchSetAttr(def.file.doc, a.node, a.name, a.value) });
+    }
+    if (!changes.length) return;
+    this.commit(opts.all ? `motion of every “${mine.preset.label}”` : `motion of ${elementLabel(name)}`, changes, opts.coalesce);
     this.playAnimations = true;
   }
 
@@ -810,9 +927,10 @@ class Editor {
   }
 
   setVar(name: string, value: string) {
-    const vdef = this.res?.vars.get(name);
-    if (!vdef) return;
-    this.commit(`change of ${humanize(name)}`, [setTextChange(vdef.file, vdef.node, value)], `var.${name}`);
+    const change = this.varChange(name, value);
+    if (!change) return;
+    this.commit(`change of ${humanize(name)}${this.consoleOnly ? ` for ${this.consoleName}` : ''}`, [change], `var.${name}${this.consoleOnly ? `@${this.consoleTheme}` : ''}`);
+    this.warnShadowed(this.res?.varHistory.get(name));
   }
 
   removeProp(elementName: string, prop: string) {
@@ -1157,10 +1275,10 @@ class Editor {
     const res = this.res;
     if (!res) return 0;
     const changes = Object.entries(palette.colors)
-      .map(([name, value]) => ({ def: res.vars.get(name), value }))
-      .filter((x) => x.def)
-      .map((x) => setTextChange(x.def!.file, x.def!.node, x.value));
-    if (changes.length) this.commit(`palette “${palette.label}”`, changes);
+      .filter(([name]) => res.vars.has(name))
+      .map(([name, value]) => this.varChange(name, value))
+      .filter((c): c is Change => !!c);
+    if (changes.length) this.commit(`palette “${palette.label}”${this.consoleOnly ? ` for ${this.consoleName}` : ''}`, changes);
     return changes.length;
   }
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Layout presets for the current screen and colour palettes for the whole theme.
   import { ed } from '$lib/editor.svelte';
+  import ConsoleScope from './ConsoleScope.svelte';
   import { viewLabel } from '$lib/friendly';
   import { appliedDesign, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
   import Icon from './Icon.svelte';
@@ -90,7 +91,7 @@
   function palette(id: string) {
     const p = PALETTES.find((x) => x.id === id)!;
     const n = ed.applyPalette(p);
-    ed.notify(n ? `Palette “${p.label}” applied. Press Ctrl+Z to undo.` : 'This theme names its colours differently; change them in the Colours tab.');
+    ed.notify(n ? `Palette “${p.label}” applied${ed.consoleOnly ? ` to ${ed.consoleName} only` : ''}. Press Ctrl+Z to undo.` : 'This theme names its colours differently; change them in the Colours tab.');
   }
 
   const covered = $derived.by(() => {
@@ -180,6 +181,7 @@
     {#if covered === 0}
       <p class="faint note">This theme names its colours its own way, so palettes can't map onto it. Change its colours in the Colours tab instead. Themes made with “New theme” work with palettes.</p>
     {:else}
+      <div class="scope"><ConsoleScope /></div>
       <div class="pals">
         {#each PALETTES as p (p.id)}
           <button class="pal" onclick={() => palette(p.id)} title="Apply the {p.label} palette">
@@ -197,6 +199,9 @@
 </div>
 
 <style>
+  .scope {
+    margin: 0 -12px 8px;
+  }
   .presets {
     padding: 8px 10px 16px;
   }

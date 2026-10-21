@@ -6,7 +6,10 @@
   import { TYPE_ICON } from '$lib/render';
   import { lineOf } from '$lib/xml/cst';
   import PropRow from './PropRow.svelte';
-  import { ANIMATIONS, presetOf } from '$lib/theme/animations';
+  import ConsoleScope from './ConsoleScope.svelte';
+  import { ANIMATIONS, presetOf, STILL_TYPES, tuningOf } from '$lib/theme/animations';
+  import { parsePair } from '$lib/theme/schema';
+  import { SHADOW_DEFAULT, SHADOW_TYPES, shaderOf } from '$lib/theme/shadow';
   import { elementLabel, propLabel, SIMPLE_PROPS, TYPE_LABELS, typeLabel, viewHelp, viewLabel } from '$lib/friendly';
 
   const GROUPS: { id: PropSpec['group']; label: string }[] = [
@@ -34,6 +37,17 @@
   let adding = $state('');
   let showAll = $state(false);
   const animId = $derived(el ? presetOf(el) : null);
+  const tuning = $derived(el ? tuningOf(el) : null);
+  const still = $derived(!!el && STILL_TYPES.has(el.type));
+  /** The preset's own duration at normal speed, for the speed slider. */
+  const baseMs = $derived(tuning && el ? Number(tuning.preset.build(parsePair(el.props.get('pos')?.value) ?? [0, 0]).animations[0].duration) : 0);
+  const sameKind = $derived(tuning && ed.currentView ? [...ed.currentView.elements.values()].filter((e) => e !== el && tuningOf(e)?.preset.id === tuning.preset.id).length : 0);
+  const shader = $derived(el && SHADOW_TYPES.has(el.type) ? shaderOf(el) : null);
+
+  function tune(amount: number, ms: number) {
+    if (!el || !tuning) return;
+    ed.tuneAnimation(el.name, amount, baseMs / Math.max(50, ms), { coalesce: `tune.${el.name}` });
+  }
   $effect(() => {
     el?.name;
     showAll = false;
@@ -139,6 +153,8 @@
     </div>
   </div>
 
+  <ConsoleScope />
+
   {#each GROUPS as g}
     {@const groupRows = visibleRows.filter((r) => r.spec.group === g.id)}
     {#if groupRows.length}
@@ -157,12 +173,54 @@
       <optgroup label="When the screen opens">
         {#each ANIMATIONS.filter((a) => a.kind === 'entrance') as a}<option value={a.id} title={a.help}>{a.label}</option>{/each}
       </optgroup>
-      <optgroup label="All the time">
-        {#each ANIMATIONS.filter((a) => a.kind === 'loop') as a}<option value={a.id} title={a.help}>{a.label}</option>{/each}
-      </optgroup>
+      {#if !still}
+        <optgroup label="All the time">
+          {#each ANIMATIONS.filter((a) => a.kind === 'loop') as a}<option value={a.id} title={a.help}>{a.label}</option>{/each}
+        </optgroup>
+      {/if}
     </select>
     <button class="secondary small" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title="Play animations in the preview">{ed.playAnimations ? '■ Stop' : '▶ Play'}</button>
   </div>
+  {#if still}<p class="faint note">Videos stay still, because looping motion makes them stutter. To move one, animate the frame around it.</p>{/if}
+  {#if tuning}
+    <div class="tune">
+      {#if tuning.preset.amount}
+        <label>
+          <span>{tuning.preset.kind === 'loop' ? 'How much it moves' : 'How far it comes from'}</span>
+          <input type="range" min="0.25" max="3" step="0.05" value={tuning.amount} oninput={(e) => tune(e.currentTarget.valueAsNumber, tuning.duration)} />
+          <b>{Math.round(tuning.amount * 100)}%</b>
+        </label>
+      {/if}
+      <label>
+        <span>{tuning.preset.id === 'spin' ? 'Time for one turn' : tuning.preset.kind === 'loop' ? 'Time for one move' : 'How long it takes'}</span>
+        <input type="range" min="200" max="20000" step="100" value={tuning.duration} oninput={(e) => tune(tuning.amount, e.currentTarget.valueAsNumber)} />
+        <b>{(tuning.duration / 1000).toFixed(1)} s</b>
+      </label>
+      {#if sameKind}
+        <button class="ghost small" onclick={() => el && ed.tuneAnimation(el.name, tuning.amount, tuning.speed, { all: true })}>Use this for all {sameKind + 1} “{tuning.preset.label}” animations here</button>
+      {/if}
+      <p class="faint note">Calm motion looks best: a small move over a few seconds.</p>
+    </div>
+  {/if}
+
+  {#if SHADOW_TYPES.has(el.type)}
+    <h4>Shadow</h4>
+    <div class="tune">
+      {#if shader && !shader.shadow}
+        <p class="faint note">This picture uses another RetroBat shader, so it can't have a shadow too.</p>
+      {:else}
+        <label class="chk"><input type="checkbox" checked={!!shader} onchange={(e) => ed.setShadow(el.name, e.currentTarget.checked ? 4 : null)} /> Soft shadow under the shape</label>
+        {#if shader}
+          <label>
+            <span>Distance</span>
+            <input type="range" min="1" max="24" step="1" value={shader.offset} oninput={(e) => ed.setShadow(el.name, e.currentTarget.valueAsNumber, `shadow.${el.name}`)} />
+            <b>{shader.offset} px</b>
+          </label>
+          <p class="faint note">RetroBat's shadow shader: always black at half strength, down and to the right. {shader.offset === SHADOW_DEFAULT ? '' : `RetroBat's own default is ${SHADOW_DEFAULT} px.`} The preview is close, not exact.</p>
+        {/if}
+      {/if}
+    </div>
+  {/if}
 
   {#if ed.simple && hiddenCount > 0}
     <button class="more ghost" onclick={() => (showAll = !showAll)}>
@@ -193,6 +251,29 @@
 {/if}
 
 <style>
+  .tune {
+    display: grid;
+    gap: 6px;
+    padding: 4px 12px 8px;
+  }
+  .tune label {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 46px;
+    gap: 2px;
+    font-size: 12px;
+  }
+  .tune label span {
+    grid-column: 1 / -1;
+  }
+  .tune b {
+    font-weight: 500;
+    font-size: 11px;
+    text-align: right;
+  }
+  .note {
+    font-size: 11px;
+    margin: 2px 12px 6px;
+  }
   .empty {
     padding: 18px 16px;
   }

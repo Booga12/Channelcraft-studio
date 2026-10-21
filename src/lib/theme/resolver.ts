@@ -409,7 +409,10 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
     stack.push(file);
     out.usedFiles.add(file);
     if (stack.length === 1) out.defaultView = attr(root, 'defaultView') ?? null;
-    for (const child of elements(root)) processThemeChild(child, file);
+    // Like RetroBat (ThemeData::appendFile), a file's <variables> are read before anything else in it.
+    const children = elements(root);
+    for (const child of children) if (child.name === 'variables') processThemeChild(child, file);
+    for (const child of children) if (child.name !== 'variables') processThemeChild(child, file);
     stack.pop();
   };
 

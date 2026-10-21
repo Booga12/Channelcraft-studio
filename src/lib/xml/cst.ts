@@ -412,6 +412,18 @@ export function formatBlock(xml: string, indent: string, unit: string, eol: stri
     .join(eol);
 }
 
+/** Inserts markup as the next sibling of `node`, on its own line with the same indent. */
+export function patchInsertAfter(doc: XDoc, node: XNode, xml: string): Patch {
+  const src = doc.src;
+  const eol = detectEol(src);
+  const unit = detectIndentUnit(src);
+  const ls = src.lastIndexOf('\n', node.start - 1) + 1;
+  const onOwnLine = /^[ \t]*$/.test(src.slice(ls, node.start));
+  if (!onOwnLine && !xml.includes('\n')) return { start: node.end, end: node.end, text: xml };
+  const indent = lineIndent(src, node.start);
+  return { start: node.end, end: node.end, text: `${eol}${indent}${formatBlock(xml, indent, unit, eol)}` };
+}
+
 /** Replaces the span from `from` to `to` (inclusive nodes) with re-indented markup. */
 export function patchReplaceSpan(doc: XDoc, from: XNode, to: XNode, xml: string): Patch {
   const indent = lineIndent(doc.src, from.start);
