@@ -82,7 +82,7 @@ In RetroBat itself (the most important part, since none of this has been seen na
 
 ## Upgrade from an earlier build (on your own PC only)
 
-- [ ] With the old build's data in `%APPDATA%\com.<old name>.channelcraft-studio`, install the new build and start it.
+- [x] With the old build's data in `%APPDATA%\com.<old name>.channelcraft-studio`, install the new build and start it.
   - `%APPDATA%\com.channelcraft.studio` appears with the same backups and settings, and the old folder is still there.
   - Your editor preferences (Settings) are kept.
   - Restore a backup lists the old backups.
@@ -91,4 +91,6 @@ In RetroBat itself (the most important part, since none of this has been seen na
 
 | Machine | Step | What happened | Screenshot |
 |---|---|---|---|
-| | | | |
+| Own PC (release build, not installed) | Upgrade data move | 12 backups hard-linked, settings and preferences kept, start-up about 4 s | — |
+| Own PC | Console screen | A `{game:video}` video showed nothing in RetroBat; fixed: the preview marks it and offers a random game's video | RetroBat Theme configuration screenshot |
+| Own PC | RetroBat menu options | All four options listed in RetroBat; switching changed the theme | user report |

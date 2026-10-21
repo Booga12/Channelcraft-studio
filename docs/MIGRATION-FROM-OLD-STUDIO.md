@@ -276,13 +276,16 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
   - Motion: On / Off, where Off is empty storyboards.
 
   The current layout and design move into their option files unchanged (paths rebased, fixed design colours linked). Parts you added stay in theme.xml for every style. Running it again keeps the styles you kept. Applying a design directly is blocked once options exist. Files: `_inc/ccs/options.xml`, `_inc/ccs/options/*.xml`.
-- Not yet seen in RetroBat: the menu options, the colour-set artwork switch, and Motion Off.
+- **Checked in RetroBat (2026-10-21, by the user):** Theme configuration showed all four options (System view style, Gamelist view style, Color set, Motion), and switching them changed the theme.
+  - Afterwards, the saved "My Theme" on disk had the new shared design colours but no menu options files, so they need adding again (and saving) to keep them.
+  - Not checked one by one: the artwork switch for each colour set, and Motion Off on every screen.
 
 ## Verification status (honest)
 
 - Done:
   - Read the old source, its docs and git state; compared it with this app's code; confirmed the zip matches the folder; checked the RetroBat version.
   - Stages 1–7, with automated tests (87 front end, 22 Rust) and browser-preview checks (read-only).
+- Done in RetroBat on this PC: the data move to the new app id, the console-screen video fix, and the menu options (user-checked).
 - Not done:
   - The clean-Windows plan hasn't been run (no VM here).
   - The data-folder copy to the new app id hasn't been seen on a real start yet.
