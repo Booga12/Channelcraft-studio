@@ -51,6 +51,13 @@ fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
         if ty.is_dir() {
             copy_tree(&e.path(), &to.join(&name))?;
         } else if ty.is_file() {
+            // Backup zips are never changed once written, so they are hard-linked: instant, no
+            // extra disk space (backups can be gigabytes), and the old folder keeps its own name for
+            // each. Files that get rewritten later (settings) are copied, so the two stay apart.
+            let in_backups = from.file_name().is_some_and(|n| n == "backups");
+            if in_backups && fs::hard_link(e.path(), to.join(&name)).is_ok() {
+                continue;
+            }
             // Browser data files can be held open by a running WebView; those are skipped.
             if let Err(err) = fs::copy(e.path(), to.join(&name))
                 && !from.components().any(|c| c.as_os_str() == "EBWebView")
@@ -143,6 +150,12 @@ mod tests {
         super::copy_tree(&old, &new).unwrap();
         assert!(new.join("settings.json").is_file() && new.join("backups/a.zip").is_file() && new.join("EBWebView/Default/prefs").is_file());
         assert!(!new.join("locks").exists() && !new.join("EBWebView/Default/Cache").exists());
+        // A backup is the same file under both names (hard link), and deleting one keeps the other.
+        std::fs::remove_file(new.join("backups/a.zip")).unwrap();
+        assert_eq!(std::fs::read_to_string(old.join("backups/a.zip")).unwrap(), "z");
+        // Settings are a real copy: changing the new one leaves the old one alone.
+        std::fs::write(new.join("settings.json"), "{\"x\":1}").unwrap();
+        assert_eq!(std::fs::read_to_string(old.join("settings.json")).unwrap(), "{}");
         std::fs::remove_dir_all(&base).unwrap();
     }
 }
