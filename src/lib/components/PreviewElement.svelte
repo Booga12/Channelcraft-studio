@@ -551,7 +551,7 @@
           {/if}
           {#if logo}
             <!-- A logo that can't be loaded shows the console's name, as RetroBat does without a logo. -->
-            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} onerror={(e) => (e.currentTarget.dataset.failed = '1')} />
+            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} onerror={(e) => ((e.currentTarget as HTMLImageElement).dataset.failed = '1')} />
             <span class="fallback">{sys?.fullName ?? ''}</span>
           {:else}
             <span>{systemGrid ? (sys?.fullName ?? '') : (env.gameNames ?? MOCK_GAMES)[i % (env.gameNames ?? MOCK_GAMES).length]}</span>
@@ -769,10 +769,10 @@
   .tile span {
     position: relative;
   }
-  .tile img[data-failed] {
+  .tile :global(img[data-failed]) {
     display: none;
   }
-  .tile img:not([data-failed]) + .fallback {
+  .tile :global(img:not([data-failed])) + .fallback {
     display: none;
   }
   .tile img {
