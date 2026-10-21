@@ -82,6 +82,26 @@ Reviewed 2026-10-21 from `F:\Browser download\Hyperbat ThemeCreator v2.2_full.ra
    - New theme becomes three steps: look, console style, colours.
    - Plain words everywhere; no raw shader or millisecond fields.
 
+## Done (2026-10-21)
+
+- **Batch 1, motion** (commit 2281438).
+  - What RetroBat does, from its source (batocera-emulationstation):
+    - On game lists, `activate` already replays on every game.
+    - On the console screen, only storyboards without an event replay (on every console), so ChannelCraft's console-screen entrances never played. That is now fixed, and old ones are flagged with a button to fix them.
+  - New presets: Slide with the list (`activateNext` / `activatePrev`), Drop and bounce, Pop and bounce, Swing in, Zoom down, Rise then float, Pop then pulse.
+  - New setting: how an element leaves when you move on (game lists only).
+  - The preview plays RetroBat's own timing and easings, and replays in the direction you moved.
+- **Batch 2, frames and tiles** (commit 18cd082).
+  - A Frame setting gives rounded corners, plus a border and drop shadow through RetroBat's built-in border shader.
+  - Designs frame screenshots and videos and round the covers.
+  - Console tiles get depth, and the selected tile a ring and glow in the accent colour.
+  - The preview draws all of these.
+- **Found while doing it:** two save bugs that damaged "My Theme", both fixed with tests.
+  - Updating menu options made overlapping edits, which cut theme.xml in the wrong place.
+  - An undo after a save let the next save write the menu option files empty.
+
+  These bugs, not the design, are why the 8-bit theme didn't show in RetroBat.
+
 ## Safety
 
 - Backup before this work: git tag `backup-before-hyperbat-review`, plus a full copy of the repository at `C:\Users\fatbo\Documents\projects\channelcraft-studio-backup-2026-10-21.bundle`.
