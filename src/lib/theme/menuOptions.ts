@@ -25,7 +25,7 @@
 // every style shows them.
 
 import { attr, elements, patchInsertChild, patchRemoveNode, patchReplaceSpan, type XElement } from '../xml/cst';
-import { ANIMATIONS } from './animations';
+import { ANIMATIONS, presetEvents, screenOf } from './animations';
 import { DESIGNS, designElements, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext, type Palette6 } from './designs';
 import type { Change } from './edits';
 import { PALETTES, designBlock, designVarsChange } from './presets';
@@ -251,14 +251,15 @@ function storyboardsOff(project: ThemeProject, res: Resolution, generated: Map<s
  */
 export function planMenuOptions(project: ThemeProject, res: Resolution, choices: MenuChoices, design: Design, systemLayoutNow: string, fonts: FontPaths): MenuPlan {
   const prev = readMenuState(project);
-  const exists = (rel: string) => !!project.fileAt(rel);
+  // An empty file (left by an older version after an undo) counts as missing, so it is made again.
+  const exists = (rel: string) => !!project.fileAt(rel)?.src.trim();
   const files: Record<string, string> = {};
   const generatedAnims = new Map<string, Set<string>>();
   const noteAnims = (view: string, els: { type: string; name: string; anim?: string }[]) => {
     const set = generatedAnims.get(view) ?? new Set<string>();
     for (const e of els) {
       const p = e.anim ? ANIMATIONS.find((a) => a.id === e.anim) : undefined;
-      if (p) set.add(`${e.type}|${e.name}|${p.kind === 'entrance' ? 'activate' : ''}`);
+      if (p) for (const ev of presetEvents(p, screenOf(view))) set.add(`${e.type}|${e.name}|${ev}`);
     }
     generatedAnims.set(view, set);
   };
@@ -289,7 +290,7 @@ export function planMenuOptions(project: ThemeProject, res: Resolution, choices:
           const els = designElements(design, contextFor(project, design, fonts), 'system', id);
           noteAnims('system', els);
           const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
-          return ['<view name="system">', ...elementsMarkup(els, extras), ...systemHides, '</view>'];
+          return ['<view name="system">', ...elementsMarkup(els, extras, 'system'), ...systemHides, '</view>'];
         })();
     files[rel] = themeFile(`ChannelCraft: console screen "${layout.label}" in the ${design.label} style. Picked in RetroBat under System view style.`, body);
   }
@@ -315,7 +316,7 @@ export function planMenuOptions(project: ThemeProject, res: Resolution, choices:
         const els = designElements(d, contextFor(project, d, fonts), view);
         noteAnims(view, els);
         const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
-        body.push(`<view name="${view}">`, ...elementsMarkup(els, extras), ...(gameHides.get(view) ?? []), '</view>');
+        body.push(`<view name="${view}">`, ...elementsMarkup(els, extras, view), ...(gameHides.get(view) ?? []), '</view>');
       }
     }
     files[rel] = themeFile(`ChannelCraft: game screens in the ${d.label} style. Picked in RetroBat under Gamelist view style.`, body);
@@ -367,10 +368,16 @@ export function planMenuOptions(project: ThemeProject, res: Resolution, choices:
       const out: Change[] = [designVarsChange(p, DESIGNS.find((d) => d.id === state.design) ?? design)];
       // Colour sets go into the theme's Color set option (first = default), before the screens.
       const colorset = elements(root).find((e) => e.name === 'subset' && attr(e, 'name') === 'colorset');
-      if (colorset) for (const inc of elements(colorset)) if ((attr(inc, 'name') ?? '').startsWith('ccs-')) out.push({ file: entry, patch: patchRemoveNode(entry.doc, inc) });
       const incs = sets.map((c) => `<include name="ccs-${c.key}" displayName="${esc(c.label)}">./${DIR}/colors-${c.key}.xml</include>`);
-      if (incs.length) {
-        if (colorset) for (const x of [...incs].reverse()) out.push({ file: entry, patch: patchInsertChild(entry.doc, colorset, x, { first: true }) });
+      const kids = colorset ? elements(colorset) : [];
+      if (colorset && kids.length) {
+        // One edit for the whole list (ours first, the theme's own after): separate removals and
+        // inserts at the same spot would overlap.
+        const keep = kids.filter((k) => !(attr(k, 'name') ?? '').startsWith('ccs-')).map((k) => entry.src.slice(k.start, k.end));
+        const lines = [...incs, ...keep];
+        if (lines.length) out.push({ file: entry, patch: patchReplaceSpan(entry.doc, kids[0], kids[kids.length - 1], lines.join('\n')) });
+      } else if (incs.length) {
+        if (colorset) out.push({ file: entry, patch: patchInsertChild(entry.doc, colorset, incs.join('\n')) });
         else out.push({ file: entry, patch: patchInsertChild(entry.doc, root, ['<subset name="colorset" displayName="Color set">', ...incs.map((x) => `  ${x}`), '</subset>'].join('\n'), { first: true }) });
       }
       if (prev) return out;

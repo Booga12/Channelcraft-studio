@@ -5,7 +5,7 @@
 // system name, maker, year and game count.
 
 import type { AnimPreset } from './animations';
-import { ANIMATIONS, storyboardXml } from './animations';
+import { ANIMATIONS, screenOf, storyboardXml } from './animations';
 import { systemLayout, type SystemLayout } from './systemLayouts';
 
 export interface Palette6 {
@@ -741,7 +741,7 @@ export function designElements(d: Design, c: DesignContext, view: string, system
 }
 
 /** Markup lines (two-space indented, inside a <view>) for elements, with their animations. */
-export function elementsMarkup(els: DesignEl[], extraNames: Set<string>): string[] {
+export function elementsMarkup(els: DesignEl[], extraNames: Set<string>, view: string): string[] {
   const lines: string[] = [];
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   for (const e of els) {

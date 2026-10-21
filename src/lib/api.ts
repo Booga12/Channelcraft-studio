@@ -74,7 +74,7 @@ export const api = {
   changedFiles: (dir: string) => invoke<string[]>('changed_files', { dir }),
   acceptChanges: (dir: string) => invoke<void>('accept_changes', { dir }),
   /** Saves all files as one transaction; fails with "CHANGED_OUTSIDE:[...]" unless forced. */
-  saveFiles: (dir: string, files: { rel: string; text: string; bom: boolean }[], force: boolean) => invoke<void>('save_files', { dir, files, force }),
+  saveFiles: (dir: string, files: { rel: string; text: string; bom: boolean; remove?: boolean }[], force: boolean) => invoke<void>('save_files', { dir, files, force }),
   /** Which of these files exist. */
   existingFiles: (paths: string[]) => invoke<boolean[]>('existing_files', { paths }),
   /** Copies a picture or video into the theme under its hash; returns the theme-relative path. */

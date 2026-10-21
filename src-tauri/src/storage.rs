@@ -155,6 +155,9 @@ struct JournalEntry {
     rel: String,
     slot: usize,
     existed: bool,
+    /// The file is deleted by this save (a file the editor made and then undid).
+    #[serde(default)]
+    remove: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -251,6 +254,9 @@ pub struct SaveFile {
     pub rel: String,
     pub text: String,
     pub bom: bool,
+    /// Delete the file instead of writing it.
+    #[serde(default)]
+    pub remove: bool,
 }
 
 /// Writes all `files` into `dir` as one transaction (see the top of this file).
@@ -263,12 +269,15 @@ fn save_transaction(journals: &Path, dir: &Path, files: &[SaveFile]) -> CmdResul
     let work = parent.join(format!("{WORK_PREFIX}save-{}", unique_id()));
     fs::create_dir_all(work.join("new")).map_err(err)?;
     fs::create_dir_all(work.join("old")).map_err(err)?;
-    let entries: Vec<JournalEntry> = files.iter().enumerate().map(|(i, f)| JournalEntry { rel: f.rel.clone(), slot: i, existed: dir.join(&f.rel).exists() }).collect();
+    let entries: Vec<JournalEntry> = files.iter().enumerate().map(|(i, f)| JournalEntry { rel: f.rel.clone(), slot: i, existed: dir.join(&f.rel).exists(), remove: f.remove }).collect();
     let jp = journal_path(journals, dir);
     let mut journal = Journal { version: 1, kind: "files".into(), dir: dir.to_string_lossy().into_owned(), work: work.to_string_lossy().into_owned(), previous: None, state: "prepared".into(), entries: entries.clone() };
 
     let staged = (|| {
         for (i, f) in files.iter().enumerate() {
+            if f.remove {
+                continue;
+            }
             let p = work.join("new").join(i.to_string());
             let mut file = fs::File::create(&p).map_err(err)?;
             file.write_all(&with_bom(&f.text, f.bom)).map_err(err)?;
@@ -291,7 +300,9 @@ fn save_transaction(journals: &Path, dir: &Path, files: &[SaveFile]) -> CmdResul
             if e.existed {
                 fs::rename(&target, work.join("old").join(e.slot.to_string())).map_err(|x| format!("{}: {x}", e.rel))?;
             }
-            fs::rename(work.join("new").join(e.slot.to_string()), &target).map_err(|x| format!("{}: {x}", e.rel))?;
+            if !e.remove {
+                fs::rename(work.join("new").join(e.slot.to_string()), &target).map_err(|x| format!("{}: {x}", e.rel))?;
+            }
         }
         Ok::<(), String>(())
     })();
@@ -695,8 +706,13 @@ pub fn save_files(app: AppHandle, roots: State<Roots>, projects: State<Projects>
     }
     save_transaction(&data_dir(&app, "transactions")?, &path, &files)?;
     for f in &files {
-        if let Some(s) = stamp(&path.join(&f.rel)) {
-            open.stamps.insert(rel_key(&f.rel), s);
+        match stamp(&path.join(&f.rel)) {
+            Some(s) => {
+                open.stamps.insert(rel_key(&f.rel), s);
+            }
+            None => {
+                open.stamps.remove(&rel_key(&f.rel));
+            }
         }
     }
     Ok(())
@@ -874,7 +890,7 @@ mod tests {
     }
 
     fn file(rel: &str, text: &str) -> SaveFile {
-        SaveFile { rel: rel.into(), text: text.into(), bom: false }
+        SaveFile { rel: rel.into(), text: text.into(), bom: false, remove: false }
     }
 
     #[test]
@@ -886,6 +902,18 @@ mod tests {
         assert_eq!(s.read("_inc/new/extra.xml"), "<theme/>");
         assert!(s.leftovers().is_empty(), "work folders were cleaned up: {:?}", s.leftovers());
         assert!(fs::read_dir(s.journals()).unwrap().next().is_none());
+    }
+
+    #[test]
+    fn a_save_can_delete_a_file_and_be_undone() {
+        let s = Scratch::new("remove");
+        let dir = s.theme();
+        let gone = SaveFile { rel: "_inc/colors.xml".into(), text: String::new(), bom: false, remove: true };
+        save_transaction(&s.journals(), &dir, &[file("theme.xml", "<theme>two</theme>"), gone.clone(), SaveFile { rel: "never.xml".into(), ..gone }]).unwrap();
+        assert_eq!(s.read("theme.xml"), "<theme>two</theme>");
+        assert!(!dir.join("_inc/colors.xml").exists());
+        assert!(!dir.join("never.xml").exists());
+        assert!(s.leftovers().is_empty());
     }
 
     #[test]
@@ -909,7 +937,7 @@ mod tests {
             work: work.to_string_lossy().into_owned(),
             previous: None,
             state: "prepared".into(),
-            entries: vec![JournalEntry { rel: "theme.xml".into(), slot: 0, existed: true }, JournalEntry { rel: "_inc/colors.xml".into(), slot: 1, existed: true }, JournalEntry { rel: "added.xml".into(), slot: 2, existed: false }],
+            entries: vec![JournalEntry { rel: "theme.xml".into(), slot: 0, existed: true, remove: false }, JournalEntry { rel: "_inc/colors.xml".into(), slot: 1, existed: true, remove: false }, JournalEntry { rel: "added.xml".into(), slot: 2, existed: false, remove: false }],
         };
         write_journal(&journal_path(&s.journals(), &dir), &j).unwrap();
         let msg = recover(&s.journals(), &dir).unwrap();
@@ -1099,7 +1127,7 @@ mod tests {
         println!("backup of {} files, {} MB: {:?}", original.len(), fs::metadata(&zip).unwrap().len() / 1_000_000, t.elapsed());
         let t = std::time::Instant::now();
         let text = fs::read_to_string(dir.join("theme.xml")).unwrap();
-        save_transaction(&s.journals(), &dir, &[SaveFile { rel: "theme.xml".into(), text: format!("{text}<!-- edited -->"), bom: false }]).unwrap();
+        save_transaction(&s.journals(), &dir, &[SaveFile { rel: "theme.xml".into(), text: format!("{text}<!-- edited -->"), bom: false, remove: false }]).unwrap();
         println!("save: {:?}", t.elapsed());
         fs::write(dir.join("added.xml"), "<theme/>").unwrap();
         let t = std::time::Instant::now();

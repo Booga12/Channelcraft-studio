@@ -7,7 +7,7 @@
   import { lineOf } from '$lib/xml/cst';
   import PropRow from './PropRow.svelte';
   import ConsoleScope from './ConsoleScope.svelte';
-  import { ANIMATIONS, presetOf, STILL_TYPES, tuningOf } from '$lib/theme/animations';
+  import { ANIMATIONS, EXITS, exitOf, misplayed, presetOf, screenOf, STILL_TYPES, tuningOf } from '$lib/theme/animations';
   import { parsePair } from '$lib/theme/schema';
   import { SHADOW_DEFAULT, SHADOW_TYPES, shaderOf } from '$lib/theme/shadow';
   import { elementLabel, propLabel, SIMPLE_PROPS, TYPE_LABELS, typeLabel, viewHelp, viewLabel } from '$lib/friendly';
@@ -36,12 +36,15 @@
 
   let adding = $state('');
   let showAll = $state(false);
-  const animId = $derived(el ? presetOf(el) : null);
-  const tuning = $derived(el ? tuningOf(el) : null);
+  const screen = $derived(screenOf(ed.view));
+  const animId = $derived(el ? presetOf(el, screen) : null);
+  const tuning = $derived(el ? tuningOf(el, screen) : null);
+  const exitId = $derived(el ? exitOf(el) : null);
+  const wontPlay = $derived(!!el && misplayed(el, screen) && !!tuning);
   const still = $derived(!!el && STILL_TYPES.has(el.type));
   /** The preset's own duration at normal speed, for the speed slider. */
-  const baseMs = $derived(tuning && el ? Number(tuning.preset.build(parsePair(el.props.get('pos')?.value) ?? [0, 0]).animations[0].duration) : 0);
-  const sameKind = $derived(tuning && ed.currentView ? [...ed.currentView.elements.values()].filter((e) => e !== el && tuningOf(e)?.preset.id === tuning.preset.id).length : 0);
+  const baseMs = $derived(tuning && el ? Number(tuning.preset.build(parsePair(el.props.get('pos')?.value) ?? [0, 0], 1, 1, screen)[0].animations[0].duration) : 0);
+  const sameKind = $derived(tuning && ed.currentView ? [...ed.currentView.elements.values()].filter((e) => e !== el && tuningOf(e, screen)?.preset.id === tuning.preset.id).length : 0);
   const shader = $derived(el && SHADOW_TYPES.has(el.type) ? shaderOf(el) : null);
 
   function tune(amount: number, ms: number) {
@@ -170,10 +173,13 @@
     <select value={animId ?? ''} onchange={(e) => ed.setAnimation(el.name, e.currentTarget.value || null)}>
       <option value="">None</option>
       {#if animId === 'custom'}<option value="custom" disabled>Custom (from the theme)</option>{/if}
-      <optgroup label="When the screen opens">
+      <optgroup label={screen === 'console' ? 'On every console you move to' : 'On every game you move to'}>
         {#each ANIMATIONS.filter((a) => a.kind === 'entrance') as a}<option value={a.id} title={a.help}>{a.label}</option>{/each}
       </optgroup>
       {#if !still}
+        <optgroup label="Comes in, then keeps moving">
+          {#each ANIMATIONS.filter((a) => a.kind === 'combo') as a}<option value={a.id} title={a.help}>{a.label}</option>{/each}
+        </optgroup>
         <optgroup label="All the time">
           {#each ANIMATIONS.filter((a) => a.kind === 'loop') as a}<option value={a.id} title={a.help}>{a.label}</option>{/each}
         </optgroup>
@@ -181,12 +187,29 @@
     </select>
     <button class="secondary small" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title="Play animations in the preview">{ed.playAnimations ? '■ Stop' : '▶ Play'}</button>
   </div>
+  {#if tuning}<p class="faint note">{tuning.preset.help}</p>{/if}
+  {#if wontPlay}
+    <p class="warn note">
+      RetroBat doesn't play this animation on the console screen: it was written for game lists.
+      <button class="small" onclick={() => el && ed.fixAnimation(el.name)}>Make it play here</button>
+    </p>
+  {/if}
+  {#if screen === 'list'}
+    <label class="exit">
+      <span>When you move on</span>
+      <select value={exitId ?? ''} onchange={(e) => ed.setExit(el.name, e.currentTarget.value || null)}>
+        <option value="">RetroBat's own quick fade</option>
+        {#if exitId === 'custom'}<option value="custom" disabled>Custom (from the theme)</option>{/if}
+        {#each EXITS as x}<option value={x.id} title={x.help}>{x.label}</option>{/each}
+      </select>
+    </label>
+  {/if}
   {#if still}<p class="faint note">Videos stay still, because looping motion makes them stutter. To move one, animate the frame around it.</p>{/if}
   {#if tuning}
     <div class="tune">
       {#if tuning.preset.amount}
         <label>
-          <span>{tuning.preset.kind === 'loop' ? 'How much it moves' : 'How far it comes from'}</span>
+          <span>{tuning.preset.kind === 'loop' ? 'How much it moves' : tuning.preset.id.includes('bounce') || tuning.preset.id === 'pop-pulse' ? 'How big the bounce is' : 'How far it comes from'}</span>
           <input type="range" min="0.25" max="3" step="0.05" value={tuning.amount} oninput={(e) => tune(e.currentTarget.valueAsNumber, tuning.duration)} />
           <b>{Math.round(tuning.amount * 100)}%</b>
         </label>
@@ -251,6 +274,17 @@
 {/if}
 
 <style>
+  .exit {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+  .warn.note {
+    color: var(--warn);
+  }
   .tune {
     display: grid;
     gap: 6px;

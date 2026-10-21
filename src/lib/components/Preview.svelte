@@ -490,6 +490,21 @@
     return out;
   };
   const gamesHere = $derived(ed.currentGames.length);
+
+  // Animations play again on every game (game lists) or console (console screen) shown, coming
+  // from the side the list moved, as in RetroBat.
+  let play = $state({ token: '', dir: 0 });
+  let lastPlace = { system: '', game: -1 };
+  $effect(() => {
+    const system = ed.settings.system.name;
+    const game = ed.gameIndex;
+    const n = Math.max(1, gamesHere);
+    let dir = 0;
+    if (system !== lastPlace.system) dir = 0;
+    else if (game !== lastPlace.game) dir = (game - lastPlace.game + n) % n <= n / 2 ? 1 : -1;
+    lastPlace = { system, game };
+    play = { token: `${system}|${game}`, dir };
+  });
 </script>
 
 <div class="canvas-area">
@@ -564,6 +579,7 @@
                   view={ed.view}
                   locked={!!ed.locked[el.name]}
                   animate={ed.playAnimations}
+                  {play}
                 />
               {/each}
               {#if menu}

@@ -5,12 +5,12 @@ import { svgToPngBase64 } from './raster';
 import { join, relative, dirname, pathKey } from './path';
 import { parseGamelist, type GameInfo } from './theme/games';
 import { screenSize, type Environment, type PreviewSettings } from './theme/context';
-import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
+import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
 import { ThemeProject, type ThemeFile } from './theme/project';
 import { resolveTheme, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
-import { ANIMATIONS, retune, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
+import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
 import { shaderOf, shadowXml } from './theme/shadow';
@@ -383,6 +383,7 @@ class Editor {
       this.rev++;
       this.lastSave = Date.now();
       await this.offerRecovery(project);
+      this.warnEmptyIncludes(project);
       this.loadGames();
       const views = this.viewNames;
       this.view = views.includes('system') ? 'system' : (this.res?.defaultView ?? views[0] ?? 'system');
@@ -393,6 +394,19 @@ class Editor {
     } finally {
       this.loading = false;
     }
+  }
+
+  /** RetroBat can't load a theme that includes an empty file; older versions could leave some. */
+  private warnEmptyIncludes(project: ThemeProject) {
+    const all = project.xmlFiles;
+    const text = all.map((f) => f.src).join('\n');
+    const empty = all.filter((f) => f !== project.entry && !f.src.trim() && text.includes(f.rel.split('/').pop()!));
+    if (!empty.length) return;
+    const menu = empty.some((f) => f.rel.startsWith('_inc/ccs/options'));
+    this.notify(
+      `This theme includes ${empty.length} empty file${empty.length === 1 ? '' : 's'} (${empty.map((f) => f.rel).join(', ')}), so RetroBat may not load it.${menu ? ' Open File → RetroBat menu options… and press the button there to make them again, then Save.' : ''}`,
+      'error',
+    );
   }
 
   /** Reads the theme from disk again, dropping unsaved edits (after asking the caller). */
@@ -504,7 +518,14 @@ class Editor {
     const byFile = new Map<string, number[]>();
     for (const c of changes) byFile.set(c.file.key, [...(byFile.get(c.file.key) ?? []), c.patch.start]);
     const pre = [...byFile].flatMap(([key, starts]) => starts.sort((a, b) => b - a).map((start) => ({ key, start })));
-    const applied = applyChanges(p, changes);
+    let applied: Applied[];
+    try {
+      applied = applyChanges(p, changes);
+    } catch (e) {
+      if (!(e instanceof OverlapError)) throw e;
+      this.notify(`Couldn't make the ${label}: ${e.message} Please report this.`, 'error');
+      return;
+    }
     const now = Date.now();
     const last = this.undoStack[this.undoStack.length - 1];
     // Edits to the same spots within a moment (typing, dragging) merge into one undo step.
@@ -845,24 +866,63 @@ class Editor {
     if (!el) return;
     const target = insertTarget(el, this.view);
     if (!target) return;
-    const existing = el.complex.filter((c) => c.name === 'storyboard' && c.node.parent === target.node);
+    // The exit storyboards are kept; the main motion is replaced.
+    const existing = el.complex.filter((c) => c.name === 'storyboard' && c.node.parent === target.node && !EXIT_EVENTS.has(attr(c.node, 'event') ?? ''));
     const preset = ANIMATIONS.find((a) => a.id === presetId);
     const removeAll = (list: typeof existing): Change[] => list.map((c) => ({ file: c.file, patch: patchRemoveNode(c.file.doc, c.node) }));
     if (!preset) {
       if (existing.length) this.commit('removing animation', removeAll(existing));
       return;
     }
-    if (preset.kind === 'loop' && STILL_TYPES.has(el.type)) {
+    if (preset.kind !== 'entrance' && STILL_TYPES.has(el.type)) {
       this.notify('Videos stay still: looping motion makes them stutter. Animate the frame around the video instead.', 'error');
       return;
     }
     const pos = parsePair(el.props.get('pos')?.value) ?? [0, 0];
-    const xml = storyboardXml(preset, pos);
-    // Replace the first storyboard in place (others go); otherwise add one.
-    const changes: Change[] = existing.length
+    const xml = storyboardXml(preset, pos, 1, 1, screenOf(this.view));
+    this.commit(`animation “${preset.label}”`, this.replaceBoards(existing, target, xml, removeAll));
+    this.playAnimations = true;
+  }
+
+  /** Replaces the first storyboard in place (the others go), or adds the markup. */
+  private replaceBoards(existing: ResolvedElement['complex'], target: { file: ThemeFile; node: XElement }, xml: string, removeAll: (l: ResolvedElement['complex']) => Change[]): Change[] {
+    return existing.length
       ? [{ file: existing[0].file, patch: patchReplaceSpan(existing[0].file.doc, existing[0].node, existing[0].node, xml) }, ...removeAll(existing.slice(1))]
       : [{ file: target.file, patch: patchInsertChild(target.file.doc, target.node, xml) }];
-    this.commit(`animation “${preset.label}”`, changes);
+  }
+
+  /** Adds, replaces or removes (null) how an element leaves a game in a game list. */
+  setExit(name: string, exitId: string | null) {
+    const el = this.currentView?.elements.get(name);
+    if (!el) return;
+    if (screenOf(this.view) === 'console') {
+      this.notify('RetroBat only plays leaving animations in game lists.', 'error');
+      return;
+    }
+    const target = insertTarget(el, this.view);
+    if (!target) return;
+    const existing = el.complex.filter((c) => c.name === 'storyboard' && c.node.parent === target.node && EXIT_EVENTS.has(attr(c.node, 'event') ?? ''));
+    const removeAll = (list: typeof existing): Change[] => list.map((c) => ({ file: c.file, patch: patchRemoveNode(c.file.doc, c.node) }));
+    const exit = EXITS.find((x) => x.id === exitId);
+    if (!exit) {
+      if (existing.length) this.commit('removing the leaving animation', removeAll(existing));
+      return;
+    }
+    const pos = parsePair(el.props.get('pos')?.value) ?? [0, 0];
+    this.commit(`leaving animation “${exit.label}”`, this.replaceBoards(existing, target, boardsXml(exit.build(pos, 1)), removeAll));
+  }
+
+  /** Rewrites an animation RetroBat never plays on this screen so that it does. */
+  fixAnimation(name: string) {
+    const el = this.currentView?.elements.get(name);
+    const t = el ? tuningOf(el, screenOf(this.view)) : null;
+    if (!el || !t) return;
+    const target = insertTarget(el, this.view);
+    if (!target) return;
+    const existing = el.complex.filter((c) => c.name === 'storyboard' && c.node.parent === target.node);
+    const removeAll = (list: typeof existing): Change[] => list.map((c) => ({ file: c.file, patch: patchRemoveNode(c.file.doc, c.node) }));
+    const pos = parsePair(el.props.get('pos')?.value) ?? [0, 0];
+    this.commit(`animation “${t.preset.label}” made to play here`, this.replaceBoards(existing, target, storyboardXml(t.preset, pos, t.amount, t.speed, screenOf(this.view)), removeAll));
     this.playAnimations = true;
   }
 
@@ -899,18 +959,21 @@ class Editor {
   tuneAnimation(name: string, amount: number, speed: number, opts: { all?: boolean; coalesce?: string } = {}) {
     const view = this.currentView;
     const el = view?.elements.get(name);
-    const mine = el ? tuningOf(el) : null;
+    const screen = screenOf(this.view);
+    const mine = el ? tuningOf(el, screen) : null;
     if (!view || !mine) return;
-    const targets = opts.all ? [...view.elements.values()].filter((e) => tuningOf(e)?.preset.id === mine.preset.id) : [el!];
+    const targets = opts.all ? [...view.elements.values()].filter((e) => tuningOf(e, screen)?.preset.id === mine.preset.id) : [el!];
     const changes: Change[] = [];
     const seen = new Set<XElement>();
     for (const e of targets) {
-      const t = tuningOf(e)!;
-      if (seen.has(t.storyboard)) continue;
-      seen.add(t.storyboard);
-      const def = e.complex.find((c) => c.node === t.storyboard)!;
+      const t = tuningOf(e, screen)!;
+      if (seen.has(t.storyboards[0])) continue;
+      seen.add(t.storyboards[0]);
       const pos = parsePair(e.props.get('pos')?.value) ?? [0, 0];
-      for (const a of retune(t, pos, amount, speed)) changes.push({ file: def.file, patch: patchSetAttr(def.file.doc, a.node, a.name, a.value) });
+      for (const a of retune(t, pos, amount, speed, screen)) {
+        const def = e.complex.find((c) => t.storyboards.includes(c.node) && elements(c.node).includes(a.node))!;
+        changes.push({ file: def.file, patch: patchSetAttr(def.file.doc, a.node, a.name, a.value) });
+      }
     }
     if (!changes.length) return;
     this.commit(opts.all ? `motion of every “${mine.preset.label}”` : `motion of ${elementLabel(name)}`, changes, opts.coalesce);
@@ -1506,7 +1569,10 @@ class Editor {
       // What is written is exactly what was there when Save was pressed; edits made while
       // saving stay unsaved.
       const sent = dirty.map((f) => ({ file: f, src: f.src }));
-      const files = sent.map(({ file, src }) => ({ rel: file.rel, text: src, bom: file.bom }));
+      // A file ChannelCraft made and then undid is empty now: it is deleted, never saved empty
+      // (RetroBat can't read a theme that includes an empty file).
+      const gone = (file: ThemeFile, src: string) => file !== p.entry && !src.trim();
+      const files = sent.map(({ file, src }) => ({ rel: file.rel, text: src, bom: file.bom, remove: gone(file, src) }));
       try {
         await api.saveFiles(p.dir, files, false);
       } catch (e) {

@@ -51,7 +51,8 @@ describe.skipIf(!existsSync(THEMES))('round-trip installed themes (read-only)', 
       const src = read(f);
       const doc = parse(src);
       if (print(doc) !== src) failures.push(f);
-      if (!doc.root) failures.push(`${f} (no root)`);
+      // Empty files (an older ChannelCraft could leave some) have no root to find.
+      if (!doc.root && src.trim()) failures.push(`${f} (no root)`);
     }
     expect(failures).toEqual([]);
   });

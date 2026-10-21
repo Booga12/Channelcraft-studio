@@ -7,7 +7,7 @@
   import { MOCK_GAME, MOCK_GAMES, type SystemInfo } from '$lib/theme/systems';
   import type { Resolution } from '$lib/theme/resolver';
   import type { Environment } from '$lib/theme/context';
-  import { animationCss } from '$lib/theme/animations';
+  import { animationCss, screenOf } from '$lib/theme/animations';
   import { shaderOf, shadowCss, SHADOW_TYPES } from '$lib/theme/shadow';
 
   function relativeDate(iso: string): string {
@@ -38,6 +38,7 @@
     view,
     locked = false,
     animate = false,
+    play,
     z,
   }: {
     el: ResolvedElement;
@@ -53,6 +54,8 @@
     locked?: boolean;
     /** Play the element's storyboard animation as a CSS approximation. */
     animate?: boolean;
+    /** Which game or console is shown and which way the list last moved, so motion replays. */
+    play?: { token: string; dir: number };
     /** Stacking position when the screen has a fixed drawing order (loading screens). */
     z?: number;
   } = $props();
@@ -221,7 +224,7 @@
   const wrapStyle = $derived.by(() => {
     const base = `translate(${-box.ox * 100}%, ${-box.oy * 100}%) rotate(${box.rotation}deg)`;
     const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${z ?? Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
-    const anim = animate ? animationCss(el, W, H, base) : null;
+    const anim = animate ? animationCss(el, W, H, base, { screen: screenOf(view), token: play?.token, dir: play?.dir }) : null;
     if (anim) s.push(`animation:${anim}`);
     const shader = SHADOW_TYPES.has(el.type) ? shaderOf(el) : null;
     if (shader?.shadow) s.push(`filter:${shadowCss(shader.offset, H)}`);

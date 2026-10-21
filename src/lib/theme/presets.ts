@@ -341,7 +341,7 @@ export function designChanges(project: ThemeProject, res: Resolution, design: De
     if (!els.length) continue;
     const names = new Set(els.map((e) => e.name));
     const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
-    const body = elementsMarkup(els, extras);
+    const body = elementsMarkup(els, extras, view);
     if (hideOwn) {
       for (const e of res.views.get(view)?.elements.values() ?? []) {
         if (e.extra && !names.has(e.name) && !isDesignExtra(e.name)) body.push(`  <${e.type} name="${e.name}" extra="${e.extra}">`, '    <visible>false</visible>', `  </${e.type}>`);

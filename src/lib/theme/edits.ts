@@ -20,6 +20,13 @@ export interface Applied {
  * Applies several patches atomically. Patches in one file must not overlap; they're applied from
  * the end of the file backwards so earlier offsets stay valid. Returns the inverse transaction.
  */
+/** A set of edits that would overlap inside one file (a bug in whoever made them). */
+export class OverlapError extends Error {
+  constructor(rel: string) {
+    super(`Edits to ${rel} overlapped, so nothing was changed.`);
+  }
+}
+
 export function applyChanges(project: ThemeProject, changes: Change[]): Applied[] {
   const byFile = new Map<ThemeFile, Patch[]>();
   for (const c of changes) {
@@ -30,6 +37,16 @@ export function applyChanges(project: ThemeProject, changes: Change[]): Applied[
   const applied: Applied[] = [];
   for (const [file, patches] of byFile) {
     patches.sort((a, b) => b.start - a.start);
+    // Edits computed on the same text must not overlap; applied together they would cut text in
+    // the wrong places (and so would their undo). Refuse instead of damaging the file.
+    for (let i = 1; i < patches.length; i++) {
+      const later = patches[i - 1];
+      const earlier = patches[i];
+      if (earlier.end > later.start || (earlier.start === later.start && earlier.end > earlier.start && later.end > later.start)) throw new OverlapError(file.rel);
+    }
+    if (patches.some((p) => p.start < 0 || p.end > file.src.length || p.end < p.start)) throw new OverlapError(file.rel);
+  }
+  for (const [file, patches] of byFile) {
     let src = file.src;
     const deltas = patches.map((p) => p.text.length - (p.end - p.start));
     patches.forEach((p, i) => {

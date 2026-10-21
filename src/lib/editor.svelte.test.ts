@@ -210,7 +210,7 @@ describe('editor operations (starter theme, in memory)', () => {
     const saves = calls.filter((c) => c.cmd === 'save_files');
     // Refused once because theme.xml changed elsewhere; the user agreed (mocked), so it was forced.
     expect(saves.map((c) => c.args.force)).toEqual([false, true]);
-    expect(saves[1].args.files).toEqual([{ rel: 'theme.xml', text: expected, bom: false }]);
+    expect(saves[1].args.files).toEqual([{ rel: 'theme.xml', text: expected, bom: false, remove: false }]);
     // The first save of the session makes a backup first.
     expect(calls.findIndex((c) => c.cmd === 'backup_theme')).toBeLessThan(calls.findIndex((c) => c.cmd === 'save_files'));
     expect(ed.dirtyCount).toBe(0);
