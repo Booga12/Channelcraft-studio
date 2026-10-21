@@ -70,6 +70,15 @@ The side buttons in the Add panel (picture, text, panel/box, clock, rating star,
 - Run `docs/CLEAN-WINDOWS-TEST.md` on the VMs (needs Hyper-V or VirtualBox on this PC, or another machine).
 - Decide on code signing (SmartScreen warns without it) and on WebView2 `embedBootstrapper` vs `offlineInstaller`.
 
+## 7. Make it easy to share with friends
+
+The user wants friends to be able to download and use the app. The installer and the "nothing personal inside" check already exist (stage 7).
+- A download page: a GitHub repository (public, or private and invite-only) with a Releases page holding the installer. Explain each step to the user first; making a repo public or posting a release is their decision and their click.
+- A short "Getting started" page for friends: download, install, what SmartScreen shows and how to get past it, point the app at RetroBat, make a copy of a theme before editing.
+- Updates: add Tauri's updater so friends get new versions inside the app, with signed update files (the signing key stays private, never in the repo).
+- Optional: code signing, so Windows stops warning "unknown publisher" (costs money; explain the options).
+- Done when: a friend on another PC can go from the link to editing a copy of a theme without help.
+
 ## Things for the user to decide
 
 - Whether to restore the themes deleted on 2026-10-20 at 23:30 (Booga's WiiTheme v4, Booga's wiiTheme, Booga's wiiTheme copy). They are in the Recycle Bin, and each has a "before delete" backup zip.
