@@ -260,6 +260,24 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
   - The installer isn't code-signed, so SmartScreen will warn.
   - A Content-Security-Policy isn't set yet (`csp: null`).
 
+## After stage 7: first test in the app and RetroBat (2026-10-20)
+
+- **Data move on first start.** Backup zips (4.2 GB here) are hard-linked into the new folder rather than copied, so the first start isn't slowed and uses no extra space. Settings are still copied. Checked on this PC: all 12 backups, settings and window preferences came across, and the app started in about 4 s.
+- **Console screen and game data.**
+  - RetroBat's console screen has no current game (`SystemView.cpp`), so `{game:…}` stays empty there.
+  - "My Theme" had a video playing `{game:video}` on it: RetroBat showed nothing, while the preview showed a sample video.
+  - The preview now leaves such media empty (a red "empty in RetroBat" frame), counts them in a note, and offers "Use a random game's video/picture" (`{random}`, `{random:image}`, …). Game artwork pasted onto the console screen converts automatically.
+- **Design colours are shared variables** (`designText`, `designAccent`, …) in a marked block at the top of theme.xml, so they show in the Colours tab and a colour set can redefine them. Before, with a design applied, RetroBat's Color set did nothing visible.
+- **Storyboards** now follow RetroBat: one per event, a later one replaces it, an empty one removes it.
+- **RetroBat menu options** (File → RetroBat menu options…, or the Options tab). Choices appear in RetroBat's Theme configuration:
+  - System view style: console-screen layouts.
+  - Gamelist view style: designs, and RetroBat allows a per-console choice.
+  - Color set: each design's colours plus the palettes, recolouring the artwork too, via `_inc/ccs/art/<design>-<set>/` and `${designArtSet}`.
+  - Motion: On / Off, where Off is empty storyboards.
+
+  The current layout and design move into their option files unchanged (paths rebased, fixed design colours linked). Parts you added stay in theme.xml for every style. Running it again keeps the styles you kept. Applying a design directly is blocked once options exist. Files: `_inc/ccs/options.xml`, `_inc/ccs/options/*.xml`.
+- Not yet seen in RetroBat: the menu options, the colour-set artwork switch, and Motion Off.
+
 ## Verification status (honest)
 
 - Done:
