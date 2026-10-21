@@ -346,7 +346,8 @@ pub fn copy_folder_into_theme(roots: State<Roots>, src: String, theme_dir: Strin
             continue;
         }
         let target = dest.join(e.file_name());
-        if !target.exists() {
+        // Only real pictures and the like; anything else in that folder stays behind.
+        if !target.exists() && crate::importing::check_file(&p, None).is_ok() {
             fs::copy(&p, &target).map_err(err)?;
             n += 1;
         }
@@ -490,6 +491,7 @@ pub fn add_font_to_theme(roots: State<Roots>, theme_dir: String, src: String) ->
     let file_name = src_p.file_name().ok_or("No file name")?.to_string_lossy().into_owned();
     let target = PathBuf::from(&theme_dir).join("_inc").join("fonts").join(&file_name);
     ensure_writable(&roots, &target)?;
+    crate::importing::check_file(&src_p, Some(crate::importing::Kind::Font))?;
     if !target.exists() {
         fs::create_dir_all(target.parent().unwrap()).map_err(err)?;
         fs::copy(&src_p, &target).map_err(err)?;
@@ -512,6 +514,7 @@ pub fn download_font(roots: State<Roots>, theme_dir: String, url: String, file_n
         // Fonts are small; refuse anything over 20 MB.
         let mut reader = std::io::Read::take(resp.into_reader(), 20 * 1024 * 1024);
         std::io::Read::read_to_end(&mut reader, &mut bytes).map_err(err)?;
+        crate::importing::check_content(&file_name, crate::importing::Kind::Font, &bytes[..bytes.len().min(8192)], bytes.len() as u64).map_err(|r| format!("The download isn't a usable font: {r}."))?;
         fs::create_dir_all(target.parent().unwrap()).map_err(err)?;
         fs::write(&target, bytes).map_err(err)?;
     }
@@ -530,22 +533,19 @@ pub(crate) fn new_theme_path(roots: &Roots, name: &str) -> CmdResult<PathBuf> {
 /// Copies a file the user picked into the theme and returns its theme-relative path.
 #[tauri::command(async)]
 pub fn import_asset(roots: State<Roots>, theme_dir: String, src: String, dest_rel_dir: String) -> CmdResult<String> {
+    use crate::importing::{check_file, copy_checked, Kind};
     let src_p = PathBuf::from(&src);
-    let file_name = src_p.file_name().ok_or("No file name")?.to_string_lossy().into_owned();
-    let dir = PathBuf::from(&theme_dir).join(&dest_rel_dir);
-    let mut target = dir.join(&file_name);
-    ensure_writable(&roots, &target)?;
-    let (stem, ext) = match file_name.rsplit_once('.') {
-        Some((s, e)) => (s.to_string(), format!(".{e}")),
-        None => (file_name.clone(), String::new()),
+    let want = match dest_rel_dir.as_str() {
+        "_inc/images" => Some(Kind::Image),
+        "_inc/fonts" => Some(Kind::Font),
+        "_inc/sounds" => Some(Kind::Sound),
+        "_inc/videos" => Some(Kind::Video),
+        _ => None,
     };
-    let mut n = 2;
-    while target.exists() {
-        target = dir.join(format!("{stem}-{n}{ext}"));
-        n += 1;
-    }
-    fs::create_dir_all(&dir).map_err(err)?;
-    fs::copy(&src_p, &target).map_err(err)?;
+    check_file(&src_p, want)?;
+    let dir = PathBuf::from(&theme_dir).join(&dest_rel_dir);
+    ensure_writable(&roots, &dir.join("x"))?;
+    let target = copy_checked(&src_p, &dir)?;
     let rel = target.strip_prefix(&theme_dir).map_err(err)?.to_string_lossy().replace('\\', "/");
     Ok(rel)
 }

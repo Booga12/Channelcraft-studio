@@ -187,11 +187,50 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
   - 4 px shadow drawn.
   - No console errors.
 
+## Stage 6 — done (2026-10-20)
+
+- **Import a theme** (start screen) takes a .zip or a folder. Nothing is written until you press Import.
+  - It looks inside first and shows how many files come in, which are left out and why.
+  - It finds the theme: the shallowest folder with a theme.xml, so GitHub zips such as `es-theme-x-master/` work. "-master" and "-main" are dropped from the suggested name.
+  - It refuses a source with two themes, no theme.xml, or a theme.xml without `<theme>`.
+  - It is added as a new folder in RetroBat's themes folder, never over an existing one. It is unpacked into a hidden `.channelcraft-import-*` folder and moved into place in one step. On any error nothing is left behind.
+- **Content checks** (`src-tauri/src/importing.rs`), shared by theme and file import:
+  - Only theme file types come in: XML, pictures, fonts, sounds, videos, shaders, plain text, `collections.info` and LICENSE/README.
+  - Programs, scripts and archives are never copied.
+  - Pictures, fonts, sounds and videos must really be that kind of file. Their first bytes are checked, and any real format of the kind is accepted, because RetroBat reads by content (carbon ships a WebP named `konami.png`).
+  - XML and text must not be binary, and an SVG must be an SVG.
+- **Safety limits:**
+  - Unsafe paths (`..`, drive letters, absolute paths) refuse the whole zip.
+  - Links, including Windows junctions, are left out.
+  - The same name twice (ignoring case) is refused.
+  - Caps are 50,000 files, 8 GB in total and 2 GB per file.
+  - A zip entry that unpacks to over 400× its packed size (and over 64 MB) is refused, and every file must unpack to exactly the size its zip claims.
+  - System clutter (`__MACOSX`, `.git`, `Thumbs.db`, `._*`) is skipped.
+  - A source that contains RetroBat's themes folder is refused.
+- **Single files.** "Import…" for pictures, fonts, sounds and videos, fonts added from Windows, downloaded fonts, and art copied from installed themes all go through the same checks.
+  - Pictures, fonts, sounds and videos have size limits: 64 MB, 32 MB, 256 MB and 2 GB.
+  - The file must be the kind the setting needs.
+  - Copies are written through a temp file and renamed into place.
+  - If the same file is already there, it is reused instead of making "-2" copies.
+- Checked with your installed themes, read-only (each imported into a temp folder and compared byte for byte):
+
+  | Theme | Files | Size | Time | Left out |
+  |---|---|---|---|---|
+  | v5 | 1,327 | 50 MB | 1.4 s | nothing |
+  | carbon | 2,154 | 148 MB | 2.1 s | one `.pdn` Paint.NET file |
+  | ARTFLIX | 3,023 | 386 MB | — | nothing |
+  | RELOAD | 5,170 | 1.3 GB | — | `.old`, `.m3u` and `.gitignore` files |
+  | BatWiiCera | 733 | — | — | its `_plaza` add-on: shell scripts, an AppImage, a `.love` and a `.tar.gz` |
+
+- Browser preview: the Import card and dialog render. Picking files needs the app window, because the browser has no file picker.
+- Still to do: imported file names aren't checked against RetroBat's own reserved folders, and a theme's fonts aren't licence-checked (stage 7).
+
 ## Verification status (honest)
 
 - Done:
   - Read the old source, its docs and git state; compared it with this app's code; confirmed the zip matches the folder; checked the RetroBat version.
-  - Stages 1–5, with automated tests (87 passing) and browser-preview checks (read-only).
+  - Stages 1–6, with automated tests (87 front end, 20 Rust) and browser-preview checks (read-only).
 - Not done:
+  - Theme import hasn't been run from the native app window (its file pickers).
   - Nothing from these stages has been tried in RetroBat itself: per-console values, retuned storyboards and the shadow shader are written to match RetroBat's source, not seen on screen.
   - The native app window hasn't been tested by hand for the new safety features.

@@ -26,7 +26,7 @@ use walkdir::WalkDir;
 
 const MANIFEST: &str = "channelcraft-backup.json";
 /// Folders this module makes next to a theme start with this, so they're easy to recognise.
-const WORK_PREFIX: &str = ".channelcraft-";
+pub(crate) const WORK_PREFIX: &str = ".channelcraft-";
 const RESTORE_MAX_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const RESTORE_MAX_FILES: usize = 100_000;
 
@@ -54,7 +54,7 @@ pub(crate) fn project_key(dir: &Path) -> String {
     hex(&Sha256::digest(norm.trim_end_matches(['\\', '/']).as_bytes()))[..32].to_string()
 }
 
-fn unique_id() -> String {
+pub(crate) fn unique_id() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     format!("{nanos:x}{:x}{:x}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed))
@@ -99,7 +99,7 @@ fn xml_stamps(dir: &Path) -> HashMap<String, Stamp> {
 }
 
 /// A relative path from a backup or the UI that can't escape the theme folder.
-fn safe_rel(rel: &str) -> CmdResult<()> {
+pub(crate) fn safe_rel(rel: &str) -> CmdResult<()> {
     let bad = rel.is_empty()
         || rel.contains('\\')
         || rel.contains(':')

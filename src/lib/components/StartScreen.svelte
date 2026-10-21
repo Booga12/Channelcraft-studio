@@ -4,11 +4,13 @@
   import { fileUrl, type ThemeInfo } from '$lib/api';
   import NewThemeDialog, { type StarterChoice } from './NewThemeDialog.svelte';
   import Icon from './Icon.svelte';
+  import ImportThemeDialog from './ImportThemeDialog.svelte';
 
   let dialog = $state<{ mode: 'new' | 'duplicate'; source?: ThemeInfo } | null>(null);
   let filter = $state('');
   let choosing = $state<ThemeInfo | null>(null);
   let dontAsk = $state(false);
+  let importing = $state(false);
 
   function openTheme(t: ThemeInfo) {
     if (ed.askCopy) choosing = t;
@@ -57,6 +59,16 @@
   }
 </script>
 
+{#if importing}
+  <ImportThemeDialog
+    onclose={() => (importing = false)}
+    onimported={(path) => {
+      importing = false;
+      ed.openTheme(path);
+    }}
+  />
+{/if}
+
 <div class="start">
   <aside class="side">
     <div class="brand">
@@ -103,6 +115,10 @@
         <button class="qcard" onclick={() => ed.themes[0] && (dialog = { mode: 'duplicate', source: shown.find((t) => t.name.toLowerCase() === ed.root?.activeTheme?.toLowerCase()) ?? ed.themes[0] })}>
           <span class="qicon b"><Icon name="copy" size={22} /></span>
           <span><strong>Remix the theme you use</strong><small>Copy RetroBat's current theme and change the copy</small></span>
+        </button>
+        <button class="qcard" onclick={() => (importing = true)} disabled={!ed.root}>
+          <span class="qicon d"><Icon name="folder" size={22} /></span>
+          <span><strong>Import a theme</strong><small>From a .zip or folder someone shared, checked first</small></span>
         </button>
         <button class="qcard" onclick={() => (ed.showGuide = true)}>
           <span class="qicon c"><Icon name="help" size={22} /></span>
@@ -332,6 +348,9 @@
   }
   .qicon.b {
     background: linear-gradient(135deg, #d6458d, #e8733d);
+  }
+  .qicon.d {
+    background: linear-gradient(135deg, #c27a1a, #d6455d);
   }
   .qicon.c {
     background: linear-gradient(135deg, #2d9d78, #2680eb);

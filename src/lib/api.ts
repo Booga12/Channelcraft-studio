@@ -47,6 +47,16 @@ export interface ThemeFs {
   readXmlFiles(dir: string): Promise<TextFile[]>;
 }
 
+export interface ImportPlan {
+  suggestedName: string;
+  root: string;
+  files: number;
+  bytes: number;
+  skipped: { path: string; reason: string }[];
+  outside: number;
+  hasSplash: boolean;
+}
+
 export const api = {
   detectRetrobat: () => invoke<string | null>('detect_retrobat'),
   setRetrobatRoot: (path: string) => invoke<RootInfo>('set_retrobat_root', { path }),
@@ -91,6 +101,10 @@ export const api = {
   /** Zips a backup, then moves the folder to the Recycle Bin. Returns the backup path. */
   deleteTheme: (dir: string) => invoke<string>('delete_theme', { dir }),
   createThemeFromStarter: (name: string) => invoke<string>('create_theme_from_starter', { name }),
+  /** Looks inside a theme .zip or folder (nothing is written): what would come in and what wouldn't. */
+  inspectThemeImport: (source: string) => invoke<ImportPlan>('inspect_theme_import', { source }),
+  /** Imports a theme .zip or folder as a new theme folder; returns its path. */
+  importTheme: (source: string, name: string) => invoke<string>('import_theme', { source, name }),
   importAsset: (themeDir: string, src: string, destRelDir: string) =>
     invoke<string>('import_asset', { themeDir, src, destRelDir }),
   readThemesettings: (theme: string) => invoke<string>('read_themesettings', { theme }),

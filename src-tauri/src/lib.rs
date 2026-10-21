@@ -1,5 +1,6 @@
 mod commands;
 mod storage;
+mod importing;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -49,6 +50,8 @@ pub fn run() {
             storage::existing_files,
             storage::copy_media_into_theme,
             storage::write_report,
+            importing::inspect_theme_import,
+            importing::import_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
