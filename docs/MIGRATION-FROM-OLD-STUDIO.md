@@ -284,11 +284,10 @@ Facts come from RetroBat's own source (RetroBat-Official/emulationstation, maste
 
 - Done:
   - Read the old source, its docs and git state; compared it with this app's code; confirmed the zip matches the folder; checked the RetroBat version.
-  - Stages 1–7, with automated tests (87 front end, 22 Rust) and browser-preview checks (read-only).
+  - Stages 1–7, with automated tests (96 front end, 24 Rust) and browser-preview checks (read-only).
 - Done in RetroBat on this PC: the data move to the new app id, the console-screen video fix, and the menu options (user-checked).
 - Not done:
   - The clean-Windows plan hasn't been run (no VM here).
-  - The data-folder copy to the new app id hasn't been seen on a real start yet.
   - Theme import hasn't been run from the native app window (its file pickers).
-  - Nothing from these stages has been tried in RetroBat itself: per-console values, retuned storyboards and the shadow shader are written to match RetroBat's source, not seen on screen.
+  - Not yet seen in RetroBat: per-console values, retuned storyboards and the shadow shader are written to match RetroBat's source, not seen on screen.
   - The native app window hasn't been tested by hand for the new safety features.
