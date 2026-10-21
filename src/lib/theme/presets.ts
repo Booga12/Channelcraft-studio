@@ -4,7 +4,7 @@
 // and can be swapped for another preset later.
 
 import { attr, patchInsertChild, patchReplaceSpan, type XNode } from '../xml/cst';
-import { DESIGNS, designElements, elementsMarkup, isDesignExtra, type Design, type DesignContext } from './designs';
+import { DESIGNS, designElements, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext } from './designs';
 import type { Change } from './edits';
 import type { ThemeProject } from './project';
 import type { Resolution } from './resolver';
@@ -351,6 +351,32 @@ export function designChanges(project: ThemeProject, res: Resolution, design: De
     out.push(blockChange(project, res, view, title, body));
   }
   return out;
+}
+
+const VARS_MARK = 'ChannelCraft design colours';
+
+/**
+ * The design's colours as shared variables at the top of theme.xml (a marked block, replaced when
+ * another design is applied). The design's parts refer to them, and RetroBat's Color set option
+ * can redefine them. A file's variables are read before the rest of it, so placement is free.
+ */
+export function designVarsChange(project: ThemeProject, design: Design): Change {
+  const entry = project.entry!;
+  const root = entry.doc.root!;
+  const body = Object.entries(designVars(design.palette)).map(([k, v]) => `  <${k}>${v}</${k}>`);
+  const markup = [`<!-- ${VARS_MARK} (${design.label}). The design's parts use these; change them in the Colours tab. -->`, '<variables>', ...body, '</variables>'].join('\n');
+  const kids = root.children;
+  for (let i = 0; i < kids.length; i++) {
+    const n = kids[i];
+    if (n.kind !== 'comment' || !entry.src.slice(n.start, n.end).includes(VARS_MARK)) continue;
+    for (let j = i + 1; j < kids.length; j++) {
+      const m = kids[j];
+      if (m.kind === 'text' && entry.src.slice(m.start, m.end).trim() === '') continue;
+      if (m.kind === 'element' && m.name === 'variables') return { file: entry, patch: patchReplaceSpan(entry.doc, n, m, markup) };
+      break;
+    }
+  }
+  return { file: entry, patch: patchInsertChild(entry.doc, root, markup, { first: true }) };
 }
 
 function findBlock(children: XNode[], src: string, view: string) {

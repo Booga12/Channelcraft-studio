@@ -453,6 +453,8 @@ export interface DesignEl {
 }
 
 export interface DesignContext {
+  /** Colours as shared variables (designText, designAccent...) instead of fixed values. */
+  vars?: boolean;
   /** Theme-relative folder the design's SVG files go in, e.g. `./_inc/ccs/cinema`. */
   art: string;
   font: string | null;
@@ -468,10 +470,10 @@ function text(d: Design, c: DesignContext, name: string, props: Record<string, s
   const p = d.palette;
   const font = opts.title ? (c.titleFont ?? c.font) : c.font;
   const out: Record<string, string> = {
-    color: `${opts.dim ? p.dim : p.text}FF`.slice(0, 8),
+    color: K(d, c, opts.dim ? 'designDimText' : 'designText'),
     ...(font ? { fontPath: font } : {}),
     ...(d.uppercase && opts.title ? { forceUppercase: 'true' } : {}),
-    ...(d.glow && opts.title ? { glowColor: `${p.accent}AA`.slice(0, 8), glowSize: '2' } : {}),
+    ...(d.glow && opts.title ? { glowColor: K(d, c, 'designGlow'), glowSize: '2' } : {}),
     visible: 'true',
     ...props,
   };
@@ -480,8 +482,36 @@ function text(d: Design, c: DesignContext, name: string, props: Record<string, s
 
 const col = (c: string) => (c.length === 6 ? `${c}FF` : c);
 
+/**
+ * The colours a design's parts use, by the shared variable name each is written as when
+ * `DesignContext.vars` is set. A colour set (RetroBat's Color set option) redefines them.
+ */
+export function designVars(p: Palette6): Record<DesignVar, string> {
+  const faint = p.surface.length === 8 && parseInt(p.surface.slice(6), 16) < 0x30;
+  return {
+    designBackground: col(p.bg),
+    designBackground2: col(p.bg2),
+    designPanel: col(p.surface),
+    designText: `${p.text}FF`.slice(0, 8),
+    designDimText: `${p.dim}FF`.slice(0, 8),
+    designAccent: col(p.accent),
+    designSelectedText: col(p.accentText),
+    designGlow: `${p.accent}AA`.slice(0, 8),
+    designRatingOff: `${p.dim.slice(0, 6)}55`,
+    designListPanel: `${p.bg.slice(0, 6)}B3`,
+    designTile: col(faint ? `${p.text}22` : p.surface),
+  };
+}
+
+export type DesignVar = 'designBackground' | 'designBackground2' | 'designPanel' | 'designText' | 'designDimText' | 'designAccent' | 'designSelectedText' | 'designGlow' | 'designRatingOff' | 'designListPanel' | 'designTile';
+
+/** A design colour: its variable when the context asks for shared colours, else its value. */
+function K(d: Design, c: DesignContext, name: DesignVar): string {
+  return c.vars ? '${' + name + '}' : designVars(d.palette)[name];
+}
+
 /** A rounded panel; the white SVG is tinted with the design's surface colour (or `color`). */
-function panel(d: Design, c: DesignContext, name: string, pos: string, size: string, z = 5, color = col(d.palette.surface)): DesignEl {
+function panel(d: Design, c: DesignContext, name: string, pos: string, size: string, z = 5, color = K(d, c, 'designPanel')): DesignEl {
   const corner = Math.max(8, d.radius);
   return { type: 'ninepatch', name, props: { pos, size, path: `${c.art}/panel.svg`, cornerSize: `${corner} ${corner}`, color, zIndex: String(z) } };
 }
@@ -490,7 +520,7 @@ function common(d: Design, c: DesignContext, view: string): DesignEl[] {
   const p = d.palette;
   const out: DesignEl[] = [
     { type: 'image', name: 'ccs_background', props: { pos: '0 0', size: '1 1', path: `${c.art}/background.png`, zIndex: '0' } },
-    { type: 'helpsystem', name: 'help', props: { pos: '0.02 0.955', textColor: col(p.dim), iconColor: col(p.dim), ...(c.font ? { fontPath: c.font } : {}) } },
+    { type: 'helpsystem', name: 'help', props: { pos: '0.02 0.955', textColor: K(d, c, 'designDimText'), iconColor: K(d, c, 'designDimText'), ...(c.font ? { fontPath: c.font } : {}) } },
     text(d, c, 'ccs_clock', { pos: '0.97 0.035', origin: '1 0', fontSize: '0.032' }, { dim: true }),
   ];
   // RetroBat's clock has no format: 12 or 24 hours comes from its own ClockMode12 setting.
@@ -513,10 +543,10 @@ function gameList(d: Design, c: DesignContext, pos: string, size: string, align 
       fontSize: d.font === 'pressstart' || d.font === 'silkscreen' ? '0.024' : '0.032',
       lineSpacing: '1.65',
       horizontalMargin: '0.012',
-      primaryColor: col(p.text),
-      secondaryColor: col(p.accent),
-      selectedColor: col(p.accentText),
-      selectorColor: col(p.accent),
+      primaryColor: K(d, c, 'designText'),
+      secondaryColor: K(d, c, 'designAccent'),
+      selectedColor: K(d, c, 'designSelectedText'),
+      selectorColor: K(d, c, 'designAccent'),
       ...(c.font ? { fontPath: c.font } : {}),
       ...(d.uppercase ? { forceUppercase: 'true' } : {}),
       zIndex: '40',
@@ -553,12 +583,12 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
     return text(d, c, 'logoText', { pos, origin, size: `${Math.max(Number(w), 0.36)} 0.05`, fontSize: '0.03', alignment: align, zIndex: '50' }, { title: true, native: true });
   };
   const details = (x: number, y: number, w: number, step = 0.036) => [
-    { type: 'rating', name: 'md_rating', props: { pos: `${x} ${y}`, size: `0 ${(step * 0.85).toFixed(3)}`, color: col(p.accent), unfilledColor: `${p.dim.slice(0, 6)}55`, visible: 'true', zIndex: '40' } } as DesignEl,
+    { type: 'rating', name: 'md_rating', props: { pos: `${x} ${y}`, size: `0 ${(step * 0.85).toFixed(3)}`, color: K(d, c, 'designAccent'), unfilledColor: K(d, c, 'designRatingOff'), visible: 'true', zIndex: '40' } } as DesignEl,
     { ...text(d, c, 'md_releasedate', { pos: `${(x + w * 0.42).toFixed(3)} ${y}`, fontSize: '0.024', format: '%Y', zIndex: '40' }, { dim: true, native: true }), type: 'datetime' },
     text(d, c, 'md_genre', { pos: `${x} ${(y + step).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', zIndex: '40' }, { dim: true, native: true }),
     text(d, c, 'md_developer', { pos: `${(x + w * 0.5).toFixed(3)} ${(y + step).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', zIndex: '40' }, { dim: true, native: true }),
     text(d, c, 'md_players', { pos: `${x} ${(y + step * 2).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', zIndex: '40' }, { dim: true, native: true }),
-    text(d, c, 'ccs_favorite', { pos: `${(x + w * 0.5).toFixed(3)} ${(y + step * 2).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', text: '★ Favourite', color: col(p.accent), visible: '{game:favorite}', zIndex: '40' }),
+    text(d, c, 'ccs_favorite', { pos: `${(x + w * 0.5).toFixed(3)} ${(y + step * 2).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', text: '★ Favourite', color: K(d, c, 'designAccent'), visible: '{game:favorite}', zIndex: '40' }),
   ];
   const desc = (pos: string, size: string, fs = '0.02') => text(d, c, 'md_description', { pos, size, fontSize: fs, lineSpacing: '1.45', verticalAlignment: 'top', zIndex: '40' }, { dim: true, native: true });
   const title = (pos: string, size: string, fs = '0.046', align = 'left') => ({ ...text(d, c, 'ccs_title', { pos, size, fontSize: fs, alignment: align, text: '{game:name}', zIndex: '45' }, { title: true }), anim: d.anims?.title });
@@ -577,7 +607,7 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
         desc('0.05 0.46', '0.4 0.16'),
         screenshot('0.15 0.77', '0.2 0.2'),
         boxart('0.34 0.77', '0.1 0.2'),
-        panel(d, c, 'ccs_listpanel', '0.65 0.14', '0.32 0.74', 20, `${p.bg.slice(0, 6)}B3`),
+        panel(d, c, 'ccs_listpanel', '0.65 0.14', '0.32 0.74', 20, K(d, c, 'designListPanel')),
         gameList(d, c, '0.665 0.16', '0.29 0.7'),
       );
       break;
@@ -659,7 +689,7 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
     const scale = ['pressstart', 'silkscreen'].includes(font) ? 0.62 : ['orbitron', 'audiowide', 'monoton', 'russo', 'lilita'].includes(font) ? 0.85 : 1;
     const size0 = Number(fs ?? defFs) * scale;
     const el = text(d, c, name, { pos, size, alignment: align, fontSize: String(Math.round(size0 * 1000) / 1000), text: value, zIndex: '45' }, kind === 'title' ? { title: true } : { dim: kind === 'dim' });
-    if (kind === 'accent') el.props.color = col(p.accent);
+    if (kind === 'accent') el.props.color = K(d, c, 'designAccent');
     return el;
   };
 
@@ -674,8 +704,8 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
     const faint = p.surface.length === 8 && parseInt(p.surface.slice(6), 16) < 0x30;
     els.push(
       { type: 'imagegrid', name: 'imagegrid', props: { autoLayoutSelectedZoom: '1.06', animateSelection: 'true', padding: '0.012 0.012 0.012 0.012', scrollLoop: 'false', scrollbarColor: '00000000', zIndex: '30', ...l.grid } },
-      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: col(faint ? `${p.text}22` : p.surface), imageColor: 'FFFFFFFF', padding: '24 24 24 24', selectionMode: 'full', imageSizeMode: 'maxSize' } },
-      { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: col(p.accent), imageColor: 'FFFFFFFF', padding: '24 24 24 24' } },
+      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designTile'), imageColor: 'FFFFFFFF', padding: '24 24 24 24', selectionMode: 'full', imageSizeMode: 'maxSize' } },
+      { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/panel.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designAccent'), imageColor: 'FFFFFFFF', padding: '24 24 24 24' } },
       { type: 'text', name: 'gridtile', props: { visible: 'false', size: '0 0' } },
       { type: 'image', name: 'gridtile.image', props: { color: 'FFFFFFAA' } },
       { type: 'image', name: 'gridtile.image:selected', props: { color: 'FFFFFFFF' } },

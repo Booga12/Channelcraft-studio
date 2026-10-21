@@ -5,9 +5,9 @@ import { resolveTheme } from './resolver';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
 import { applyChanges } from './edits';
-import { appliedSystemLayout, designChanges } from './presets';
+import { appliedSystemLayout, designChanges, designVarsChange } from './presets';
 import { SYSTEM_LAYOUTS, systemLayout } from './systemLayouts';
-import { DESIGNS, designAssets, type DesignContext } from './designs';
+import { DESIGNS, designAssets, designVars, type DesignContext } from './designs';
 import { parse, print } from '../xml/cst';
 import { renderText } from './expr';
 import type { Environment } from './context';
@@ -127,5 +127,34 @@ describe.skipIf(!existsSync(V5))('a design on v5 (in memory)', () => {
     const det = r.views.get('detailed')!.elements;
     expect(det.get('bottom-bar')!.props.get('visible')!.value).toBe('false');
     expect(det.get('logo')!.history.get('path')!.some((d) => d.value.includes('_inc/systems/logos/snes'))).toBe(true);
+  });
+});
+
+describe('design colours as shared variables', () => {
+  it('looks exactly the same through the variables, for every design and screen', async () => {
+    for (const d of DESIGNS) {
+      const fixed = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+      applyChanges(fixed, designChanges(fixed, resolveTheme(fixed, env), d, ctx(d.id), ['system', 'detailed'], true));
+      const shared = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+      applyChanges(shared, [designVarsChange(shared, d), ...designChanges(shared, resolveTheme(shared, env), d, { ...ctx(d.id), vars: true }, ['system', 'detailed'], true)]);
+      const a = resolveTheme(fixed, env);
+      const b = resolveTheme(shared, env);
+      for (const view of ['system', 'detailed']) {
+        for (const [name, el] of a.views.get(view)!.elements) {
+          for (const [k, def] of el.props) expect(b.views.get(view)!.elements.get(name)!.props.get(k)!.value, `${d.id} ${view} ${name}.${k}`).toBe(def.value);
+        }
+      }
+      // The colours are linked: the gamelist's text colour is the shared designText.
+      const list = b.views.get('detailed')!.elements.get('gamelist')!.props.get('primaryColor')!;
+      expect(list.raw).toBe('${designText}');
+    }
+  });
+
+  it('replaces its own colours block when another design is applied', async () => {
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    applyChanges(p, [designVarsChange(p, DESIGNS[0])]);
+    applyChanges(p, [designVarsChange(p, DESIGNS[1])]);
+    expect(p.entry!.src.split('ChannelCraft design colours').length).toBe(2);
+    expect(resolveTheme(p, env).vars.get('designAccent')!.value).toBe(designVars(DESIGNS[1].palette).designAccent);
   });
 });

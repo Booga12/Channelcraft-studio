@@ -17,7 +17,7 @@ import { shaderOf, shadowXml } from './theme/shadow';
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { consoleScreenPath, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
-import { designChanges, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
+import { designChanges, designVarsChange, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
 import { DESIGNS, designAssets, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
@@ -1145,6 +1145,7 @@ class Editor {
     if (this.project !== p) return;
     const has = (dir: string) => p.assets.some((a) => a.rel.toLowerCase().startsWith(`${dir}/`));
     const ctx = {
+      vars: true,
       art: `./${artRel}`,
       font: font ? `./${font}` : null,
       titleFont: titleFont ? `./${titleFont}` : null,
@@ -1156,7 +1157,8 @@ class Editor {
     if (!res) return;
     const views = opts.views ?? ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v));
     const label = opts.systemLayout ? `“${LAYOUTS.find((l) => l.id === opts.systemLayout)?.label ?? opts.systemLayout}” in the ${design.label} style` : `design “${design.label}”`;
-    this.commit(label, designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout));
+    // The design's colours become shared colours (variables) its parts refer to.
+    this.commit(label, [designVarsChange(p, design), ...designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout)]);
     this.selected = null;
     const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
     if (opts.systemLayout) return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to the System screen.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
