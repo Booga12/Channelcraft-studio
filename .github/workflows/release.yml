@@ -1,0 +1,100 @@
+# Publishes a GitHub release whenever the app's version goes up.
+#
+# On every push to main that touches a version file, this reads the version from package.json.
+# If there is no tag v<version> yet, it builds the Windows installer with `pnpm release:check`
+# (which also checks nothing personal is bundled) and publishes it as release v<version>.
+# The version must be the same in package.json, src-tauri/tauri.conf.json and src-tauri/Cargo.toml.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - src-tauri/tauri.conf.json
+      - src-tauri/Cargo.toml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      release: ${{ steps.tag.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and check the three files agree
+        id: read
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo=$(grep -m1 '^version *=' src-tauri/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
+          echo "package.json: $pkg  tauri.conf.json: $conf  Cargo.toml: $cargo"
+          if [ "$pkg" != "$conf" ] || [ "$pkg" != "$cargo" ]; then
+            echo "::error::Version numbers don't match. Set the same version in package.json, src-tauri/tauri.conf.json and src-tauri/Cargo.toml."
+            exit 1
+          fi
+          echo "version=$pkg" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version was already released
+        id: tag
+        env:
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "v$VERSION already exists, nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "v$VERSION is new, releasing."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Build and publish
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build installer and run release checks
+        run: pnpm release:check
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" src-tauri/target/release/bundle/nsis/*.exe \
+            --title "ChannelCraft Studio $VERSION" \
+            --target "$GITHUB_SHA" \
+            --generate-notes
