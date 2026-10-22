@@ -20,6 +20,7 @@
     if (!v) return [];
     const q = filter.trim().toLowerCase();
     return [...v.elements.values()]
+      .filter((e) => e.type !== 'gameextras')
       .filter((e) => !q || e.name.toLowerCase().includes(q) || e.type.includes(q) || elementLabel(e.name).toLowerCase().includes(q))
       .sort((a, b) => zOf(b) - zOf(a) || a.order - b.order);
   });

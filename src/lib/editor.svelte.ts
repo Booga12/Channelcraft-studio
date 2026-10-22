@@ -8,7 +8,8 @@ import { parseGamelist, type GameInfo } from './theme/games';
 import { screenSize, type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
 import { ThemeProject, type ThemeFile } from './theme/project';
-import { resolveTheme, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
+import { isGameListView, perGameApplies, resolveTheme, romStem, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
+import { EMPTY_GAME_FILE, gameEditChanges, gameExtrasChange, screensWithoutGameExtras, type GameEdit } from './theme/perGame';
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
 import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
@@ -110,6 +111,8 @@ class Editor {
   playAnimations = $state(false);
   /** Edits of colours and properties go to the preview console's own values (RetroBat `if` on ${system.theme}). */
   consoleOnly = $state(false);
+  /** Edits go to the game in the preview only: RetroBat's own file for that game (see perGame.ts). */
+  gameOnly = $state(false);
   contactSheet = $state(false);
   showSettings = $state(false);
   showRestore = $state(false);
@@ -575,6 +578,10 @@ class Editor {
     const el = this.currentView?.elements.get(elementName);
     const res = this.res;
     if (!el || !res) return;
+    if (this.gameEditing) {
+      this.gameSet(`${propLabel(prop).toLowerCase()} of ${elementLabel(elementName)}`, [{ name: elementName, type: el.type, props: { [prop]: value } }], opts.coalesce ?? `${elementName}.${prop}`);
+      return;
+    }
     const history = el.history.get(prop);
     // Outside "only this console", the shared definition is the one to follow (or link through).
     const basis = this.consoleOnly ? el.props.get(prop) : (sharedIn(history) ?? el.props.get(prop));
@@ -664,13 +671,121 @@ class Editor {
     return changes;
   }
 
+  // ---- one game's own look ----------------------------------------------------------------
+
+  /** Why "only this game" can't be used on this screen right now, or null when it can. */
+  get gameOnlyBlocker(): string | null {
+    const res = this.res;
+    if (this.screenFile !== 'theme.xml') return 'Loading screens show no game.';
+    if (!res || !isGameListView(res, this.view)) return 'Only the game-list screens that show one game at a time (detailed, video, grid and game carousel) can look different for each game.';
+    if (!this.currentGame?.path) return 'Needs one of your own games in the preview: pick a console that has games, with “Real artwork” on in Settings.';
+    const info = res.perGame.get(this.view);
+    if (info && !info.root) return 'This theme picks its per-game folder with a binding, which ChannelCraft can’t follow yet.';
+    if (info?.root && this.project && !this.project.isInside(info.root)) return 'This theme keeps its per-game files outside its own folder, so ChannelCraft can’t write them.';
+    return null;
+  }
+
+  /** Edits are going to the current game's own file. */
+  get gameEditing(): boolean {
+    return this.gameOnly && !this.gameOnlyBlocker;
+  }
+
+  get gameName(): string {
+    return this.currentGame?.name || 'this game';
+  }
+
+  /** The current game's own file for this screen: the one RetroBat would find, or where a new one goes. */
+  gameFilePath(): string | null {
+    const p = this.project;
+    const res = this.res;
+    const g = this.currentGame;
+    if (!p || !res || !g?.path) return null;
+    const info = res.perGame.get(this.view);
+    if (info?.file) return info.file.abs;
+    return join(info?.root ?? join(p.dir, 'games', this.settings.system.name), romStem(g.path), 'theme.xml');
+  }
+
+  /** The current game's own file, if it has one for this screen. */
+  get gameFile(): ThemeFile | null {
+    return this.res?.perGame.get(this.view)?.file ?? null;
+  }
+
+  private gameSetMany(label: string, updates: Record<string, Record<string, string>>, coalesce?: string) {
+    const v = this.currentView;
+    if (!v) return false;
+    const edits = Object.entries(updates)
+      .filter(([name]) => v.elements.has(name))
+      .map(([name, props]) => ({ name, type: v.elements.get(name)!.type, props }));
+    return this.gameSet(label, edits, coalesce);
+  }
+
+  /**
+   * Writes edits into the current game's own file (made if needed), and points the theme's
+   * game-list screens at the per-game folder the first time. Parts RetroBat draws once for the
+   * whole list are refused with a message, since a game's file can't change them.
+   */
+  private gameSet(label: string, edits: GameEdit[], coalesce?: string): boolean {
+    const p = this.project;
+    const res = this.res;
+    const abs = this.gameFilePath();
+    const entry = p?.fileAt('theme.xml');
+    if (!p || !res || !abs || !entry || !p.isInside(abs)) return false;
+    const view = this.currentView;
+    const own = this.gameFile;
+    const ok: GameEdit[] = [];
+    const refused: string[] = [];
+    for (const e of edits) {
+      const el = view?.elements.get(e.name);
+      const onlyHere = !!el && !!own && el.defs.every((d) => d.file === own);
+      if (e.extra || onlyHere || perGameApplies(el, e.name, false)) ok.push(e);
+      else refused.push(e.name);
+    }
+    if (refused.length) {
+      const names = refused.map(elementLabel).join(', ');
+      this.notify(`RetroBat draws ${names} once for the whole game list, so ${refused.length === 1 ? 'it' : 'they'} can’t change for one game. The game parts (cover, video, name, description…) can, and so can anything you add while “Only this game” is on.`, 'error');
+    }
+    if (!ok.length) return false;
+    const rel = abs.slice(p.dir.length + 1).replace(/\\/g, '/');
+    const file = p.file(abs) ?? p.addFile(rel, EMPTY_GAME_FILE);
+    const changes = gameEditChanges(file, this.view, ok);
+    const decl = gameExtrasChange(entry, screensWithoutGameExtras(this.themeRes ?? res));
+    if (decl) changes.push(decl);
+    this.commit(`${label} for ${this.gameName}`, changes, coalesce ? `${coalesce}@game:${rel}` : undefined);
+    return true;
+  }
+
+  /** Empties the current game's own file for this screen, so it looks like every other game (undoable). */
+  resetGame() {
+    const f = this.gameFile;
+    if (!f?.doc.root) return;
+    this.commit(`${this.gameName}'s own look`, [{ file: f, patch: { start: 0, end: f.src.length, text: EMPTY_GAME_FILE } }]);
+    this.notify(`${this.gameName} uses the shared look again. Save to keep it, or Ctrl+Z to undo.`);
+  }
+
+  /** Games of the preview console that have their own file for this screen. */
+  get gamesWithOwnLook(): { index: number; name: string }[] {
+    this.rev;
+    const p = this.project;
+    const info = this.res?.perGame.get(this.view);
+    if (!p || !info?.root) return [];
+    const out: { index: number; name: string }[] = [];
+    this.currentGames.forEach((g, index) => {
+      const stem = romStem(g.path);
+      const f = p.file(join(info.root!, `${stem}.xml`)) ?? p.file(join(info.root!, stem, 'theme.xml'));
+      if (f?.doc.root && elements(f.doc.root).length) out.push({ index, name: g.name || stem });
+    });
+    return out;
+  }
+
   /** Sets several properties of one element as a single undo step. */
   setProps(elementName: string, props: Record<string, string>, coalesce?: string) {
+    if (this.gameEditing) return void this.gameSetMany(`changes to ${elementLabel(elementName)}`, { [elementName]: props }, coalesce);
     this.commit(`changes to ${elementLabel(elementName)}`, this.propChanges(elementName, props), coalesce);
   }
 
   /** Sets properties on several elements at once (group moves, align, distribute). */
   setPropsMany(label: string, updates: Record<string, Record<string, string>>, coalesce?: string) {
+    if (this.gameEditing) return void this.gameSetMany(label, updates, coalesce);
     const changes = Object.entries(updates).flatMap(([name, props]) => this.propChanges(name, props));
     this.commit(label, changes, coalesce);
   }
@@ -1047,7 +1162,15 @@ class Editor {
     while (this.undoStack.length < count && this.redoStack.length) this.redo(true);
   }
 
+  /** Colours and other variables are read once for the whole theme, so they can't differ per game. */
+  private sharedOnly(what: string): boolean {
+    if (!this.gameEditing) return false;
+    this.notify(`${what} are shared by every game. Switch to “All games” to change them, or select a part and change it for ${this.gameName} only.`, 'error');
+    return true;
+  }
+
   setVar(name: string, value: string) {
+    if (this.sharedOnly('Colours and theme values')) return;
     const change = this.varChange(name, value);
     if (!change) return;
     this.commit(`change of ${humanize(name)}${this.consoleOnly ? ` for ${this.consoleName}` : ''}`, [change], `var.${name}${this.consoleOnly ? `@${this.consoleTheme}` : ''}`);
@@ -1066,6 +1189,10 @@ class Editor {
     if (!p || !res) return;
     const name = uniqueName(res, this.view, type === 'text' ? 'label' : type);
     const body = STARTER_PROPS[type] ?? '<pos>0.4 0.4</pos>\n<size>0.2 0.2</size>';
+    if (this.gameEditing) {
+      if (this.gameSet(`adding ${typeLabel(type).toLowerCase()}`, [{ name, type, props: {}, extra: true, body }])) this.selected = name;
+      return;
+    }
     this.commit(`adding ${typeLabel(type).toLowerCase()}`, [addElementChange(p, res, this.view, type, name, body)]);
     this.selected = name;
   }
@@ -1091,6 +1218,10 @@ class Editor {
       return;
     }
     const name = item.native ? item.name : uniqueName(res, this.view, item.name);
+    if (this.gameEditing) {
+      if (this.gameSet(`adding ${item.label.toLowerCase()}`, [{ name, type: item.type, props: {}, extra: !item.native, body: item.body }])) this.selected = name;
+      return;
+    }
     this.commit(`adding ${item.label.toLowerCase()}`, [addElementChange(p, res, this.view, item.type, name, item.body, !item.native)]);
     this.selected = name;
   }
@@ -1171,6 +1302,7 @@ class Editor {
 
   /** Writes a layout preset into its own block at the end of theme.xml (replacing an earlier one). */
   async applyLayout(preset: LayoutPreset, views: string[], style: Design | null = null, hideOwn = true) {
+    if (this.sharedOnly('Layouts')) return;
     if (this.menuGuard()) return;
     const p = this.project;
     if (!p) return;
@@ -1253,6 +1385,7 @@ class Editor {
    * layout of each screen with the design's (one undo step for the layout).
    */
   async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string } = {}) {
+    if (this.sharedOnly('Designs')) return;
     const p = this.project;
     if (!p) return;
     if (this.menuGuard()) return;
@@ -1463,7 +1596,7 @@ class Editor {
   /** Sets every colour of a palette that this theme has a variable for. Returns how many were set. */
   applyPalette(palette: Palette): number {
     const res = this.res;
-    if (!res) return 0;
+    if (!res || this.sharedOnly('Colour palettes')) return 0;
     const changes = Object.entries(palette.colors)
       .filter(([name]) => res.vars.has(name))
       .map(([name, value]) => this.varChange(name, value))
@@ -1496,6 +1629,15 @@ class Editor {
   deleteSelection() {
     const v = this.currentView;
     if (!v || !this.selection.length) return;
+    if (this.gameEditing) {
+      // Parts only this game has are deleted; shared ones are hidden for this game.
+      const own = this.gameFile;
+      const mine = this.selection.filter((n) => own && v.elements.get(n)?.defs.every((d) => d.file === own));
+      const hide = this.selection.filter((n) => !mine.includes(n));
+      if (hide.length) this.gameSetMany(`hiding ${hide.length === 1 ? elementLabel(hide[0]) : `${hide.length} elements`}`, Object.fromEntries(hide.map((n) => [n, { visible: 'false' }])));
+      if (!mine.length) return;
+      this.selection = mine;
+    }
     const changes: Change[] = [];
     const seen = new Set<string>();
     let kept = 0;
@@ -1533,6 +1675,8 @@ class Editor {
 
   /** Path to store in a property for an asset, relative to the file that will hold it. */
   relativeAssetPath(elementName: string, prop: string, abs: string): string {
+    const gameFile = this.gameEditing ? this.gameFilePath() : null;
+    if (gameFile) return relative(dirname(gameFile), abs);
     const el = this.currentView?.elements.get(elementName);
     const def = el?.props.get(prop);
     const holder: ThemeFile | undefined = def?.file ?? (el ? insertTarget(el, this.view)?.file : undefined) ?? this.project?.entry;
@@ -1622,7 +1766,7 @@ class Editor {
     // A path held by a single ${variable} is written relative to the variable's file, like typing it.
     const now = this.currentView.elements.get(elementName)!.props.get(fit.prop);
     const v = now ? varRef(now.raw) : null;
-    const varDef = v ? this.res?.vars.get(v) : undefined;
+    const varDef = v && !this.gameEditing ? this.res?.vars.get(v) : undefined;
     const rel = varDef ? relative(dirname(varDef.file.abs), abs) : this.relativeAssetPath(elementName, fit.prop, abs);
     this.setProp(elementName, fit.prop, rel);
     this.selected = elementName;

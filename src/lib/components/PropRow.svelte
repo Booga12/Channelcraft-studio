@@ -64,6 +64,9 @@
       {#if def.conditional}<span class="badge" title="This value only applies under a condition">if</span>{/if}
       {#if history.length > 1}<span class="badge" title="Set {history.length} times for this element; this is the value that wins">×{history.length}</span>{/if}
     {/if}
+    {#if ed.gameFile && def.file === ed.gameFile}
+      <span class="badge accent" title="Only {ed.gameName} uses this value ({def.file.rel})">This game only</span>
+    {/if}
     {#if own}
       <span class="badge accent" title="Only {ed.consoleName} uses this value; other consoles use the shared one">This console only</span>
       <button class="ghost small" title="Use the shared value on {ed.consoleName} again" onclick={() => own && ed.clearConsoleValues([own])}>Reset</button>

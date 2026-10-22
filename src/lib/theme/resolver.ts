@@ -3,7 +3,7 @@
 // element merge into earlier ones property by property. Every resolved value remembers the
 // XML node it came from, so the editor can write changes back to the right place.
 
-import { dirname, isAbsolute, join } from '../path';
+import { basename, dirname, isAbsolute, join } from '../path';
 import { attr, elements, hasElementChildren, textOf, type XElement } from '../xml/cst';
 import { ARCH, bindingValue, builtinVar, type Environment } from './context';
 import { evalCondition, type ExprEnv } from './expr';
@@ -91,6 +91,62 @@ export interface Resolution {
   /** Conditions that couldn't be decided (treated as passing). */
   unknownExpressions: Set<string>;
   defaultView: string | null;
+  /** Per game-list screen: where RetroBat looks for this game's own file, and the file if there is one. */
+  perGame: Map<string, PerGameInfo>;
+  /** Parts of a game's own file that RetroBat doesn't apply (see perGameApplies). */
+  perGameIgnored: { view: string; name: string }[];
+}
+
+/**
+ * RetroBat's per-game look (DetailedContainer::loadThemedExtras): a game-list screen with a
+ * `<gameextras name="gameextras"><path>folder</path></gameextras>` element reads, for the game in
+ * focus, `folder/<rom name>.xml` or `folder/<rom name>/theme.xml` (also by CRC32, not used here)
+ * and lays it over the theme for that game only.
+ */
+export interface PerGameInfo {
+  view: string;
+  /** Absolute folder, or null when it's given as a binding (`path_binding`) the app can't follow. */
+  root: string | null;
+  /** The game's ROM file name without its extension. */
+  stem: string;
+  file: ThemeFile | null;
+}
+
+/** Screens that show one game at a time (they use RetroBat's DetailedContainer). */
+export const GAME_LIST_VIEWS = new Set(['detailed', 'video', 'grid', 'gamecarousel']);
+
+/** Whether a screen (or the custom screen it is based on) shows one game at a time. */
+export function isGameListView(res: Resolution, name: string): boolean {
+  for (let n: string | null = name, i = 0; n && i < 10; i++) {
+    if (GAME_LIST_VIEWS.has(n)) return true;
+    n = res.views.get(n)?.inherits ?? null;
+  }
+  return false;
+}
+
+/** A ROM path's file name without the extension, as RetroBat names per-game files. */
+export function romStem(romPath: string): string {
+  const b = basename(romPath.replace(/[\\/]+$/, ''));
+  const i = b.lastIndexOf('.');
+  return i > 0 ? b.slice(0, i) : b;
+}
+
+const ACTIVATE_EVENTS = new Set(['activate', 'activateNext', 'activatePrev']);
+
+/**
+ * Whether RetroBat re-applies an element from a game's own file. Only the game parts (md_*) and
+ * extras with an appear animation are rebuilt per game; extras the game's file adds itself need
+ * extra="true". Everything else is drawn once for the whole list, so a game's file can't change it.
+ */
+export function perGameApplies(existing: ResolvedElement | undefined, name: string, hasExtraAttr: boolean): boolean {
+  if (name.startsWith('md_')) return true;
+  if (!existing) return hasExtraAttr;
+  // extra="true" on a name the theme already uses makes RetroBat draw a per-game copy of it.
+  return hasExtraAttr || (!!existing.extra && existing.extra !== 'false' && hasActivateStoryboard(existing));
+}
+
+export function hasActivateStoryboard(el: ResolvedElement): boolean {
+  return el.complex.some((c) => c.name === 'storyboard' && ACTIVATE_EVENTS.has(attr(c.node, 'event') ?? ''));
 }
 
 const COND_ATTRS = new Set(['if', 'ifSubset', 'lang', 'region', 'tinyScreen', 'verticalScreen', 'ifHelpPrompts', 'ifArch', 'ifNotArch', 'ifCheevos', 'ifNetwork']);
@@ -139,7 +195,11 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
     unknownConditions: 0,
     unknownExpressions: new Set(),
     defaultView: null,
+    perGame: new Map(),
+    perGameIgnored: [],
   };
+  /** While a game's own file is read: the screens it applies to. */
+  let perGameViews: Set<string> | null = null;
   const subsetSel = new Map<string, string>();
   const subsetInfo = new Map<string, SubsetInfo>();
   const stack: ThemeFile[] = [];
@@ -285,6 +345,10 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
     if (!names.length) names.push(el.name);
     for (const name of names) {
       let re = view.elements.get(name);
+      if (perGameViews && !perGameApplies(re, name, attr(el, 'extra') !== undefined)) {
+        out.perGameIgnored.push({ view: view.name, name });
+        continue;
+      }
       if (!re) {
         re = { name, type: el.name, extra: null, defs: [], props: new Map(), history: new Map(), complex: [], conditional: false, unknownConditions: 0, order: order++ };
         view.elements.set(name, re);
@@ -391,6 +455,7 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
       case 'view': {
         if (!conds(el).pass) return;
         for (const name of splitNames(attr(el, 'name'))) {
+          if (perGameViews && !perGameViews.has(name)) continue;
           const view = getView(name);
           view.defs.push({ node: el, file });
           for (const child of elements(el)) processElement(view, child, file);
@@ -400,6 +465,7 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
       case 'customView': {
         if (!conds(el).pass) return;
         for (const name of splitNames(attr(el, 'name'))) {
+          if (perGameViews && !perGameViews.has(name)) continue;
           const view = getView(name, true, attr(el, 'inherits') ?? null, attr(el, 'displayName') ?? null);
           view.defs.push({ node: el, file });
           for (const child of elements(el)) processElement(view, child, file);
@@ -428,6 +494,25 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
 
   const entry = entryRel ? project.fileAt(entryRel) : project.entry;
   if (entry) processFile(entry);
+  // The game in focus: its own file, if the theme has one for it, goes over the theme.
+  if (env.game?.path && entry?.rel === 'theme.xml') {
+    const stem = romStem(env.game.path);
+    const byFile = new Map<ThemeFile, Set<string>>();
+    for (const [name, v] of out.views) {
+      const ge = v.elements.get('gameextras');
+      if (!ge || !isGameListView(out, name)) continue;
+      const def = ge.props.get('path');
+      const root = def?.value ? resolvePath(def.value, dirname(def.file.abs), project.dir, env) : null;
+      const file = root ? (project.file(join(root, `${stem}.xml`)) ?? project.file(join(root, stem, 'theme.xml')) ?? null) : null;
+      out.perGame.set(name, { view: name, root, stem, file });
+      if (file) byFile.set(file, (byFile.get(file) ?? new Set()).add(name));
+    }
+    for (const [file, views] of byFile) {
+      perGameViews = views;
+      processFile(file);
+      perGameViews = null;
+    }
+  }
   for (const info of out.subsets) info.selected = subsetSel.get(info.name) ?? info.selected;
   return out;
 }

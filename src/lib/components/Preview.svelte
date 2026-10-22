@@ -131,6 +131,8 @@
           e.type !== 'gridtile' &&
           !e.name.startsWith('gridtile') &&
           e.type !== 'sound' &&
+          // Where RetroBat looks for each game's own file; nothing to draw.
+          e.type !== 'gameextras' &&
           !e.type.startsWith('menu') &&
           (visibleNow(e) || ed.isSelected(e.name)),
       )

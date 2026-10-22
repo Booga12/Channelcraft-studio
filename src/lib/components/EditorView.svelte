@@ -24,7 +24,7 @@
 
   const LABELS = $derived<Record<PanelId, { label: string; title: string; count?: number }>>({
     properties: { label: 'Properties', title: 'Settings of the selected element' },
-    elements: { label: 'Layers', title: 'Everything drawn on this screen', count: ed.currentView?.elements.size },
+    elements: { label: 'Layers', title: 'Everything drawn on this screen', count: [...(ed.currentView?.elements.values() ?? [])].filter((e) => e.type !== 'gameextras').length },
     library: { label: 'Add', title: 'Ready-made elements that show RetroBat’s game and system data' },
     assets: { label: 'Assets', title: 'Your own pictures, videos, sounds and fonts; drag one onto an element to use it', count: ed.library.length || undefined },
     presets: { label: 'Presets', title: 'Designs, layouts, colour palettes' },

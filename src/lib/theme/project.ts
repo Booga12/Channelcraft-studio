@@ -85,8 +85,9 @@ export class ThemeProject {
     return f;
   }
 
+  /** Changed files. A new file that is still an empty <theme> (its edits were undone) isn't one. */
   get dirtyFiles(): ThemeFile[] {
-    return [...this.files.values()].filter((f) => f.dirty);
+    return [...this.files.values()].filter((f) => f.dirty && !(f.savedSrc === '' && /^\s*<theme>\s*<\/theme>\s*$/.test(f.src)));
   }
 
   /** Theme files grouped as a sorted list, theme.xml first. */
