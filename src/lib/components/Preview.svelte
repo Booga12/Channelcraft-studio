@@ -155,10 +155,13 @@
     if (splash) return splash.elements.filter((e) => !ed.hidden[e.name]);
     const v = ed.currentView;
     if (!v) return [];
+    // On the console screen an image grid replaces RetroBat's carousel.
+    const gridded = ed.view === 'system' && [...v.elements.values()].some((e) => e.type === 'imagegrid' && isVisible(e));
     return [...v.elements.values()]
       .filter(
         (e) =>
           !ed.hidden[e.name] &&
+          !(gridded && e.type === 'carousel') &&
           !(simpleList && e.name.startsWith('md_')) &&
           !(logoShown && e.name === 'logoText') &&
           !isCarouselPart(ed.view, e) &&

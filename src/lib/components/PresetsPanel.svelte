@@ -1,5 +1,6 @@
 <script lang="ts">
   // Layout presets for the current screen and colour palettes for the whole theme.
+  import TileStylePicker from './TileStylePicker.svelte';
   import { ed } from '$lib/editor.svelte';
   import { viewLabel } from '$lib/friendly';
   import { appliedDesign, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
@@ -174,6 +175,13 @@
       </div>
     {/if}
   </section>
+
+  {#if ed.tileStyle !== null}
+    <section>
+      <h4>Tile style</h4>
+      <TileStylePicker />
+    </section>
+  {/if}
 
   <section>
     <h4>Colour palettes</h4>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TileStylePicker from './TileStylePicker.svelte';
   import { ask } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
   import { sharing } from '$lib/theme/edits';
@@ -178,6 +179,11 @@
       {/each}
     {/if}
   {/each}
+
+  {#if ed.tileStyle !== null && (el.type === 'imagegrid' || el.type === 'gridtile' || el.name.startsWith('gridtile'))}
+    <h4>Tile style</h4>
+    <TileStylePicker />
+  {/if}
 
   <h4>Animation</h4>
   <div class="anim">

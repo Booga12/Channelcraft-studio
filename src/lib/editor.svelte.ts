@@ -24,6 +24,7 @@ import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { consoleScreenPath, isDataBound, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
 import { reorder, zIndexFor } from './theme/layers';
+import { TILE_DIR, TILE_STYLES, tileArt, tileColoursFrom, tileStyleOfPath, tileStyleProps, type TileColours } from './theme/tiles';
 import { appliedDesign, appliedSystemLayout, coloursFromVars, designChanges, designVarsChange, LAYOUTS, layoutChanges, paletteDesignVars, type LayoutPreset, type Palette } from './theme/presets';
 import { planMenuOptions, readMenuState, type MenuChoices, type MenuState } from './theme/menuOptions';
 import { DESIGNS, designAssets, type Design } from './theme/designs';
@@ -1442,16 +1443,64 @@ class Editor {
   #artTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** The design artwork folders in this theme and the colours they should be drawn in now. */
-  private designArtNow(): { key: string; jobs: { dir: string; design: Design }[]; colours: NonNullable<ReturnType<typeof coloursFromVars>> } | null {
-    const p = this.project;
+  /** The theme's design colours (designAccent...), as shared across consoles, if it has them. */
+  private designColours() {
     const res = this.res;
-    if (!p || !res) return null;
-    const colours = coloursFromVars((n) => (sharedIn(res.varHistory.get(n)) ?? res.vars.get(n))?.value);
-    if (!colours) return null;
+    return res ? coloursFromVars((n) => (sharedIn(res.varHistory.get(n)) ?? res.vars.get(n))?.value) : null;
+  }
+
+  private designArtNow(): { key: string; jobs: { dir: string; files: () => Record<string, string> }[] } | null {
+    const p = this.project;
+    const colours = this.designColours();
+    if (!p || !colours) return null;
     const dirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/([^/]+)\//)?.[1]).filter(Boolean));
-    const jobs = DESIGNS.filter((d) => dirs.has(d.id)).map((d) => ({ dir: `_inc/ccs/${d.id}`, design: d }));
+    const tileDirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/tiles\/([^/]+)\//)?.[1]).filter(Boolean));
+    const jobs = [
+      ...DESIGNS.filter((d) => dirs.has(d.id)).map((d) => ({ dir: `_inc/ccs/${d.id}`, files: () => designAssets({ ...d, palette: colours }), id: d.id })),
+      ...TILE_STYLES.filter((t) => tileDirs.has(t.id)).map((t) => ({ dir: `${TILE_DIR}/${t.id}`, files: () => tileArt(t, this.tileColours()), id: `tiles/${t.id}` })),
+    ];
     if (!jobs.length) return null;
-    return { key: `${jobs.map((j) => j.design.id).join(',')}|${Object.values(colours).join(',')}`, jobs, colours };
+    return { key: `${jobs.map((j) => j.id).join(',')}|${Object.values(colours).join(',')}`, jobs };
+  }
+
+  /** Colours for grid tiles: the design colours, else the tiles' own colours on this screen. */
+  private tileColours(): TileColours {
+    const c = this.designColours();
+    if (c) return { tile: c.text, accent: c.accent, text: c.text };
+    // Otherwise the theme's accent and text colours when it names them (as the starter theme
+    // does), else the tiles' colours as written (white once a style has been applied).
+    const els = this.currentView?.elements;
+    const v = (n: string) => this.res?.vars.get(n)?.value;
+    const bg = (n: string) => els?.get(n)?.props.get('backgroundColor')?.value;
+    return tileColoursFrom(v('textColor') ?? bg('default'), v('accentColor') ?? bg('selected'), v('textColor'));
+  }
+
+  /** The image grid's tile style on this screen ('' for one ChannelCraft didn't make), or null without a grid. */
+  get tileStyle(): string | null {
+    const v = this.currentView;
+    if (!v || ![...v.elements.values()].some((e) => e.type === 'imagegrid')) return null;
+    return tileStyleOfPath(v.elements.get('default')?.props.get('backgroundImage')?.value) ?? '';
+  }
+
+  /** Gives the image grid on this screen a tile style: new tile pictures and matching settings. */
+  async applyTileStyle(id: string) {
+    const style = TILE_STYLES.find((t) => t.id === id);
+    const v = this.currentView;
+    if (!style || !v || this.tileStyle === null) return;
+    if (!v.elements.has('default') || !v.elements.has('selected')) {
+      this.notify('This grid has no tile settings (“default” and “selected”) to style. Grids from Presets have them.', 'error');
+      return;
+    }
+    const wrote = await this.writeArt(`${TILE_DIR}/${style.id}`, tileArt(style, this.tileColours()));
+    const props = tileStyleProps(style);
+    const grid = [...v.elements.values()].find((e) => e.type === 'imagegrid')!;
+    const updates: Record<string, Record<string, string>> = {};
+    for (const [name, p] of Object.entries(props)) {
+      const target = name === 'imagegrid' ? grid.name : name;
+      if (v.elements.has(target)) updates[target] = p;
+    }
+    this.setPropsMany(`tile style “${style.label}”`, updates);
+    this.notify(wrote ? `Tiles now use “${style.label}”. Ctrl+Z to undo.` : `Tile style “${style.label}” shown in the preview only (files can’t be written here).`);
   }
 
   /**
@@ -1472,7 +1521,7 @@ class Editor {
       const again = this.designArtNow();
       if (this.project !== p || !again || this.#artDrawn.get(p.dir) === again.key) return;
       this.#artDrawn.set(p.dir, again.key);
-      for (const j of again.jobs) await this.writeArt(j.dir, designAssets({ ...j.design, palette: again.colours }));
+      for (const j of again.jobs) await this.writeArt(j.dir, j.files());
     }, 350);
   }
 
