@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { SvelteMap } from 'svelte/reactivity';
 
 export interface RootInfo {
   root: string;
@@ -136,7 +137,7 @@ export const api = {
   noticesPath: () => invoke<string>('notices_path'),
   copyTheme: (src: string, name: string) => invoke<string>('copy_theme', { src, name }),
   /** Zips a backup, then moves the folder to the Recycle Bin. Returns the backup path. */
-  deleteTheme: (dir: string) => invoke<string>('delete_theme', { dir }),
+  deleteTheme: (dir: string) => invoke<void>('delete_theme', { dir }),
   createThemeFromStarter: (name: string) => invoke<string>('create_theme_from_starter', { name }),
   /** Looks inside a theme .zip or folder (nothing is written): what would come in and what wouldn't. */
   inspectThemeImport: (source: string) => invoke<ImportPlan>('inspect_theme_import', { source }),
@@ -167,7 +168,9 @@ export const tauriFs: ThemeFs = {
 
 const urlCache = new Map<string, string>();
 /** Files created in this session (design artwork), shown before or without being on disk. */
-const virtualFiles = new Map<string, string>();
+// Reactive, so the preview picks up artwork the editor has just drawn (a SvelteMap works outside
+// components too).
+const virtualFiles = new SvelteMap<string, string>();
 
 export function registerVirtualFile(path: string, content: string, mime = 'image/svg+xml') {
   virtualFiles.set(path.toLowerCase().replace(/\//g, '\\'), `data:${mime};charset=utf-8,${encodeURIComponent(content)}`);

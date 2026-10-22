@@ -23,7 +23,8 @@ const r4 = (v: number) => String(Math.round(v * 10000) / 10000);
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
 import { consoleScreenPath, isDataBound, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
-import { appliedDesign, appliedSystemLayout, designChanges, designVarsChange, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
+import { reorder, zIndexFor } from './theme/layers';
+import { appliedDesign, appliedSystemLayout, coloursFromVars, designChanges, designVarsChange, LAYOUTS, layoutChanges, paletteDesignVars, type LayoutPreset, type Palette } from './theme/presets';
 import { planMenuOptions, readMenuState, type MenuChoices, type MenuState } from './theme/menuOptions';
 import { DESIGNS, designAssets, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
@@ -112,7 +113,13 @@ class Editor {
   locked = $state<Record<string, boolean>>({});
   /** On-screen boxes of drawn elements in screen fractions, measured by the preview. */
   rects = $state.raw<Record<string, { x: number; y: number; w: number; h: number }>>({});
-  playAnimations = $state(false);
+  /** Animations play in the preview (on by default, remembered between sessions). */
+  get playAnimations() {
+    return prefs.v.playAnimations;
+  }
+  set playAnimations(on: boolean) {
+    if (prefs.v.playAnimations !== on) prefs.set('playAnimations', on);
+  }
   /** Edits of colours and properties go to the preview console's own values (RetroBat `if` on ${system.theme}). */
   consoleOnly = $state(false);
   /** Edits go to the game in the preview only: RetroBat's own file for that game (see perGame.ts). */
@@ -520,13 +527,20 @@ class Editor {
     return dest;
   }
 
+  /** Themes being moved to the Recycle Bin right now; the start screen leaves them out. */
+  deleting = $state<string[]>([]);
+
   async deleteTheme(dir: string, name: string) {
+    this.deleting = [...this.deleting, dir];
+    this.notify(`Moving “${name}” to the Recycle Bin…`);
     try {
       await api.deleteTheme(dir);
       await this.refreshThemes();
-      this.notify(`“${name}” was moved to the Recycle Bin (a backup zip was saved too)`);
+      this.notify(`“${name}” was moved to the Recycle Bin. Restore it from there if you change your mind.`);
     } catch (e) {
       this.notify(String(e), 'error');
+    } finally {
+      this.deleting = this.deleting.filter((d) => d !== dir);
     }
   }
 
@@ -974,12 +988,26 @@ class Editor {
     this.setPropsMany('layer order', updates);
   }
 
-  /** Puts `name` directly above `target` in the layer order (drag and drop in Layers). */
-  placeAbove(name: string, target: string) {
+  /** The screen's layers top first, as RetroBat draws them (zIndex, then later in the files on top). */
+  get layers(): ResolvedElement[] {
     const v = this.currentView;
-    const t = v?.elements.get(target);
-    if (!v || !t || name === target) return;
-    this.setProps(name, { zIndex: String(zOf(t) + 1) });
+    if (!v) return [];
+    return [...v.elements.values()].filter((e) => e.type !== 'gameextras').sort((a, b) => zOf(b) - zOf(a) || b.order - a.order);
+  }
+
+  /**
+   * Moves layers (Layers panel drag and drop) so they sit just above `before`, or at the bottom
+   * when it's null, keeping their own order. One undo step.
+   */
+  moveLayers(names: string[], before: string | null) {
+    const layers = this.layers.map((e) => ({ name: e.name, z: zOf(e) }));
+    const moving = layers.filter((l) => names.includes(l.name)).map((l) => l.name);
+    if (!moving.length || (before !== null && moving.includes(before))) return;
+    const order = reorder(layers, moving, before);
+    if (order.every((l, i) => l.name === layers[i].name)) return;
+    const z = zIndexFor(order, new Set(moving));
+    const updates = Object.fromEntries(Object.entries(z).map(([n, v]) => [n, { zIndex: String(v) }]));
+    this.setPropsMany(moving.length > 1 ? `layer order of ${moving.length} layers` : `layer order of ${elementLabel(moving[0])}`, updates);
   }
 
   // ---- clipboard ----
@@ -1407,6 +1435,47 @@ class Editor {
     this.selected = null;
   }
 
+  // ---- design artwork follows the design colours ----
+
+  /** What the design artwork on disk was drawn with, per theme folder ('' = not known yet). */
+  #artDrawn = new Map<string, string>();
+  #artTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** The design artwork folders in this theme and the colours they should be drawn in now. */
+  private designArtNow(): { key: string; jobs: { dir: string; design: Design }[]; colours: NonNullable<ReturnType<typeof coloursFromVars>> } | null {
+    const p = this.project;
+    const res = this.res;
+    if (!p || !res) return null;
+    const colours = coloursFromVars((n) => (sharedIn(res.varHistory.get(n)) ?? res.vars.get(n))?.value);
+    if (!colours) return null;
+    const dirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/([^/]+)\//)?.[1]).filter(Boolean));
+    const jobs = DESIGNS.filter((d) => dirs.has(d.id)).map((d) => ({ dir: `_inc/ccs/${d.id}`, design: d }));
+    if (!jobs.length) return null;
+    return { key: `${jobs.map((j) => j.design.id).join(',')}|${Object.values(colours).join(',')}`, jobs, colours };
+  }
+
+  /**
+   * Redraws a design theme's artwork (background, panels, tiles) when its design colours change,
+   * from a palette, the Colours tab or undo, so the picture never keeps the old colours.
+   * The first call for a theme only notes what the artwork was drawn with.
+   */
+  syncDesignArt() {
+    const p = this.project;
+    const now = this.designArtNow();
+    if (!p || !now) return;
+    const drawn = this.#artDrawn.get(p.dir);
+    if (drawn === undefined) return void this.#artDrawn.set(p.dir, now.key);
+    if (drawn === now.key) return;
+    if (this.#artTimer) clearTimeout(this.#artTimer);
+    this.#artTimer = setTimeout(async () => {
+      this.#artTimer = null;
+      const again = this.designArtNow();
+      if (this.project !== p || !again || this.#artDrawn.get(p.dir) === again.key) return;
+      this.#artDrawn.set(p.dir, again.key);
+      for (const j of again.jobs) await this.writeArt(j.dir, designAssets({ ...j.design, palette: again.colours }));
+    }, 350);
+  }
+
   /** Writes generated SVG artwork into the theme (and shows it straight away). Returns false if it couldn't be written. */
   async writeArt(relDir: string, files: Record<string, string>): Promise<boolean> {
     const p = this.project;
@@ -1493,6 +1562,8 @@ class Editor {
     if (this.screenFile !== 'theme.xml') this.showScreen({ view: this.viewNames.includes('system') ? 'system' : (this.viewNames[0] ?? 'system'), file: 'theme.xml' });
     const artRel = `_inc/ccs/${design.id}`;
     const wrote = await this.writeArt(artRel, designAssets(design));
+    // Drawn in the design's own colours, which the commit below sets: note them afresh.
+    this.#artDrawn.delete(p.dir);
     task.step('fonts');
     const font = await this.ensureFont(design.font);
     const titleFont = design.titleFont ? await this.ensureFont(design.titleFont) : null;
@@ -1686,6 +1757,16 @@ class Editor {
     return (root && attr(root, 'defaultTransition')) || '';
   }
 
+  /**
+   * How RetroBat moves between consoles: its own Transition Style, or the theme's when that is
+   * Auto, else a slide.
+   */
+  get transition(): 'slide' | 'fade' | 'instant' {
+    const own = (this.root?.es?.transitionStyle ?? 'auto').toLowerCase();
+    const v = own !== 'auto' && own ? own : this.themeTransition.toLowerCase();
+    return v.includes('fade') ? 'fade' : v === 'instant' ? 'instant' : 'slide';
+  }
+
   /** Sets the transition RetroBat uses between screens when its Transition Style is Auto. */
   setThemeTransition(value: string) {
     const entry = this.project?.fileAt('theme.xml');
@@ -1699,7 +1780,10 @@ class Editor {
   applyPalette(palette: Palette): number {
     const res = this.res;
     if (!res || this.sharedOnly('Colour palettes')) return 0;
-    const changes = Object.entries(palette.colors)
+    // Themes made from a design draw with the design colours (designAccent...), so those change
+    // too; their artwork follows by itself (syncDesignArt).
+    const colours: Record<string, string> = { ...palette.colors, ...(res.vars.has('designAccent') ? paletteDesignVars(palette) : {}) };
+    const changes = Object.entries(colours)
       .filter(([name]) => res.vars.has(name))
       .map(([name, value]) => this.varChange(name, value))
       .filter((c): c is Change => !!c);

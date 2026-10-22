@@ -40,6 +40,7 @@
     locked = false,
     animate = false,
     play,
+    slide = { by: 0, axis: 'x', mode: 'slide' },
     z,
   }: {
     el: ResolvedElement;
@@ -57,6 +58,11 @@
     animate?: boolean;
     /** Which game or console is shown and which way the list last moved, so motion replays. */
     play?: { token: string; dir: number };
+    /**
+     * The console screen between two consoles: `by` slots still to scroll (0 when settled).
+     * The carousel scrolls by it; everything else slides a screen per slot, or fades.
+     */
+    slide?: { by: number; axis: 'x' | 'y'; mode: string };
     /** Stacking position when the screen has a fixed drawing order (loading screens). */
     z?: number;
   } = $props();
@@ -222,13 +228,17 @@
     return parts.join(';');
   });
 
+  const shadowFilter = $derived.by(() => {
+    const shader = SHADOW_TYPES.has(el.type) ? shaderOf(el) : null;
+    return shader?.shadow ? shadowCss(shader.offset, H) : '';
+  });
+
   const wrapStyle = $derived.by(() => {
     const base = `translate(${-box.ox * 100}%, ${-box.oy * 100}%) rotate(${box.rotation}deg)`;
     const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${z ?? Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
     const anim = animate ? animationCss(el, W, H, base, { screen: screenOf(view), token: play?.token, dir: play?.dir }) : null;
-    if (anim) s.push(`animation:${anim}`);
-    const shader = SHADOW_TYPES.has(el.type) ? shaderOf(el) : null;
-    if (shader?.shadow) s.push(`filter:${shadowCss(shader.offset, H)}`);
+    if (anim) s.push(`animation:${anim}`, `--ccs-w:${W}px`, `--ccs-h:${H}px`);
+    if (shadowFilter) s.push(`filter:${shadowFilter}`);
     if (outer.w !== null) s.push(`width:${outer.w}px`);
     if (outer.h !== null) s.push(`height:${outer.h}px`);
     const op = num('opacity', 1);
@@ -269,6 +279,7 @@
   });
 
   // ---- carousel ----
+
   // Laid out the way EmulationStation's SystemView does it: logos spaced across the carousel
   // (horizontal / vertical), or all on one spot and turned around a far-away point (wheels).
   const carouselItems = $derived.by(() => {
@@ -303,11 +314,16 @@
     const list = carousel.systems;
     const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
     // RetroBat also draws a couple of logos past each end (they're clipped by the carousel box).
+    // While scrolling, logos sit `shift` slots away from their resting place.
+    const shift = slide.by;
     const reach = n === 1 ? 0 : Math.floor(n / 2) + 2;
+    const extra = Math.ceil(Math.abs(shift));
     const items: { sys: SystemInfo; logo: string | null; selected: boolean; x: number; y: number; w: number; h: number; transform: string; opacity: number; z: number }[] = [];
-    for (let k = -reach; k <= reach; k++) {
+    for (let k = -reach - extra; k <= reach + extra; k++) {
       const sys = list.length ? list[(((cur + k) % list.length) + list.length) % list.length] : env.settings.system;
-      const d = Math.abs(k);
+      const p = k + shift;
+      if (n === 1 && Math.abs(p) >= 1) continue;
+      const d = Math.abs(p);
       const scale = Math.min(L, Math.max(1, 1 + (L - 1) * (1 - d))) / L;
       const opacity = Math.min(1, Math.max(minOp, (0x80 + 0x7f * (1 - d)) / 255));
       // The logo is sized to logoSize × logoScale and centred on its slot, then scaled down.
@@ -315,8 +331,9 @@
       const h = lh * L;
       const dx = (ro[0] - 0.5) * w;
       const dy = (ro[1] - 0.5) * h;
-      const transform = wheel ? `scale(${scale}) translate(${dx}px, ${dy}px) rotate(${rot * k}deg) translate(${-dx}px, ${-dy}px)` : `scale(${scale})`;
-      items.push({ sys, logo: logoFor(sys), selected: k === 0, x: k * sx + xOff + lw / 2 - w / 2, y: k * sy + yOff + lh / 2 - h / 2, w, h, transform, opacity, z: 100 - d });
+      const transform = wheel ? `scale(${scale}) translate(${dx}px, ${dy}px) rotate(${rot * p}deg) translate(${-dx}px, ${-dy}px)` : `scale(${scale})`;
+      const fade = n === 1 ? 1 - d : 1;
+      items.push({ sys, logo: logoFor(sys), selected: k === 0, x: p * sx + xOff + lw / 2 - w / 2, y: p * sy + yOff + lh / 2 - h / 2, w, h, transform, opacity: opacity * fade, z: 100 - Math.round(d * 10) });
     }
     return items;
   });
@@ -388,7 +405,16 @@
   const helpIcon = $derived(cssColor(val('iconColor'), '#bbb'));
 </script>
 
-<div class="el {el.type}" class:selected class:ghost class:locked data-name={el.name} style={wrapStyle}>
+<div
+  class="el {el.type}"
+  class:selected
+  class:ghost
+  class:locked
+  data-name={el.name}
+  style={wrapStyle}
+  style:translate={slide.by && slide.mode === 'slide' && el.type !== 'carousel' ? (slide.axis === 'x' ? `${slide.by * W}px 0` : `0 ${slide.by * H}px`) : undefined}
+  style:filter={slide.by && slide.mode === 'fade' && el.type !== 'carousel' ? `${shadowFilter} brightness(${Math.max(0, 1 - Math.abs(slide.by) * 2)})` : undefined}
+>
   {#if el.type === 'image'}
     {#if imgPath}
       {@const url = displayUrl(imgPath)}

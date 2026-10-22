@@ -62,7 +62,7 @@
       ed.notify(`“${t.name}” is the theme RetroBat is using, so it can’t be deleted. Use another theme in RetroBat first.`, 'error');
       return;
     }
-    const ok = await ask(`Delete “${t.name}”?\n\nThe folder goes to the Windows Recycle Bin, so you can restore it from there. A backup zip is saved first as well.`, {
+    const ok = await ask(`Delete “${t.name}”?\n\nThe folder goes to the Windows Recycle Bin, so you can restore it from there.`, {
       title: 'Delete theme',
       kind: 'warning',
       okLabel: 'Move to Recycle Bin',
@@ -85,7 +85,7 @@
     open_(t.path);
   }
 
-  const shown = $derived(ed.themes.filter((t) => t.name.toLowerCase().includes(filter.trim().toLowerCase())));
+  const shown = $derived(ed.themes.filter((t) => !ed.deleting.includes(t.path) && t.name.toLowerCase().includes(filter.trim().toLowerCase())));
 
   async function pickRoot() {
     const dir = await open({ directory: true, title: 'Choose your RetroBat folder (the one with RetroBat.exe)' });
@@ -179,7 +179,7 @@
 
         <div class="flex flex-col gap-4">
           <div class="flex items-center gap-3">
-            <h2 class="m-0 flex items-center gap-2 text-lg font-semibold">Your themes <Badge variant="secondary">{ed.themes.length}</Badge></h2>
+            <h2 class="m-0 flex items-center gap-2 text-lg font-semibold">Your themes <Badge variant="secondary">{ed.themes.length - ed.deleting.length}</Badge></h2>
             <div class="flex-1"></div>
             <div class="relative w-64">
               <SearchIcon class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />

@@ -4,7 +4,7 @@
 // and can be swapped for another preset later.
 
 import { attr, patchInsertChild, patchReplaceSpan, type XElement, type XNode } from '../xml/cst';
-import { DESIGNS, designElements, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext } from './designs';
+import { DESIGNS, designElements, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext, type DesignVar, type Palette6 } from './designs';
 import type { Change } from './edits';
 import type { ThemeProject } from './project';
 import type { Resolution } from './resolver';
@@ -256,9 +256,47 @@ export function layoutsFor(view: string): LayoutPreset[] {
   return LAYOUTS.filter((l) => l.kind === kind);
 }
 
-/** Which colours of a palette this theme has variables for. */
+/** Mixes two RRGGBB(AA) colours; t = 0 gives a, 1 gives b. Returns RRGGBB. */
+function mix(a: string, b: string, t: number): string {
+  const ch = (c: string, i: number) => parseInt(c.slice(i, i + 2), 16) || 0;
+  return [0, 2, 4].map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+/** A palette as the seven colours designs are drawn with. */
+export function paletteColours(palette: Palette): Palette6 {
+  const c = palette.colors;
+  const bg = c.bgColor ?? '101014FF';
+  const accent = c.accentColor ?? 'FFFFFFFF';
+  return {
+    bg,
+    // The second background colour: a little towards the accent, for gradients and floors.
+    bg2: `${mix(bg, accent, 0.14)}FF`,
+    surface: c.panelColor ?? 'FFFFFF14',
+    text: c.textColor ?? 'FFFFFFFF',
+    dim: c.dimTextColor ?? 'AAAAAAFF',
+    accent,
+    accentText: c.selectedTextColor ?? 'FFFFFFFF',
+  };
+}
+
+/** The design colours (designAccent...) a palette sets in themes made from a design. */
+export function paletteDesignVars(palette: Palette): Record<DesignVar, string> {
+  return designVars(paletteColours(palette));
+}
+
+/** A design theme's colours read back from its variables, to redraw its artwork in them. */
+export function coloursFromVars(get: (name: DesignVar) => string | undefined): Palette6 | null {
+  const v = (n: DesignVar) => get(n)?.trim();
+  const bg = v('designBackground');
+  const accent = v('designAccent');
+  if (!bg || !accent) return null;
+  return { bg, bg2: v('designBackground2') ?? bg, surface: v('designPanel') ?? 'FFFFFF14', text: v('designText') ?? 'FFFFFFFF', dim: v('designDimText') ?? 'AAAAAAFF', accent, accentText: v('designSelectedText') ?? 'FFFFFFFF' };
+}
+
+/** Which colours of a palette this theme has variables for (a design theme's count as all). */
 export function paletteCoverage(palette: Palette, res: Resolution): number {
-  return Object.keys(palette.colors).filter((n) => res.vars.has(n)).length;
+  const own = Object.keys(palette.colors).filter((n) => res.vars.has(n)).length;
+  return res.vars.has('designAccent') ? Math.max(own, Object.keys(palette.colors).length) : own;
 }
 
 const MARK = (view: string) => `ChannelCraft layout preset (${view})`;

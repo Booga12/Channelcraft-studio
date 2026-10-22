@@ -538,10 +538,14 @@ export function animationCss(el: ResolvedElement, W: number, H: number, base: st
       if (x !== undefined) v[k.prop] = x;
     }
     const opacity = v.opacity === undefined ? null : v.opacity > 1 ? v.opacity / 255 : v.opacity;
-    const dx = (v.x !== undefined ? (v.x - pos[0]) * W : 0) + (v.offsetX ?? 0) * W;
-    const dy = (v.y !== undefined ? (v.y - pos[1]) * H : 0) + (v.offsetY ?? 0) * H;
+    // Movement in screen fractions, times the screen size the element carries in --ccs-w / --ccs-h,
+    // so zooming the preview doesn't make new keyframes (which would restart the motion).
+    const dx = (v.x !== undefined ? v.x - pos[0] : 0) + (v.offsetX ?? 0);
+    const dy = (v.y !== undefined ? v.y - pos[1] : 0) + (v.offsetY ?? 0);
     const f = (n: number) => Math.round(n * 1000) / 1000;
-    return `transform:${base} translate(${f(dx)}px, ${f(dy)}px) rotate(${f(v.rotation ?? 0)}deg) scale(${f(v.scale ?? 1)});${opacity !== null ? `opacity:${f(Math.max(0, Math.min(1, opacity)))};` : ''}`;
+    const g = (n: number) => Math.round(n * 1e6) / 1e6;
+    const move = dx || dy ? ` translate(calc(var(--ccs-w, ${W}px) * ${g(dx)}), calc(var(--ccs-h, ${H}px) * ${g(dy)}))` : '';
+    return `transform:${base}${move} rotate(${f(v.rotation ?? 0)}deg) scale(${f(v.scale ?? 1)});${opacity !== null ? `opacity:${f(Math.max(0, Math.min(1, opacity)))};` : ''}`;
   };
   const keyframes = (name: string, from: number, to: number) => {
     const span = Math.max(1, to - from);
@@ -550,7 +554,7 @@ export function animationCss(el: ResolvedElement, W: number, H: number, base: st
     for (let i = 0; i <= steps; i++) out.push(`${r((i / steps) * 100)}% { ${frame(from + (span * i) / steps)} }`);
     inject(name, `@keyframes ${name} { ${out.join(' ')} }`);
   };
-  const id = hash(`${el.name}|${src(anims)}|${base}|${W}x${H}|${o.token ?? ''}|${o.dir ?? 0}`);
+  const id = hash(`${el.name}|${src(anims)}|${base}|${o.token ?? ''}|${o.dir ?? 0}`);
   const forever = tracks.filter((k) => k.repeat === 0 && cycle(k) > 0);
   if (!forever.length) {
     const end = Math.max(50, ...tracks.map((k) => k.begin + cycle(k) * k.repeat));

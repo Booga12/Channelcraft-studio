@@ -1,6 +1,7 @@
 <script lang="ts">
   // The editor: one bar on top, and the preview filling the rest with floating tools over it
   // (the dock and its panel on the left, the inspector on the right when something is selected).
+  import { untrack } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { ed } from '$lib/editor.svelte';
@@ -39,6 +40,12 @@
   });
   $effect(() => {
     if (ed.simple && open === 'files') open = null;
+  });
+  // A design theme's artwork is redrawn whenever its design colours change.
+  $effect(() => {
+    ed.rev;
+    ed.project;
+    untrack(() => ed.syncDesignArt());
   });
 
   // The preview fits in the space the floating parts leave free.

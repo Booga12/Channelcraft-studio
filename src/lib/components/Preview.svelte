@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
+  import { Tween } from 'svelte/motion';
+  import { cubicOut } from 'svelte/easing';
   import { ed } from '$lib/editor.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { bindingValue, screenSize } from '$lib/theme/context';
@@ -540,6 +542,66 @@
     lastPlace = { system, game };
     play = { token: `${system}|${game}`, dir };
   });
+
+  // On the console screen, changing console scrolls the carousel over 500 ms (cubic ease-out, as
+  // RetroBat's SystemView) and slides or fades the rest of the screen with it.
+  const scroll = new Tween(0, { duration: 500, easing: cubicOut });
+  let lastConsole: { name: string; index: number } | null = null;
+  /** Copies of the previous console's screen while it slides out (RetroBat shows both). */
+  let outgoing: { nodes: HTMLElement[]; delta: number } | null = null;
+  const sliding = () => ed.view === 'system' && untrack(() => ed.playAnimations) && ed.transition === 'slide';
+  // Runs before the DOM changes, so the screen being left can still be copied.
+  $effect.pre(() => {
+    const name = ed.settings.system.name;
+    if (!stageEl || !lastConsole || lastConsole.name === name || !sliding()) return;
+    for (const n of outgoing?.nodes ?? []) n.remove();
+    const nodes: HTMLElement[] = [];
+    for (const el of stageEl.querySelectorAll<HTMLElement>(':scope > .el:not(.carousel)')) {
+      const c = el.cloneNode(true) as HTMLElement;
+      c.style.animation = 'none';
+      c.classList.add('outgoing');
+      c.removeAttribute('data-name');
+      nodes.push(c);
+    }
+    // Added at the end of the stage, outside Svelte's lists; z-index keeps the drawing order.
+    stageEl.append(...nodes);
+    outgoing = { nodes, delta: 0 };
+  });
+  // Moves the copies along with the scroll, then drops them.
+  $effect(() => {
+    const by = scroll.current;
+    const o = outgoing;
+    if (!o) return;
+    if (by === 0) {
+      for (const n of o.nodes) n.remove();
+      outgoing = null;
+      return;
+    }
+    const off = by - o.delta;
+    for (const n of o.nodes) n.style.translate = slideAxis === 'x' ? `${off * dims.width}px 0` : `0 ${off * dims.height}px`;
+  });
+  $effect(() => {
+    const list = carousel.systems;
+    const name = ed.settings.system.name;
+    const index = list.findIndex((s) => s.name === name);
+    const prev = lastConsole;
+    lastConsole = { name, index };
+    // Re-runs for the same console (its list or logos changed) leave a running slide alone.
+    if (prev?.name === name) return;
+    const n = list.length;
+    let delta = prev && index >= 0 && prev.index >= 0 ? (index - prev.index + n) % n : 0;
+    if (delta > n / 2) delta -= n;
+    if (!delta || ed.view !== 'system' || !untrack(() => ed.playAnimations) || ed.transition === 'instant') {
+      for (const n of outgoing?.nodes ?? []) n.remove();
+      outgoing = null;
+      return;
+    }
+    if (outgoing) outgoing.delta = delta;
+    scroll.set(untrack(() => scroll.current) + delta, { duration: 0 });
+    scroll.target = 0;
+  });
+  const slideAxis = $derived<'x' | 'y'>(drawn.find((e) => e.type === 'carousel')?.props.get('type')?.value.trim().startsWith('vertical') ? 'y' : 'x');
+  const slide = $derived({ by: ed.view === 'system' ? scroll.current : 0, axis: slideAxis, mode: ed.transition });
 </script>
 
 <div class="canvas-area">
@@ -615,6 +677,7 @@
                   locked={!!ed.locked[el.name]}
                   animate={ed.playAnimations}
                   {play}
+                  {slide}
                 />
               {/each}
               {#if menu}
@@ -800,6 +863,9 @@
   .stage-wrap {
     position: relative;
     box-shadow: var(--elev-3);
+  }
+  .stage :global(.outgoing) {
+    pointer-events: none;
   }
   .stage {
     position: absolute;

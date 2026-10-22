@@ -12,8 +12,15 @@
   let adding = $state(false);
   let renaming = $state<string | null>(null);
   let renameText = $state('');
-  let dragName = $state<string | null>(null);
-  let dropOn = $state<string | null>(null);
+  // Dragging layers to reorder them. Pointer events rather than HTML drag and drop, which the
+  // desktop app turns off on Windows (it handles files dropped from Explorer itself).
+  let press: { name: string; x: number; y: number; id: number } | null = null;
+  let drag = $state<{ names: string[]; x: number; y: number } | null>(null);
+  /** Where the dragged layers would land: above this layer, or at the bottom (null). */
+  let dropBefore = $state<string | null | undefined>(undefined);
+  let lineY = $state(0);
+  let justDragged = false;
+  let scrollTimer: ReturnType<typeof setInterval> | null = null;
   let menuAt = $state<{ x: number; y: number } | null>(null);
 
   const list = $derived.by(() => {
@@ -23,7 +30,7 @@
     return [...v.elements.values()]
       .filter((e) => e.type !== 'gameextras')
       .filter((e) => !q || e.name.toLowerCase().includes(q) || e.type.includes(q) || elementLabel(e.name).toLowerCase().includes(q))
-      .sort((a, b) => zOf(b) - zOf(a) || a.order - b.order);
+      .sort((a, b) => zOf(b) - zOf(a) || b.order - a.order);
   });
 
   /** On a loading screen, RetroBat draws only its built-in parts and extras. */
@@ -37,7 +44,80 @@
     queueMicrotask(() => listEl.querySelector('li.primary')?.scrollIntoView({ block: 'nearest' }));
   });
 
+  function rowDown(e: PointerEvent, name: string) {
+    if (e.button !== 0 || renaming === name || (e.target as HTMLElement).closest('.ico')) return;
+    press = { name, x: e.clientX, y: e.clientY, id: e.pointerId };
+  }
+
+  /** The drop spot under the pointer: above the row whose top half it's over, else the bottom. */
+  function spotAt(y: number) {
+    const rows = [...listEl.querySelectorAll<HTMLElement>('li[data-layer]')];
+    const top = listEl.getBoundingClientRect().top - listEl.scrollTop;
+    for (const r of rows) {
+      const b = r.getBoundingClientRect();
+      if (y < b.top + b.height / 2) return { before: r.dataset.layer!, y: b.top - top };
+    }
+    const last = rows.at(-1)?.getBoundingClientRect();
+    return { before: null, y: last ? last.bottom - top : 0 };
+  }
+
+  function onmove(e: PointerEvent) {
+    if (!press || e.pointerId !== press.id) return;
+    if (!drag) {
+      if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < 5) return;
+      if (!ed.isSelected(press.name)) ed.select(press.name, 'only');
+      const picked = new Set(ed.selection.length ? ed.selection : [press.name]);
+      drag = { names: list.filter((l) => picked.has(l.name)).map((l) => l.name), x: e.clientX, y: e.clientY };
+      // Scroll the list while the pointer is near its top or bottom edge.
+      scrollTimer = setInterval(() => {
+        if (!drag) return;
+        const b = listEl.getBoundingClientRect();
+        const edge = 28;
+        const d = drag.y < b.top + edge ? -1 : drag.y > b.bottom - edge ? 1 : 0;
+        if (!d) return;
+        listEl.scrollTop += d * 10;
+        place(drag.y);
+      }, 16);
+    }
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    place(e.clientY);
+  }
+
+  function place(y: number) {
+    const spot = spotAt(y);
+    dropBefore = spot.before;
+    lineY = spot.y;
+  }
+
+  function onup(e: PointerEvent) {
+    if (!press || e.pointerId !== press.id) return;
+    press = null;
+    if (scrollTimer) clearInterval(scrollTimer);
+    scrollTimer = null;
+    if (!drag) return;
+    const names = drag.names;
+    const before = dropBefore;
+    drag = null;
+    dropBefore = undefined;
+    // The click that follows the release isn't a selection.
+    justDragged = true;
+    setTimeout(() => (justDragged = false), 0);
+    if (before !== undefined && !names.includes(before ?? '')) ed.moveLayers(names, before);
+  }
+
+  function cancelDrag(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || !drag) return;
+    e.stopPropagation();
+    press = null;
+    drag = null;
+    dropBefore = undefined;
+    if (scrollTimer) clearInterval(scrollTimer);
+    scrollTimer = null;
+  }
+
   function click(e: MouseEvent, name: string) {
+    if (justDragged) return;
     if (e.shiftKey && ed.selected) {
       // Range select between the last selected layer and this one.
       const names = list.map((x) => x.name);
@@ -92,7 +172,7 @@
   ]);
 </script>
 
-<svelte:window onkeydown={onkey} />
+<svelte:window onkeydown={onkey} onkeydowncapture={cancelDrag} onpointermove={onmove} onpointerup={onup} onpointercancel={onup} />
 
 <div class="layers">
   <div class="search">
@@ -106,26 +186,11 @@
         class:sel={ed.isSelected(el.name)}
         class:primary={ed.selected === el.name}
         class:off={hidden || ed.hidden[el.name]}
-        class:drop={dropOn === el.name && dragName !== el.name}
+        class:dragging={drag?.names.includes(el.name)}
         role="option"
         data-layer={el.name}
         aria-selected={ed.isSelected(el.name)}
-        draggable={renaming !== el.name}
-        ondragstart={(e) => {
-          dragName = el.name;
-          e.dataTransfer?.setData('text/plain', el.name);
-        }}
-        ondragover={(e) => {
-          e.preventDefault();
-          dropOn = el.name;
-        }}
-        ondragleave={() => dropOn === el.name && (dropOn = null)}
-        ondrop={(e) => {
-          e.preventDefault();
-          if (dragName && dragName !== el.name) ed.placeAbove(dragName, el.name);
-          dragName = dropOn = null;
-        }}
-        ondragend={() => (dragName = dropOn = null)}
+        onpointerdown={(e) => rowDown(e, el.name)}
         oncontextmenu={(e) => {
           e.preventDefault();
           if (!ed.isSelected(el.name)) ed.select(el.name, 'only');
@@ -135,7 +200,7 @@
         <button class="ico" title={ed.hidden[el.name] ? 'Show in the preview' : 'Hide in the preview only (the theme is not changed)'} onclick={() => (ed.hidden[el.name] = !ed.hidden[el.name])}>
           {#if !ed.hidden[el.name]}<Icon name="eye" size={14} />{/if}
         </button>
-        <button class="row" onclick={(e) => click(e, el.name)} ondblclick={() => startRename(el.name)} title="{el.name} · double-click to rename, drag to reorder">
+        <button class="row" onclick={(e) => click(e, el.name)} ondblclick={() => startRename(el.name)} title="{el.name} · double-click to rename, drag up or down to change the order">
           <span class="thumb"><Icon name={TYPE_ICONS[el.type] ?? 'file'} size={15} /></span>
           {#if renaming === el.name}
             <!-- svelte-ignore a11y_autofocus -->
@@ -170,6 +235,9 @@
     {:else}
       <li class="empty faint">{filter ? 'No layers match.' : 'Nothing on this screen yet. Add something with the buttons below.'}</li>
     {/each}
+    {#if drag && dropBefore !== undefined}
+      <li class="drop-line" aria-hidden="true" style:top="{lineY - 1}px"></li>
+    {/if}
   </ul>
   <footer>
     <span class="faint">{ed.selection.length > 1 ? `${ed.selection.length} selected` : `${list.length} layer${list.length === 1 ? '' : 's'}`}</span>
@@ -196,6 +264,12 @@
   </footer>
 </div>
 
+{#if drag}
+  <div class="drag-ghost" style:left="{drag.x + 14}px" style:top="{drag.y + 10}px">
+    {drag.names.length === 1 ? elementLabel(drag.names[0]) : `${drag.names.length} layers`}
+  </div>
+{/if}
+
 {#if menuAt}
   <ContextMenu x={menuAt.x} y={menuAt.y} items={menuItems} onclose={() => (menuAt = null)} />
 {/if}
@@ -214,6 +288,7 @@
     width: 100%;
   }
   ul {
+    position: relative;
     list-style: none;
     margin: 0;
     padding: 0;
@@ -232,8 +307,33 @@
   li.primary {
     background: var(--hover);
   }
-  li.drop {
-    box-shadow: inset 0 2px 0 var(--brand);
+  li.dragging {
+    opacity: 0.45;
+  }
+  li.drop-line {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    height: 2px;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: var(--brand);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 25%, transparent);
+    pointer-events: none;
+  }
+  .drag-ghost {
+    position: fixed;
+    z-index: 80;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: var(--elev-3);
+    pointer-events: none;
+    white-space: nowrap;
   }
   li.off .name,
   li.off .thumb {

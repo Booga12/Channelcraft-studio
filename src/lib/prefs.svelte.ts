@@ -29,6 +29,8 @@ const DEFAULTS = {
   mode: 'system' as Mode,
   uiScale: 1,
   realArtwork: true,
+  /** Animations play in the preview. */
+  playAnimations: true,
   /** The dock panel stays open while working on the preview. */
   pinPanel: false,
   panelWidth: 320,
