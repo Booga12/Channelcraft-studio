@@ -57,7 +57,11 @@ export function pathKey(p: string): string {
   return join(p).toLowerCase();
 }
 
-/** `target` relative to `from` directory, with forward slashes and a leading `./`. */
+/**
+ * `target` relative to `from` directory, with forward slashes and always a leading `./`
+ * (`./x`, `./../x`): RetroBat only anchors paths that start with `./` to the theme file
+ * (FileSystemUtil::resolveRelativePath); a bare `../x` is looked up from its program folder.
+ */
 export function relative(fromDir: string, target: string): string {
   const a = splitPath(join(fromDir));
   const b = splitPath(join(target));
@@ -66,5 +70,5 @@ export function relative(fromDir: string, target: string): string {
   const ups = a.slice(i).map(() => '..');
   const rest = b.slice(i);
   const parts = [...ups, ...rest];
-  return ups.length ? parts.join('/') : './' + rest.join('/');
+  return './' + parts.join('/');
 }

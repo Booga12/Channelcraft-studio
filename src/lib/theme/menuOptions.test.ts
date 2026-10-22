@@ -87,7 +87,7 @@ describe('RetroBat menu options', () => {
     const r = resolveTheme(p, env({ colorset: 'ccs-p-neon', gamelistview: 'cinema', motion: 'off' }));
     expect(r.vars.get('designAccent')!.value).toBe(designVars(neon.palette).designAccent);
     const bg = r.views.get('detailed')!.elements.get('ccs_background')!;
-    expect(bg.props.get('path')!.value).toBe('../art/cinema-p-neon/background.png');
+    expect(bg.props.get('path')!.value).toBe('./../art/cinema-p-neon/background.png');
     expect(bg.props.get('path')!.file.rel).toBe('_inc/ccs/options/games-cinema.xml');
     for (const view of ['system', 'detailed'])
       for (const el of r.views.get(view)!.elements.values()) expect(el.complex.filter((c) => c.name === 'storyboard'), `${view} ${el.name}`).toEqual([]);

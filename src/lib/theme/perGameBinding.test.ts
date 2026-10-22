@@ -57,9 +57,9 @@ describe('per-game files chosen by an expression', () => {
     const src = `<theme>\n  <customView name="hyperbat">\n    <image name="bg" extra="true">\n      <visible>\${noOwn}</visible>\n      <path>./Background.png</path>\n      <path>\${themePath}/x.png</path>\n    </image>\n    <video name="v" extra="true"><path>firstfile("./a.mp4", {game:video})</path></video>\n  </customView>\n</theme>\n`;
     const out = copyOfShared(src, 'C:\\t\\g\\snes\\_default', 'C:\\t\\g\\snes\\Mario', ['noOwn']);
     expect(out).toContain('<visible>true</visible>');
-    expect(out).toContain('<path>../_default/Background.png</path>');
+    expect(out).toContain('<path>./../_default/Background.png</path>');
     expect(out).toContain('<path>${themePath}/x.png</path>');
-    expect(out).toContain('firstfile("../_default/a.mp4", {game:video})');
+    expect(out).toContain('firstfile("./../_default/a.mp4", {game:video})');
     expect(out).toMatch(/<!-- This game's own look/);
   });
 
@@ -85,7 +85,7 @@ describe('per-game files chosen by an expression', () => {
     expect(visible(res2).filter((n) => n !== 'defaultthemeauthor')).toEqual(before.filter((n) => n !== 'defaultthemeauthor'));
     // Pictures the default used are still found from the new folder.
     const bezel = res2.views.get(info.view)!.elements.get('VideobezelDef')!;
-    expect(bezel.props.get('path')!.raw).toBe('../_default/video.png');
+    expect(bezel.props.get('path')!.raw).toBe('./../_default/video.png');
     expect(resolveAsset(bezel.props.get('path'), res2, p, mario)).toBe(join(dirname(shared.abs), 'video.png'));
   }, 120_000);
 });

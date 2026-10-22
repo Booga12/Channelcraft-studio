@@ -573,13 +573,19 @@ function cloneElement(e: ResolvedElement): ResolvedElement {
   };
 }
 
-/** Resolves a theme path (`./x`, `../x`, `:/x`, `~/x`, absolute) to an absolute path. */
+/**
+ * Resolves a theme path to an absolute path the way RetroBat does (FileSystemUtil::
+ * resolveRelativePath): `./x` (and `./../x`) from the file's folder, `~/x` from .emulationstation,
+ * `:/x` from its resources. Anything else relative, such as `../x` or `art/x.png`, is left to the
+ * working folder of emulationstation.exe, so it is not found in the theme.
+ */
 export function resolvePath(p: string, baseDir: string, themeDir: string, env: Environment): string {
   const t = p.trim();
   if (t.startsWith(':/')) return join(env.resourcesDir, t.slice(2));
   if (t.startsWith('~/') || t.startsWith('~\\')) return join(env.esHome, t.slice(2));
   if (isAbsolute(t)) return join(t);
-  return join(baseDir || themeDir, t);
+  if (t === '.' || /^\.[\\/]/.test(t)) return join(baseDir || themeDir, t);
+  return env.esHome ? join(env.esHome, '..', t) : join(themeDir, t);
 }
 
 export function assetExists(p: string, project: ThemeProject, env: Environment): boolean {

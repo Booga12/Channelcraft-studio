@@ -73,3 +73,14 @@ describe('per-game looks', () => {
     expect(res.views.get('detailed')!.elements.get(staticOne.name)!.props.get('opacity')?.value).not.toBe('0.1');
   });
 });
+
+describe('paths the way RetroBat reads them', () => {
+  it('anchors only ./ paths to the theme file', async () => {
+    const { resolvePath } = await import('./resolver');
+    const e = env();
+    expect(resolvePath('./../_inc/x.png', 'C:\\t\\games\\snes\\Mario', 'C:\\t', e)).toBe('C:\\t\\games\\snes\\_inc\\x.png');
+    // A bare ../x (or x/y) is left to emulationstation.exe's folder (here C:\es's parent), so it
+    // isn't the theme's file.
+    expect(resolvePath('../_inc/x.png', 'C:\\t\\games\\snes\\Mario', 'C:\\t', e)).toBe('C:\\_inc\\x.png');
+  });
+});

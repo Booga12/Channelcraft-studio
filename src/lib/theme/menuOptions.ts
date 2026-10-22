@@ -117,7 +117,8 @@ function relPath(from: string, to: string): string {
   const b = to.split('/').filter(Boolean);
   let i = 0;
   while (i < a.length && i < b.length && a[i].toLowerCase() === b[i].toLowerCase()) i++;
-  return [...a.slice(i).map(() => '..'), ...b.slice(i)].join('/') || '.';
+  // Always ./-anchored: RetroBat looks up a bare ../x from its program folder, not the file's.
+  return './' + [...a.slice(i).map(() => '..'), ...b.slice(i)].join('/');
 }
 
 /** Theme-relative form of a path written in a file of folder `dir` (`./x`, `../x`). */
@@ -136,9 +137,8 @@ function rebase(markup: string, design: string | null): string {
   return markup.replace(/(^|[>\s,(])(\.{1,2}\/[^\s,()<>"']*)/g, (_m, pre: string, p: string) => {
     const rel = fromDir('', p);
     // The design's own artwork moves to its colour-set folder.
-    if (design && rel.toLowerCase().startsWith(`_inc/ccs/${design}/`)) return `${pre}../art/${design}-\${designArtSet}/${rel.slice(`_inc/ccs/${design}/`.length)}`;
-    const r = relPath(DIR, rel);
-    return `${pre}${r.startsWith('.') ? r : `./${r}`}`;
+    if (design && rel.toLowerCase().startsWith(`_inc/ccs/${design}/`)) return `${pre}./../art/${design}-\${designArtSet}/${rel.slice(`_inc/ccs/${design}/`.length)}`;
+    return `${pre}${relPath(DIR, rel)}`;
   });
 }
 
@@ -180,7 +180,7 @@ function contextFor(project: ThemeProject, d: Design, fonts: FontPaths): DesignC
   const f = (id: string | undefined) => (id && fonts[id] ? relPath(DIR, fonts[id]!) : null);
   return {
     vars: true,
-    art: `../art/${d.id}-\${designArtSet}`,
+    art: `./../art/${d.id}-\${designArtSet}`,
     font: f(d.font),
     titleFont: f(d.titleFont),
     logos: has('_inc/systems/logos') ? relPath(DIR, '_inc/systems/logos') : null,
