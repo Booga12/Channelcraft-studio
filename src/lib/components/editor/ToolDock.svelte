@@ -20,7 +20,7 @@
   /** The panels the dock opens, in order. */
   export const PANELS: PanelInfo[] = [
     { id: 'elements', label: 'Layers', help: 'Everything drawn on this screen', icon: LayersIcon },
-    { id: 'library', label: 'Add', help: 'Ready-made elements that show RetroBat’s game and system data', icon: SparklesIcon },
+    { id: 'library', label: 'Library', help: 'Ready-made elements that show RetroBat’s game and system data', icon: SparklesIcon },
     { id: 'assets', label: 'Assets', help: 'Your own pictures, videos, sounds and fonts; drag one onto an element to use it', icon: ImagesIcon },
     { id: 'presets', label: 'Presets', help: 'Designs, layouts and colour palettes', icon: LayoutTemplateIcon },
     { id: 'variables', label: 'Colours', help: 'Colours and values shared across the theme', icon: PaletteIcon },
@@ -31,17 +31,22 @@
 </script>
 
 <script lang="ts">
-  // A floating column of tools at the left of the preview: things to add, then the panels.
+  // A floating column at the left of the preview: an Add menu, then the panels, each with its
+  // name under the icon so it's clear what a button opens before clicking it.
   import ImageIcon from '@lucide/svelte/icons/image';
   import TypeIcon from '@lucide/svelte/icons/type';
   import SquareIcon from '@lucide/svelte/icons/square-dashed';
   import ClockIcon from '@lucide/svelte/icons/clock';
   import StarIcon from '@lucide/svelte/icons/star';
   import VideoIcon from '@lucide/svelte/icons/video';
+  import PlusIcon from '@lucide/svelte/icons/plus';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+  import * as Tooltip from '$lib/components/ui/tooltip';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import { mergeProps } from 'bits-ui';
   import { ed } from '$lib/editor.svelte';
   import { TYPE_LABELS } from '$lib/friendly';
-  import IconButton from './IconButton.svelte';
+  import { cn } from '$lib/utils';
 
   let { open = $bindable<PanelId | null>(null) }: { open?: PanelId | null } = $props();
 
@@ -55,31 +60,77 @@
   ];
 
   const counts = $derived<Partial<Record<PanelId, number | undefined>>>({
-    elements: [...(ed.currentView?.elements.values() ?? [])].filter((e) => e.type !== 'gameextras').length || undefined,
+    elements: ed.layers.length || undefined,
     assets: ed.library.length || undefined,
     options: ed.res?.subsets.length || undefined,
     history: ed.history.done.length || undefined,
   });
   const panels = $derived(PANELS.filter((p) => !(ed.simple && p.id === 'files')));
   const label = (p: PanelInfo) => (p.id === 'variables' && !ed.simple ? 'Variables' : p.label);
+  const item = 'relative flex w-full flex-col items-center gap-1 rounded-xl px-1 pt-1.5 pb-1 text-[10px] leading-none font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&_svg]:size-[18px] [&_svg]:shrink-0';
+  const on = 'bg-primary/12 font-semibold text-primary hover:bg-primary/18 hover:text-primary';
 </script>
 
-<nav class="ui-new flex w-11 flex-col items-center gap-0.5 rounded-2xl bg-card/90 p-1 text-card-foreground shadow-elev-3 ring-1 ring-foreground/8 backdrop-blur-xl" aria-label="Tools">
-  {#each ADD as a (a.type)}
-    <IconButton side="right" label="Add {TYPE_LABELS[a.type]?.label.toLowerCase() ?? a.type}: {TYPE_LABELS[a.type]?.help ?? ''}" onclick={() => ed.addElement(a.type)} class="relative">
-      <a.icon />
-      <span class="absolute right-1 bottom-1 size-1.5 rounded-full bg-primary/70"></span>
-    </IconButton>
-  {/each}
-  <div class="my-1 h-px w-6 bg-border"></div>
+<nav class="ui-new flex max-h-full w-16 flex-col items-center gap-0.5 overflow-y-auto rounded-2xl bg-card/90 p-1 text-card-foreground shadow-elev-3 ring-1 ring-foreground/8 backdrop-blur-xl [scrollbar-width:none]" aria-label="Tools">
+  <DropdownMenu.Root>
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        {#snippet child({ props: tip })}
+          <DropdownMenu.Trigger>
+            {#snippet child({ props })}
+              <button {...mergeProps(tip, props)} class={cn(item, 'text-foreground aria-expanded:bg-muted')}>
+                <span class="grid size-7 place-items-center rounded-lg bg-primary text-primary-foreground shadow-elev-1"><PlusIcon /></span>
+                Add
+              </button>
+            {/snippet}
+          </DropdownMenu.Trigger>
+        {/snippet}
+      </Tooltip.Trigger>
+      <Tooltip.Content side="right" sideOffset={6}>Add something to this screen</Tooltip.Content>
+    </Tooltip.Root>
+    <DropdownMenu.Content side="right" align="start" sideOffset={8} class="w-72">
+      <DropdownMenu.Group>
+        <DropdownMenu.Label>Add to this screen</DropdownMenu.Label>
+        {#each ADD as a (a.type)}
+          <DropdownMenu.Item onSelect={() => ed.addElement(a.type)} class="items-start gap-2.5 py-1.5">
+            <a.icon class="mt-0.5" />
+            <div class="flex min-w-0 flex-col">
+              <span>{TYPE_LABELS[a.type]?.label ?? a.type}</span>
+              <span class="line-clamp-2 text-xs text-muted-foreground">{TYPE_LABELS[a.type]?.help ?? ''}</span>
+            </div>
+          </DropdownMenu.Item>
+        {/each}
+      </DropdownMenu.Group>
+      <DropdownMenu.Separator />
+      <DropdownMenu.Item onSelect={() => (open = 'library')} class="items-start gap-2.5 py-1.5">
+        <SparklesIcon class="mt-0.5" />
+        <div class="flex min-w-0 flex-col">
+          <span>Ready-made elements…</span>
+          <span class="text-xs text-muted-foreground">Box art, game info and more, filled in by RetroBat</span>
+        </div>
+      </DropdownMenu.Item>
+    </DropdownMenu.Content>
+  </DropdownMenu.Root>
+
+  <div class="my-1 h-px w-8 shrink-0 bg-border"></div>
+
   {#each panels as p (p.id)}
-    <IconButton side="right" label="{label(p)}: {p.help}" active={open === p.id} onclick={() => (open = open === p.id ? null : p.id)} class="relative">
-      <p.icon />
-      {#if counts[p.id]}
-        <span class="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-muted px-0.5 text-[9px] leading-none font-semibold text-muted-foreground ring-1 ring-background">{counts[p.id]! > 99 ? '99+' : counts[p.id]}</span>
-      {/if}
-    </IconButton>
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        {#snippet child({ props })}
+          <button {...mergeProps(props, { onclick: () => (open = open === p.id ? null : p.id) })} class={cn(item, open === p.id && on)} aria-pressed={open === p.id}>
+            <p.icon />
+            <span class="max-w-full truncate">{label(p)}</span>
+            {#if counts[p.id]}
+              <span class="absolute top-0.5 right-1 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-muted px-0.5 text-[9px] leading-none font-semibold text-muted-foreground ring-1 ring-background">{counts[p.id]! > 99 ? '99+' : counts[p.id]}</span>
+            {/if}
+          </button>
+        {/snippet}
+      </Tooltip.Trigger>
+      <Tooltip.Content side="right" sideOffset={6}>{p.help}</Tooltip.Content>
+    </Tooltip.Root>
   {/each}
-  <div class="my-1 h-px w-6 bg-border"></div>
-  <IconButton side="right" label="Getting started" onclick={() => (ed.showGuide = true)}><CircleHelpIcon /></IconButton>
+
+  <div class="my-1 h-px w-8 shrink-0 bg-border"></div>
+  <button class={item} onclick={() => (ed.showGuide = true)}><CircleHelpIcon /><span>Help</span></button>
 </nav>

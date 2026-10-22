@@ -14,7 +14,7 @@
     },
     {
       title: 'Move, restyle, add',
-      text: 'Drag the selected part to move it, or use the arrow keys for small steps. The tools on the left add pictures, text, panels and more, and open Layers, Presets, Colours and the other panels.',
+      text: 'Drag the selected part to move it, or use the arrow keys for small steps. The column on the left has Add (pictures, text, panels and more) and opens Layers, Presets, Colours and the other panels.',
     },
     {
       title: 'Save and try it',

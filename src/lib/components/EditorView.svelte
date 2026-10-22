@@ -50,7 +50,7 @@
 
   // The preview fits in the space the floating parts leave free.
   const GAP = 12;
-  const DOCK = 44;
+  const DOCK = 64;
   const insetL = $derived(GAP + DOCK + (open ? 8 + prefs.v.panelWidth : 0) + 16);
   const insetR = $derived(inspecting ? GAP + prefs.v.inspectorWidth + 16 : 20);
   const insetB = 56;
