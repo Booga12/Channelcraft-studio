@@ -4,7 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { ThemeProject } from './project';
-import { isOwnGamePath, resolveTheme } from './resolver';
+import { isOwnGamePath, resolveAsset, resolveTheme } from './resolver';
+import { copyOfShared, ownFileGuards } from './perGame';
+import { dirname } from '../path';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
 import type { Environment } from './context';
@@ -49,5 +51,41 @@ describe('per-game files chosen by an expression', () => {
     // Another game still gets the console default.
     const other = resolveTheme(p, env(game('./Super Mario Kart (USA).zip'))).perGame.get(info!.view)!;
     expect(other.file?.rel).toMatch(/_default\/theme(-\d+)?\.xml$/);
+  }, 120_000);
+
+  it('copies a shared look for one game: paths rewritten, own-file guards kept visible', () => {
+    const src = `<theme>\n  <customView name="hyperbat">\n    <image name="bg" extra="true">\n      <visible>\${noOwn}</visible>\n      <path>./Background.png</path>\n      <path>\${themePath}/x.png</path>\n    </image>\n    <video name="v" extra="true"><path>firstfile("./a.mp4", {game:video})</path></video>\n  </customView>\n</theme>\n`;
+    const out = copyOfShared(src, 'C:\\t\\g\\snes\\_default', 'C:\\t\\g\\snes\\Mario', ['noOwn']);
+    expect(out).toContain('<visible>true</visible>');
+    expect(out).toContain('<path>../_default/Background.png</path>');
+    expect(out).toContain('<path>${themePath}/x.png</path>');
+    expect(out).toContain('firstfile("../_default/a.mp4", {game:video})');
+    expect(out).toMatch(/<!-- This game's own look/);
+  });
+
+  it.skipIf(!existsSync(BOOGA))('a copied default looks the same for that game in the installed theme', async () => {
+    const p = await ThemeProject.load(BOOGA, nodeFs);
+    const mario = env(game('./Mario Is Missing! (USA).zip'));
+    const res = resolveTheme(p, mario);
+    const info = [...res.perGame.values()].find((i) => i.binding)!;
+    const shared = info.file!;
+    const visible = (r: typeof res) =>
+      [...r.views.get(info.view)!.elements.values()]
+        .filter((e) => !['false', '0'].includes((e.props.get('visible')?.value ?? '').trim()))
+        .map((e) => e.name)
+        .sort();
+    const before = visible(res);
+    const own = info.candidates.find((c) => isOwnGamePath(c, 'Mario Is Missing! (USA)') && /[\\/]theme\.xml$/i.test(c))!;
+    const guards = ownFileGuards(res);
+    expect(guards).toContain('IfnoextGamethemeexist');
+    p.addFile(own.slice(p.dir.length + 1).replace(/\\/g, '/'), copyOfShared(shared.src, dirname(shared.abs), dirname(own), guards));
+    const res2 = resolveTheme(p, mario);
+    expect(res2.perGame.get(info.view)!.file!.abs).toBe(own);
+    // The same parts show (only the default theme's author credit hides itself, as the theme intends).
+    expect(visible(res2).filter((n) => n !== 'defaultthemeauthor')).toEqual(before.filter((n) => n !== 'defaultthemeauthor'));
+    // Pictures the default used are still found from the new folder.
+    const bezel = res2.views.get(info.view)!.elements.get('VideobezelDef')!;
+    expect(bezel.props.get('path')!.raw).toBe('../_default/video.png');
+    expect(resolveAsset(bezel.props.get('path'), res2, p, mario)).toBe(join(dirname(shared.abs), 'video.png'));
   }, 120_000);
 });

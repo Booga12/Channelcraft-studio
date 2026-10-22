@@ -9,7 +9,7 @@ import { screenSize, type Environment, type PreviewSettings } from './theme/cont
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
 import { ThemeProject, type ThemeFile } from './theme/project';
 import { isGameListView, isOwnGamePath, perGameApplies, resolveTheme, romStem, type PerGameInfo, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
-import { EMPTY_GAME_FILE, gameEditChanges, gameExtrasChange, screensWithoutGameExtras, type GameEdit } from './theme/perGame';
+import { applyToText, copyOfShared, draftFile, EMPTY_GAME_FILE, gameEditChanges, gameExtrasChange, ownFileGuards, screensWithoutGameExtras, type GameEdit } from './theme/perGame';
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
 import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
@@ -761,12 +761,19 @@ class Editor {
     const rel = abs.slice(p.dir.length + 1).replace(/\\/g, '/');
     const existing = p.file(abs);
     const file = existing?.doc.root ? existing : existing ? (p.setSource(existing, EMPTY_GAME_FILE), existing) : p.addFile(rel, EMPTY_GAME_FILE);
-    // A game that used a shared fallback (its console's default look) keeps it: its new file
-    // includes the fallback first, since RetroBat reads only one per-game file.
+    // A game that used a shared fallback (its console's default look) starts from a copy of it,
+    // since RetroBat reads only one per-game file and such looks hide parts once a game has its own.
     const shared = this.gameSharedFile;
     const fresh = !elements(file.doc.root!).length;
-    const prelude = fresh && shared ? [`<include>${relative(dirname(abs), shared.abs)}</include>`] : [];
-    const changes = gameEditChanges(file, this.view, ok, { prelude, custom: !!this.currentView?.custom });
+    const custom = !!this.currentView?.custom;
+    let changes: Change[];
+    if (fresh && shared?.doc.root) {
+      const copy = copyOfShared(shared.src, dirname(shared.abs), dirname(abs), ownFileGuards(this.themeRes ?? res));
+      const text = applyToText(copy, gameEditChanges(draftFile(file, copy), this.view, ok, { custom }));
+      changes = [{ file, patch: { start: 0, end: file.src.length, text } }];
+    } else {
+      changes = gameEditChanges(file, this.view, ok, { custom });
+    }
     const decl = screensWithoutGameExtras(this.themeRes ?? res).includes(this.view) ? gameExtrasChange(entry, [this.view]) : null;
     if (decl) changes.push(decl);
     this.commit(`${label} for ${this.gameName}`, changes, coalesce ? `${coalesce}@game:${rel}` : undefined);

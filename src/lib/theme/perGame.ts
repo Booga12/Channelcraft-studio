@@ -3,7 +3,8 @@
 // changes go to games/<console>/<rom name>/theme.xml, as partial element definitions RetroBat lays
 // over the theme while that game is in focus.
 
-import { attr, elements, patchInsertChild, type XElement } from '../xml/cst';
+import { applyPatch, attr, elements, parse, patchInsertChild, type XElement } from '../xml/cst';
+import { dirname, join, relative } from '../path';
 import { setTextChange, type Change } from './edits';
 import type { ThemeFile } from './project';
 import { isGameListView, splitNames, type Resolution } from './resolver';
@@ -84,6 +85,46 @@ export function gameEditChanges(file: ThemeFile, view: string, edits: GameEdit[]
     else changes.push({ file, patch: patchInsertChild(doc, root, [...prelude, `<${tag} name="${escAttr(view)}">\n${xml.split('\n').map((l) => '  ' + l).join('\n')}\n</${tag}>`].join('\n')) });
   }
   return changes;
+}
+
+/**
+ * Theme variables that are true only while a game has no file of its own, such as Hyperbat's
+ * `!exists(".../" + stem({game:rom}) + "/theme.xml")`. Shared default looks use them to hide parts
+ * once a game has its own file.
+ */
+export function ownFileGuards(res: Resolution): string[] {
+  return [...res.vars.values()].filter((v) => /!\s*exists\s*\(/i.test(v.raw) && /stem\(\s*\{game:(rom|path)\}\s*\)|\{game:stem\}/i.test(v.raw)).map((v) => v.name);
+}
+
+/**
+ * A game's own file made from a shared default look, so the game looks the same until it is
+ * changed: relative paths are rewritten for the new folder, and own-file guards (see
+ * ownFileGuards) become `true`, since the parts they hide are now this game's own.
+ */
+export function copyOfShared(src: string, fromDir: string, toDir: string, guards: string[]): string {
+  let out = src;
+  for (const g of guards) out = out.split('${' + g + '}').join('true');
+  const rebase = (p: string) => relative(toDir, join(fromDir, p));
+  // Paths as element text (<path>./x.png</path>, <include>./theme.xml</include>) and in quoted
+  // expression strings ("./x.png"). ~/ and absolute paths stay as they are.
+  out = out.replace(/>(\s*)(\.\.?\/[^<]*?)(\s*)</g, (_m, a: string, p: string, b: string) => `>${a}${rebase(p)}${b}<`);
+  out = out.replace(/"(\.\.?\/[^"<>]*)"/g, (m, p: string, offset: number) => (/=\s*$/.test(out.slice(Math.max(0, offset - 3), offset)) ? m : `"${rebase(p)}"`));
+  const note = `<!-- This game's own look, made by ChannelCraft Studio from ${relative(toDir, fromDir)}/ (a copy, so changes here affect only this game). -->`;
+  const at = out.search(/<theme[\s>]/);
+  return at < 0 ? out : `${out.slice(0, at)}${note}\n${out.slice(at)}`;
+}
+
+/** Applies changes computed on `src` (as gameEditChanges returns them) and returns the new text. */
+export function applyToText(src: string, changes: Change[]): string {
+  return changes
+    .map((c) => c.patch)
+    .sort((a, b) => b.start - a.start)
+    .reduce((text, p) => applyPatch(text, p), src);
+}
+
+/** A stand-in file for computing edits on text that isn't in the project yet. */
+export function draftFile(file: ThemeFile, src: string): ThemeFile {
+  return { ...file, src, doc: parse(src) };
 }
 
 /** Whether a game file has nothing in it (so it needn't be written). */

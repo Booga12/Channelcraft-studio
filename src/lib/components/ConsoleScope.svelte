@@ -39,7 +39,7 @@
   {#if gameMode && !blocker}
     <p class="hint">Changes now apply only to <strong>{ed.gameName}</strong>. Pick another game at the bottom of the preview to give it its own look. The game parts (cover, video, name, description…) and anything you add can change; things RetroBat draws once for the whole list can't.</p>
     {#if ed.gameSharedFile && !ed.gameFile}
-      <p class="hint">It uses a shared look for games without their own (<span class="mono">{ed.gameSharedFile.rel}</span>). Its own file will start from that look, so only your changes differ.</p>
+      <p class="hint">It uses a shared look for games without their own (<span class="mono">{ed.gameSharedFile.rel}</span>). Its own file starts as a copy of that look, so only your changes differ.</p>
     {/if}
     {#if hasOwn}
       <button class="secondary small reset" onclick={() => ed.resetGame()} title="Remove everything {ed.gameName} has of its own on this screen">Reset {ed.gameName}</button>
