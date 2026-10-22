@@ -9,7 +9,7 @@ import { screenSize, type Environment, type PreviewSettings } from './theme/cont
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
 import { ThemeProject, type ThemeFile } from './theme/project';
 import { isGameListView, isOwnGamePath, perGameApplies, resolveTheme, romStem, type PerGameInfo, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
-import { applyToText, copyOfShared, draftFile, EMPTY_GAME_FILE, gameEditChanges, gameExtrasChange, ownFileGuards, screensWithoutGameExtras, type GameEdit } from './theme/perGame';
+import { applyToText, copyOfShared, draftFile, EMPTY_GAME_FILE, GAMES_README, gameEditChanges, gameExtrasChange, ownFileGuards, screensWithoutGameExtras, type GameEdit } from './theme/perGame';
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
 import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
@@ -379,6 +379,9 @@ class Editor {
       this.undoStack = [];
       this.redoStack = [];
       this.selected = null;
+      // Where edits go is chosen per theme; a new one starts with every console and game.
+      this.consoleOnly = false;
+      this.gameOnly = false;
       this.hidden = {};
       this.sourceFile = null;
       try {
@@ -510,6 +513,7 @@ class Editor {
 
   async createTheme(name: string) {
     const dest = await api.createThemeFromStarter(name);
+    await this.makeGameFolders(dest);
     await this.refreshThemes();
     return dest;
   }
@@ -702,7 +706,7 @@ class Editor {
     if (!p || !res || !g?.path) return null;
     const info = res.perGame.get(this.view);
     const stem = romStem(g.path);
-    if (!info) return join(p.dir, 'games', this.settings.system.name, stem, 'theme.xml');
+    if (!info) return join(p.dir, 'games', this.consoleTheme, stem, 'theme.xml');
     if (info.file && isOwnGamePath(info.file.abs, stem)) return info.file.abs;
     // The first file RetroBat would try that is named after the game; plain theme.xml rather than a
     // screen-ratio variant (theme-43.xml), which RetroBat also finds.
@@ -759,6 +763,12 @@ class Editor {
     }
     if (!ok.length) return false;
     const rel = abs.slice(p.dir.length + 1).replace(/\\/g, '/');
+    // A drag or typing sends many edits. The first one makes the game's file, later ones change
+    // values in it, so their patches differ and wouldn't merge: fold them into one undo step by
+    // taking the previous step back first and writing the whole change again.
+    const key = coalesce ? `${coalesce}@game:${rel}` : undefined;
+    const last = this.undoStack[this.undoStack.length - 1];
+    if (key && last?.coalesce === key && Date.now() - last.time < 1200) this.undo(true);
     const existing = p.file(abs);
     const file = existing?.doc.root ? existing : existing ? (p.setSource(existing, EMPTY_GAME_FILE), existing) : p.addFile(rel, EMPTY_GAME_FILE);
     // A game that used a shared fallback (its console's default look) starts from a copy of it,
@@ -776,7 +786,7 @@ class Editor {
     }
     const decl = screensWithoutGameExtras(this.themeRes ?? res).includes(this.view) ? gameExtrasChange(entry, [this.view]) : null;
     if (decl) changes.push(decl);
-    this.commit(`${label} for ${this.gameName}`, changes, coalesce ? `${coalesce}@game:${rel}` : undefined);
+    this.commit(`${label} for ${this.gameName}`, changes, key);
     return true;
   }
 
@@ -804,6 +814,24 @@ class Editor {
       if (f?.src.trim()) return f;
     }
     return null;
+  }
+
+  /**
+   * The per-game folders of a theme: games/<console>/ for every console that has games (by its
+   * theme name, as {game:system:theme} gives it), with a README. A failure here never stops a theme
+   * from being made; the folders are a convenience, RetroBat finds files without them.
+   */
+  async makeGameFolders(themeDir: string) {
+    try {
+      if (!this.gameSystems.length) await this.loadGames();
+      const consoles = [...new Set(this.systems.filter((s) => this.gameSystems.includes(s.name)).map((s) => s.theme || s.name))]
+        .filter((t) => /^[\w.+-]+$/.test(t))
+        .sort();
+      await api.makeThemeDirs(themeDir, ['games', 'games/_default', ...consoles.map((c) => `games/${c}`)]);
+      await api.writeText(join(themeDir, 'games', 'README.txt'), GAMES_README.replace(/\n/g, '\r\n'), false);
+    } catch (e) {
+      console.warn('per-game folders', e);
+    }
   }
 
   /** Games of the preview console that have their own file for this screen. */
@@ -1386,10 +1414,13 @@ class Editor {
   async applyStarter(choice: { design: string; artFrom: string | null }) {
     const p = this.project;
     if (!p) return;
-    if (choice.artFrom) await this.importConsoleArt(choice.artFrom);
     const design = DESIGNS.find((d) => d.id === choice.design);
+    // Copying logos and downloading the design's fonts can take a while; say so meanwhile.
+    this.notify(`Setting up “${p.name}”${choice.artFrom ? ': copying console logos and pictures' : ''}${design ? `${choice.artFrom ? ', then' : ':'} adding the ${design.label} design` : ''}…`, 'info', 120000);
+    if (choice.artFrom) await this.importConsoleArt(choice.artFrom);
     if (design) await this.applyDesign(design, { hideOwn: true });
     await this.save();
+    this.notify(`“${p.name}” is ready${design ? ` with the ${design.label} design` : ''}. It's saved; your changes from here can be undone.`);
     // The starting point is the saved theme, not something to undo back past.
     this.undoStack = [];
     this.redoStack = [];
@@ -1592,6 +1623,7 @@ class Editor {
     if (!dest) return;
     try {
       if (this.dirtyCount) await this.save();
+      this.notify(`Exporting “${p.name}”… With many pictures this can take a little while.`, 'info', 600000);
       await api.exportTheme(p.dir, dest);
       this.notify(`Exported to ${dest}. To install it, unzip it into RetroBat's themes folder.`);
     } catch (e) {
@@ -1966,10 +1998,10 @@ class Editor {
     this.showSource = true;
   }
 
-  notify(text: string, kind: Toast['kind'] = 'info') {
+  notify(text: string, kind: Toast['kind'] = 'info', ms?: number) {
     clearTimeout(this.toastTimer);
     this.toast = { text, kind, id: Date.now() };
-    this.toastTimer = setTimeout(() => (this.toast = null), kind === 'error' ? 8000 : 2800);
+    this.toastTimer = setTimeout(() => (this.toast = null), ms ?? (kind === 'error' ? 8000 : 2800));
   }
 }
 

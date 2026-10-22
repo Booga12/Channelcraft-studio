@@ -55,7 +55,8 @@ describe.skipIf(!existsSync(THEMES))('round-trip installed themes (read-only)', 
       if (!doc.root && src.trim()) failures.push(`${f} (no root)`);
     }
     expect(failures).toEqual([]);
-  });
+    // Thousands of files across every installed theme: slow when the whole suite runs at once.
+  }, 120_000);
 });
 
 const SAMPLE = [

@@ -45,7 +45,16 @@ fn kind_name(k: Kind) -> Option<&'static str> {
 fn library_dir(app: &AppHandle) -> CmdResult<PathBuf> {
     let d = app.path().app_data_dir().map_err(err)?.join("assets");
     fs::create_dir_all(&d).map_err(err)?;
-    app.asset_protocol_scope().allow_directory(&d, true).map_err(err)?;
+    let scope = app.asset_protocol_scope();
+    scope.allow_directory(&d, true).map_err(err)?;
+    // The asset protocol checks a file's real location. When AppData is redirected (a junction, a
+    // roaming profile, or Windows' per-app virtualization) files resolve somewhere else than the
+    // folder above, so the kind folders are allowed by their real location too.
+    for sub in ["images", "videos", "sounds", "fonts"] {
+        if let Ok(real) = fs::canonicalize(d.join(sub)) {
+            scope.allow_directory(&real, true).map_err(err)?;
+        }
+    }
     Ok(d)
 }
 

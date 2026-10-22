@@ -92,6 +92,8 @@ export const api = {
   existingFiles: (paths: string[]) => invoke<boolean[]>('existing_files', { paths }),
   /** Copies a picture or video into the theme under its hash; returns the theme-relative path. */
   copyMediaIntoTheme: (themeDir: string, src: string, destRelDir: string) => invoke<string>('copy_media_into_theme', { themeDir, src, destRelDir }),
+  /** Makes folders inside a theme (theme-relative paths); returns how many were new. */
+  makeThemeDirs: (themeDir: string, rels: string[]) => invoke<number>('make_theme_dirs', { themeDir, rels }),
   /** Saves a .csv report where the user chose. */
   writeReport: (path: string, text: string) => invoke<void>('write_report', { path, text }),
   listBackups: (dir: string) => invoke<BackupInfo[]>('list_backups', { dir }),

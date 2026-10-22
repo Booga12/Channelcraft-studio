@@ -121,6 +121,7 @@ pub fn run() {
             storage::existing_files,
             storage::copy_media_into_theme,
             storage::write_report,
+            storage::make_theme_dirs,
             importing::inspect_theme_import,
             importing::import_theme,
             assets::asset_library_dir,

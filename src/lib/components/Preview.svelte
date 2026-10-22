@@ -5,7 +5,7 @@
   import { bindingValue, screenSize } from '$lib/theme/context';
   import { evaluate, truthy, type ExprEnv } from '$lib/theme/expr';
   import type { ResolvedElement } from '$lib/theme/resolver';
-  import { assetExists, resolveAsset } from '$lib/theme/resolver';
+  import { assetExists, resolveAsset, resolveAssetWithFallbacks } from '$lib/theme/resolver';
   import { fmtNum, parsePair } from '$lib/theme/schema';
   import { isCarouselPart, isVisible, zOf } from '$lib/render';
   import { usesGameData } from '$lib/theme/library';
@@ -118,6 +118,24 @@
   /** Pictures and videos on the console screen that use the current game's data (none there in RetroBat). */
   const emptyOnConsoles = $derived(ed.view === 'system' && ed.currentView ? [...ed.currentView.elements.values()].filter((e) => (e.type === 'image' || e.type === 'video') && usesGameData(e.props.get('path')?.value) && isVisible(e)) : []);
 
+  /** The simple game list (basic, or a custom screen based on it): RetroBat draws the list and the
+   * theme's extras there, never the game parts (BasicGameListView has no DetailedContainer). */
+  const simpleList = $derived.by(() => {
+    for (let n: string | null = ed.view, i = 0; n && i < 10; i++) {
+      if (n === 'basic') return true;
+      n = ed.res?.views.get(n)?.inherits ?? null;
+    }
+    return false;
+  });
+
+  /** On game lists RetroBat shows logoText only when the logo picture is missing (ISimpleGameListView). */
+  const logoShown = $derived.by(() => {
+    const v = ed.currentView;
+    const logo = v?.elements.get('logo');
+    if (ed.view === 'system' || !logo || !ed.res || !ed.project || !isVisible(logo)) return false;
+    return !!resolveAssetWithFallbacks(logo, 'path', ed.res, ed.project, ed.env);
+  });
+
   const drawn = $derived.by(() => {
     if (splash) return splash.elements.filter((e) => !ed.hidden[e.name]);
     const v = ed.currentView;
@@ -126,6 +144,8 @@
       .filter(
         (e) =>
           !ed.hidden[e.name] &&
+          !(simpleList && e.name.startsWith('md_')) &&
+          !(logoShown && e.name === 'logoText') &&
           !isCarouselPart(ed.view, e) &&
           // Grid tiles and their parts (gridtile.image, ...) style the image grid, they don't draw alone.
           e.type !== 'gridtile' &&

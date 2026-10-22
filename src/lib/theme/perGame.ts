@@ -9,8 +9,48 @@ import { setTextChange, type Change } from './edits';
 import type { ThemeFile } from './project';
 import { isGameListView, splitNames, type Resolution } from './resolver';
 
-/** Folder written into new <gameextras> elements, relative to theme.xml. */
-export const GAMES_PATH = './games/${system.name}';
+/**
+ * Path written into new <gameextras> elements: an expression RetroBat evaluates for each game
+ * (a {x:y} binding makes it one), so it works for consoles whose folder doesn't exist yet. The
+ * game's own file first, then its console's shared look, then one for every game.
+ */
+export const GAMES_PATH =
+  'firstfile("${themePath}/games/" + {game:system:theme} + "/" + stem({game:rom}) + "/theme.xml", ' +
+  '"${themePath}/games/" + {game:system:theme} + "/_default/theme.xml", ' +
+  '"${themePath}/games/_default/theme.xml")';
+
+/** Explains the per-game folders; written into games/ of a new theme. */
+export const GAMES_README = `Per-game looks for RetroBat (8.3 and later)
+==========================================
+
+When a game is selected in a game list (detailed or video screen), RetroBat reads the first of
+these files that exists and lays it over the theme, for that game only:
+
+  games/<console>/<rom name>/theme.xml   one game's own look
+  games/<console>/_default/theme.xml     a look for every game of that console
+  games/_default/theme.xml               a look for every game
+
+<console> is the console's theme name (snes, megadrive, psx...). <rom name> is the ROM's file
+name without its extension, exactly as on disk: "Super Mario Kart (USA).zip" becomes
+"Super Mario Kart (USA)".
+
+ChannelCraft Studio writes these files for you: select a part on a game-list screen and choose
+"Only this game" in Properties. A file here is an ordinary theme file:
+
+  <theme>
+    <view name="detailed">
+      <image name="md_image"><pos>0.1 0.2</pos></image>
+      <image name="my_picture" extra="true"><path>./picture.png</path></image>
+    </view>
+  </theme>
+
+Paths in it start with ./ (from the file's own folder) or \${themePath} (the theme folder).
+RetroBat doesn't find a path that starts with ../ on its own.
+
+RetroBat re-applies these per game: the game parts (md_image, md_video, md_name, md_description...),
+parts with an appear animation, and new parts marked extra="true". Parts drawn once for the whole
+list (such as a plain background) can't change per game.
+`;
 
 export const EMPTY_GAME_FILE = '<theme>\n</theme>\n';
 

@@ -798,6 +798,27 @@ pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: Stri
     Ok(dest.to_string_lossy().into_owned())
 }
 
+/// Creates folders inside a theme (theme-relative, forward slashes), such as the per-game
+/// games/<console>/ folders a new theme starts with. Returns how many were made.
+#[tauri::command(async)]
+pub fn make_theme_dirs(roots: State<Roots>, theme_dir: String, rels: Vec<String>) -> CmdResult<usize> {
+    let dir = PathBuf::from(&theme_dir);
+    if !dir.join("theme.xml").is_file() {
+        return Err(format!("{theme_dir} is not a theme folder"));
+    }
+    let mut made = 0;
+    for rel in rels {
+        safe_rel(&rel)?;
+        let p = dir.join(&rel);
+        ensure_writable(&roots, &p.join("x"))?;
+        if !p.is_dir() {
+            fs::create_dir_all(&p).map_err(err)?;
+            made += 1;
+        }
+    }
+    Ok(made)
+}
+
 /// Saves a report (CSV) where the user chose in the save dialog. Only .csv files, never inside a
 /// RetroBat themes folder by accident of a typo: the extension is required.
 #[tauri::command(async)]

@@ -120,4 +120,16 @@
       <maxSize>0.42 0.42</maxSize>
     </video>
   </view>
+  <!-- Per-game looks (RetroBat 8.3 and later). For the game in focus, RetroBat reads the first of
+       these files that exists and lays it over this theme, for that game only:
+         games/<console>/<rom name>/theme.xml   one game's own look ("Only this game" in ChannelCraft)
+         games/<console>/_default/theme.xml     a look for every game of that console
+         games/_default/theme.xml               a look for every game
+       <console> is the console's theme name (snes, megadrive...), <rom name> the ROM file name
+       without its extension. See games/README.txt. -->
+  <view name="detailed, video">
+    <gameextras name="gameextras">
+      <path>firstfile("${themePath}/games/" + {game:system:theme} + "/" + stem({game:rom}) + "/theme.xml", "${themePath}/games/" + {game:system:theme} + "/_default/theme.xml", "${themePath}/games/_default/theme.xml")</path>
+    </gameextras>
+  </view>
 </theme>

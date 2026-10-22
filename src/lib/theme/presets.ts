@@ -332,6 +332,8 @@ export function blockChange(project: ThemeProject, res: Resolution, view: string
   return existing ? { file: entry, patch: patchReplaceSpan(entry.doc, existing.comment, existing.view, markup) } : { file: entry, patch: patchInsertChild(entry.doc, root, markup) };
 }
 
+const isShown = (e: { props: Map<string, { value: string }> }) => !['false', '0'].includes((e.props.get('visible')?.value ?? 'true').trim().toLowerCase());
+
 /** Changes that apply a design to the given views; `hideOwn` hides the theme's own decorations. */
 export function designChanges(project: ThemeProject, res: Resolution, design: Design, ctx: DesignContext, views: string[], hideOwn: boolean, systemLayoutId = design.system): Change[] {
   const out: Change[] = [];
@@ -345,6 +347,9 @@ export function designChanges(project: ThemeProject, res: Resolution, design: De
     if (hideOwn) {
       for (const e of res.views.get(view)?.elements.values() ?? []) {
         if (e.extra && !names.has(e.name) && !isDesignExtra(e.name)) body.push(`  <${e.type} name="${e.name}" extra="${e.extra}">`, '    <visible>false</visible>', `  </${e.type}>`);
+        // The theme's own game parts the design doesn't place (e.g. md_image on the video screen,
+        // where the design shows md_video) would stay where the theme put them, over the design.
+        else if (!e.extra && e.name.startsWith('md_') && !names.has(e.name) && isShown(e)) body.push(`  <${e.type} name="${e.name}">`, '    <visible>false</visible>', `  </${e.type}>`);
       }
     }
     const title = view === 'system' ? `design ${design.label} [design-${design.id}], layout ${layout.label} [layout:${layout.id}]` : `design ${design.label} [design-${design.id}]`;
