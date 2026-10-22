@@ -71,6 +71,10 @@ export function parseGamelist(text: string, systemDir: string): GameInfo[] {
 }
 
 /** Value of `{game:xxx}` for a real game (media keys give absolute paths). */
+function romFileName(p: string): string {
+  return p.replace(/[\\/]+$/, '').replace(/^.*[\\/]/, '');
+}
+
 export function gameBinding(g: GameInfo, key: string): string | number | boolean | undefined {
   const k = key.toLowerCase();
   switch (k) {
@@ -104,6 +108,16 @@ export function gameBinding(g: GameInfo, key: string): string | number | boolean
       return g.media.image ?? '';
     case 'boxart':
       return g.media.boxart ?? g.media.thumbnail ?? '';
+    // The ROM itself (FileData.cpp): file name, file name without extension, path.
+    case 'rom':
+      return romFileName(g.path);
+    case 'stem': {
+      const b = romFileName(g.path);
+      const i = b.lastIndexOf('.');
+      return i > 0 ? b.slice(0, i) : b;
+    }
+    case 'path':
+      return g.path;
   }
   return g.media[k] ?? g.media[key] ?? '';
 }

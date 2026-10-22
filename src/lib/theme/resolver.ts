@@ -6,7 +6,7 @@
 import { basename, dirname, isAbsolute, join } from '../path';
 import { attr, elements, hasElementChildren, textOf, type XElement } from '../xml/cst';
 import { ARCH, bindingValue, builtinVar, type Environment } from './context';
-import { evalCondition, type ExprEnv } from './expr';
+import { evalCondition, evaluate, type ExprEnv } from './expr';
 import type { ThemeFile, ThemeProject } from './project';
 
 export interface Source {
@@ -95,6 +95,8 @@ export interface Resolution {
   perGame: Map<string, PerGameInfo>;
   /** Parts of a game's own file that RetroBat doesn't apply (see perGameApplies). */
   perGameIgnored: { view: string; name: string }[];
+  /** Files read as the current game's per-game file (with what they include). */
+  perGameFiles: Set<ThemeFile>;
 }
 
 /**
@@ -105,11 +107,23 @@ export interface Resolution {
  */
 export interface PerGameInfo {
   view: string;
-  /** Absolute folder, or null when it's given as a binding (`path_binding`) the app can't follow. */
+  /** The folder per-game files are looked up in, when the path names a folder. */
   root: string | null;
   /** The game's ROM file name without its extension. */
   stem: string;
+  /** The file RetroBat lays over the theme for this game: its own, or a shared fallback. */
   file: ThemeFile | null;
+  /** The path is an expression evaluated per game (a `{game:...}` binding, e.g. firstfile(...)). */
+  binding: boolean;
+  /** Files RetroBat tries for this game, in order (absolute). */
+  candidates: string[];
+}
+
+/** Whether a per-game path is this game's own: a folder or file named after its ROM. */
+export function isOwnGamePath(path: string, stem: string): boolean {
+  const parts = path.split(/[\\/]+/).map((x) => x.toLowerCase());
+  const s = stem.toLowerCase();
+  return parts.slice(0, -1).includes(s) || parts[parts.length - 1] === `${s}.xml`;
 }
 
 /** Screens that show one game at a time (they use RetroBat's DetailedContainer). */
@@ -197,6 +211,7 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
     defaultView: null,
     perGame: new Map(),
     perGameIgnored: [],
+    perGameFiles: new Set(),
   };
   /** While a game's own file is read: the screens it applies to. */
   let perGameViews: Set<string> | null = null;
@@ -484,6 +499,7 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
     if (!root || root.name !== 'theme') return;
     stack.push(file);
     out.usedFiles.add(file);
+    if (perGameViews) out.perGameFiles.add(file);
     if (stack.length === 1) out.defaultView = attr(root, 'defaultView') ?? null;
     // Like RetroBat (ThemeData::appendFile), a file's <variables> are read before anything else in it.
     const children = elements(root);
@@ -497,14 +513,44 @@ function resolvePass(project: ThemeProject, env: Environment, entryRel?: string)
   // The game in focus: its own file, if the theme has one for it, goes over the theme.
   if (env.game?.path && entry?.rel === 'theme.xml') {
     const stem = romStem(env.game.path);
+    // A file emptied in the editor is deleted on save, so it counts as missing here.
+    const live = (abs: string) => {
+      const f = project.file(abs);
+      return f && f.src.trim() ? f : null;
+    };
     const byFile = new Map<ThemeFile, Set<string>>();
     for (const [name, v] of out.views) {
       const ge = v.elements.get('gameextras');
       if (!ge || !isGameListView(out, name)) continue;
-      const def = ge.props.get('path');
-      const root = def?.value ? resolvePath(def.value, dirname(def.file.abs), project.dir, env) : null;
-      const file = root ? (project.file(join(root, `${stem}.xml`)) ?? project.file(join(root, stem, 'theme.xml')) ?? null) : null;
-      out.perGame.set(name, { view: name, root, stem, file });
+      const def = ge.props.get('path_binding') ?? ge.props.get('path');
+      const base = def ? dirname(def.file.abs) : project.dir;
+      const raw = def?.value.trim() ?? '';
+      // Like ThemeData: a path with a {x:y} binding is an expression evaluated for each game.
+      const binding = !!ge.props.get('path_binding') || /\{[^{}]*:[^{}]*\}/.test(raw);
+      const asked: string[] = [];
+      let target = raw;
+      if (binding) {
+        const askEnv: ExprEnv = {
+          ...exprEnv,
+          exists: (p) => {
+            const abs = resolvePath(p, base, project.dir, env);
+            if (!asked.includes(abs)) asked.push(abs);
+            return /\.xml$/i.test(abs) ? !!live(abs) : exprEnv.exists(p);
+          },
+        };
+        try {
+          target = String(evaluate(raw, askEnv) ?? '');
+        } catch {
+          target = '';
+        }
+      }
+      const abs = target ? resolvePath(target, base, project.dir, env) : null;
+      const isFile = !!abs && /\.xml$/i.test(abs);
+      const root = abs && !isFile ? abs : null;
+      const candidates = root ? [join(root, `${stem}.xml`), join(root, stem, 'theme.xml')] : asked.filter((a) => /\.xml$/i.test(a));
+      if (isFile && !candidates.includes(abs!)) candidates.push(abs!);
+      const file = isFile ? live(abs!) : (candidates.map(live).find(Boolean) ?? null);
+      out.perGame.set(name, { view: name, root, stem, file, binding, candidates });
       if (file) byFile.set(file, (byFile.get(file) ?? new Set()).add(name));
     }
     for (const [file, views] of byFile) {

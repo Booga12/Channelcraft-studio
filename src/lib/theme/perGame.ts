@@ -54,13 +54,16 @@ function elementMarkup(e: GameEdit): string {
  * Changes that set properties in a game's own file: an existing value is replaced, a missing one
  * added to the element, a missing element added to the screen's <view>, a missing <view> added.
  */
-export function gameEditChanges(file: ThemeFile, view: string, edits: GameEdit[]): Change[] {
+export function gameEditChanges(file: ThemeFile, view: string, edits: GameEdit[], opts: { prelude?: string[]; custom?: boolean } = {}): Change[] {
+  const prelude = opts.prelude ?? [];
   const root = file.doc.root;
   if (!root || !edits.length) return [];
   const doc = file.doc;
   const viewNode = lastWhere(root, (e) => (e.name === 'view' || e.name === 'customView') && noCondition(e) && splitNames(attr(e, 'name')).join() === view);
   const changes: Change[] = [];
   const newElements: string[] = [];
+  // RetroBat themes (and their per-game files) name custom screens with <customView>.
+  const tag = opts.custom ? 'customView' : 'view';
   for (const e of edits) {
     const node = viewNode && lastWhere(viewNode, (c) => noCondition(c) && splitNames(attr(c, 'name')).includes(e.name));
     if (!node) {
@@ -78,7 +81,7 @@ export function gameEditChanges(file: ThemeFile, view: string, edits: GameEdit[]
   if (newElements.length) {
     const xml = newElements.join('\n');
     if (viewNode) changes.push({ file, patch: patchInsertChild(doc, viewNode, xml) });
-    else changes.push({ file, patch: patchInsertChild(doc, root, `<view name="${escAttr(view)}">\n${xml.split('\n').map((l) => '  ' + l).join('\n')}\n</view>`) });
+    else changes.push({ file, patch: patchInsertChild(doc, root, [...prelude, `<${tag} name="${escAttr(view)}">\n${xml.split('\n').map((l) => '  ' + l).join('\n')}\n</${tag}>`].join('\n')) });
   }
   return changes;
 }

@@ -292,6 +292,7 @@ class Parser {
       case 'coalesce':
         return a.find((v) => v !== null && String(v) !== '') ?? '';
       case 'filename':
+      case 'stem':
         return s(0).replace(/^.*[\\/]/, '').replace(/\.[^.]*$/, '');
       case 'year':
         return s(0).slice(0, 4);

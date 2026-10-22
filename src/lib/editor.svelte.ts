@@ -8,7 +8,7 @@ import { parseGamelist, type GameInfo } from './theme/games';
 import { screenSize, type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
 import { ThemeProject, type ThemeFile } from './theme/project';
-import { isGameListView, perGameApplies, resolveTheme, romStem, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
+import { isGameListView, isOwnGamePath, perGameApplies, resolveTheme, romStem, type PerGameInfo, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
 import { EMPTY_GAME_FILE, gameEditChanges, gameExtrasChange, screensWithoutGameExtras, type GameEdit } from './theme/perGame';
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
@@ -679,9 +679,9 @@ class Editor {
     if (this.screenFile !== 'theme.xml') return 'Loading screens show no game.';
     if (!res || !isGameListView(res, this.view)) return 'Only the game-list screens that show one game at a time (detailed, video, grid and game carousel) can look different for each game.';
     if (!this.currentGame?.path) return 'Needs one of your own games in the preview: pick a console that has games, with “Real artwork” on in Settings.';
-    const info = res.perGame.get(this.view);
-    if (info && !info.root) return 'This theme picks its per-game folder with a binding, which ChannelCraft can’t follow yet.';
-    if (info?.root && this.project && !this.project.isInside(info.root)) return 'This theme keeps its per-game files outside its own folder, so ChannelCraft can’t write them.';
+    const target = this.gameFilePath();
+    if (!target) return 'ChannelCraft can’t tell where this theme keeps a game’s own file (its per-game path never names the game).';
+    if (this.project && !this.project.isInside(target)) return 'This theme keeps its per-game files outside its own folder (a theme option may move them to _bobmedia), so ChannelCraft can’t write them.';
     return null;
   }
 
@@ -701,13 +701,25 @@ class Editor {
     const g = this.currentGame;
     if (!p || !res || !g?.path) return null;
     const info = res.perGame.get(this.view);
-    if (info?.file) return info.file.abs;
-    return join(info?.root ?? join(p.dir, 'games', this.settings.system.name), romStem(g.path), 'theme.xml');
+    const stem = romStem(g.path);
+    if (!info) return join(p.dir, 'games', this.settings.system.name, stem, 'theme.xml');
+    if (info.file && isOwnGamePath(info.file.abs, stem)) return info.file.abs;
+    // The first file RetroBat would try that is named after the game; plain theme.xml rather than a
+    // screen-ratio variant (theme-43.xml), which RetroBat also finds.
+    const mine = info.candidates.filter((c) => isOwnGamePath(c, stem));
+    return mine.find((c) => /[\\/]theme\.xml$/i.test(c)) ?? mine[0] ?? null;
   }
 
-  /** The current game's own file, if it has one for this screen. */
+  /** The current game's own file, if it has one for this screen (not a console's shared fallback). */
   get gameFile(): ThemeFile | null {
-    return this.res?.perGame.get(this.view)?.file ?? null;
+    const info = this.res?.perGame.get(this.view);
+    return info?.file && isOwnGamePath(info.file.abs, info.stem) ? info.file : null;
+  }
+
+  /** A shared file RetroBat uses for games without their own (e.g. a console's _default/theme.xml). */
+  get gameSharedFile(): ThemeFile | null {
+    const info = this.res?.perGame.get(this.view);
+    return info?.file && !isOwnGamePath(info.file.abs, info.stem) ? info.file : null;
   }
 
   private gameSetMany(label: string, updates: Record<string, Record<string, string>>, coalesce?: string) {
@@ -731,12 +743,13 @@ class Editor {
     const entry = p?.fileAt('theme.xml');
     if (!p || !res || !abs || !entry || !p.isInside(abs)) return false;
     const view = this.currentView;
-    const own = this.gameFile;
     const ok: GameEdit[] = [];
     const refused: string[] = [];
     for (const e of edits) {
       const el = view?.elements.get(e.name);
-      const onlyHere = !!el && !!own && el.defs.every((d) => d.file === own);
+      // Defined by the per-game files (this game's, or the shared fallback it uses) alone, or
+      // re-declared there with extra="true": RetroBat rebuilds it for each game (ThemeData, extra 3).
+      const onlyHere = !!el && (el.defs.every((d) => res.perGameFiles.has(d.file)) || el.defs.some((d) => res.perGameFiles.has(d.file) && attr(d.node, 'extra') !== undefined));
       if (e.extra || onlyHere || perGameApplies(el, e.name, false)) ok.push(e);
       else refused.push(e.name);
     }
@@ -746,20 +759,44 @@ class Editor {
     }
     if (!ok.length) return false;
     const rel = abs.slice(p.dir.length + 1).replace(/\\/g, '/');
-    const file = p.file(abs) ?? p.addFile(rel, EMPTY_GAME_FILE);
-    const changes = gameEditChanges(file, this.view, ok);
-    const decl = gameExtrasChange(entry, screensWithoutGameExtras(this.themeRes ?? res));
+    const existing = p.file(abs);
+    const file = existing?.doc.root ? existing : existing ? (p.setSource(existing, EMPTY_GAME_FILE), existing) : p.addFile(rel, EMPTY_GAME_FILE);
+    // A game that used a shared fallback (its console's default look) keeps it: its new file
+    // includes the fallback first, since RetroBat reads only one per-game file.
+    const shared = this.gameSharedFile;
+    const fresh = !elements(file.doc.root!).length;
+    const prelude = fresh && shared ? [`<include>${relative(dirname(abs), shared.abs)}</include>`] : [];
+    const changes = gameEditChanges(file, this.view, ok, { prelude, custom: !!this.currentView?.custom });
+    const decl = screensWithoutGameExtras(this.themeRes ?? res).includes(this.view) ? gameExtrasChange(entry, [this.view]) : null;
     if (decl) changes.push(decl);
     this.commit(`${label} for ${this.gameName}`, changes, coalesce ? `${coalesce}@game:${rel}` : undefined);
     return true;
   }
 
-  /** Empties the current game's own file for this screen, so it looks like every other game (undoable). */
+  /**
+   * Removes the current game's own file for this screen (deleted on save, after a backup), so it
+   * looks like the other games again. Undoable.
+   */
   resetGame() {
     const f = this.gameFile;
-    if (!f?.doc.root) return;
-    this.commit(`${this.gameName}'s own look`, [{ file: f, patch: { start: 0, end: f.src.length, text: EMPTY_GAME_FILE } }]);
-    this.notify(`${this.gameName} uses the shared look again. Save to keep it, or Ctrl+Z to undo.`);
+    if (!f) return;
+    this.commit(`${this.gameName}'s own look`, [{ file: f, patch: { start: 0, end: f.src.length, text: '' } }]);
+    this.notify(`${this.gameName} uses the shared look again. Saving deletes its own file (${f.rel}); Ctrl+Z undoes it.`);
+  }
+
+  /** Where RetroBat would look for another game's own file, following the current game's. */
+  private ownFileFor(info: PerGameInfo, stem: string): ThemeFile | null {
+    const p = this.project!;
+    const swap = (c: string) =>
+      c
+        .split(/([\\/]+)/)
+        .map((part) => (part.toLowerCase() === info.stem.toLowerCase() ? stem : part.toLowerCase() === `${info.stem}.xml`.toLowerCase() ? `${stem}.xml` : part))
+        .join('');
+    for (const c of info.candidates.filter((c) => isOwnGamePath(c, info.stem))) {
+      const f = p.file(swap(c));
+      if (f?.src.trim()) return f;
+    }
+    return null;
   }
 
   /** Games of the preview console that have their own file for this screen. */
@@ -767,11 +804,11 @@ class Editor {
     this.rev;
     const p = this.project;
     const info = this.res?.perGame.get(this.view);
-    if (!p || !info?.root) return [];
+    if (!p || !info) return [];
     const out: { index: number; name: string }[] = [];
     this.currentGames.forEach((g, index) => {
       const stem = romStem(g.path);
-      const f = p.file(join(info.root!, `${stem}.xml`)) ?? p.file(join(info.root!, stem, 'theme.xml'));
+      const f = this.ownFileFor(info, stem);
       if (f?.doc.root && elements(f.doc.root).length) out.push({ index, name: g.name || stem });
     });
     return out;

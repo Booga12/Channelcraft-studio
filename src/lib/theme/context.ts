@@ -127,6 +127,8 @@ export function bindingValue(name: string, env: Environment, subsets: Map<string
       return builtinVar(`system.${key}`, env, '', subsets) ?? builtinVar(`system.${key[0]?.toLowerCase()}${key.slice(1)}`, env, '', subsets) ?? '';
     }
     case 'game': {
+      // {game:system:theme} and friends: the game's own console (the same one in the preview).
+      if (key.toLowerCase().startsWith('system.')) return bindingValue(`system:${key.slice(7)}`, env, subsets);
       if (env.game) {
         const v = gameBinding(env.game, key);
         return v === undefined ? '' : v;
