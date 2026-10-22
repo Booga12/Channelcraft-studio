@@ -1,7 +1,6 @@
 <script lang="ts">
   // Layout presets for the current screen and colour palettes for the whole theme.
   import { ed } from '$lib/editor.svelte';
-  import ConsoleScope from './ConsoleScope.svelte';
   import { viewLabel } from '$lib/friendly';
   import { appliedDesign, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
   import Icon from './Icon.svelte';
@@ -91,7 +90,7 @@
   function palette(id: string) {
     const p = PALETTES.find((x) => x.id === id)!;
     const n = ed.applyPalette(p);
-    ed.notify(n ? `Palette “${p.label}” applied${ed.consoleOnly ? ` to ${ed.consoleName} only` : ''}. Press Ctrl+Z to undo.` : 'This theme names its colours differently; change them in the Colours tab.');
+    ed.notify(n ? `Palette “${p.label}” applied${ed.consoleOnly ? ` to ${ed.consoleName} only` : ''}. Press Ctrl+Z to undo.` : 'This theme names its colours differently; change them in Colours.');
   }
 
   const covered = $derived.by(() => {
@@ -149,7 +148,7 @@
       {#if GAME_LISTS.includes(ed.view)}
         <label class="chk"><input type="checkbox" bind:checked={allLists} /> Apply to all game list screens</label>
       {/if}
-      <div class="grid">
+      <div class="tiles">
         {#each layouts as l (l.id)}
           {@const st = styleFor(l)}
           <button class="card" class:on={currentLayout === l.id} onclick={() => apply(l)} title={l.description} disabled={applying}>
@@ -179,9 +178,8 @@
   <section>
     <h4>Colour palettes</h4>
     {#if covered === 0}
-      <p class="faint note">This theme names its colours its own way, so palettes can't map onto it. Change its colours in the Colours tab instead. Themes made with “New theme” work with palettes.</p>
+      <p class="faint note">This theme names its colours its own way, so palettes can't map onto it. Change its colours in Colours instead. Themes made with “New theme” work with palettes.</p>
     {:else}
-      <div class="scope"><ConsoleScope /></div>
       <div class="pals">
         {#each PALETTES as p (p.id)}
           <button class="pal" onclick={() => palette(p.id)} title="Apply the {p.label} palette">
@@ -199,9 +197,6 @@
 </div>
 
 <style>
-  .scope {
-    margin: 0 -12px 8px;
-  }
   .presets {
     padding: 8px 10px 16px;
   }
@@ -229,7 +224,7 @@
     margin-bottom: 8px;
     color: var(--text-dim);
   }
-  .grid {
+  .tiles {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -241,15 +236,15 @@
     white-space: normal;
     padding: 6px;
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 6px;
   }
   .card:hover {
-    border-color: var(--accent);
+    border-color: var(--brand);
   }
   .card.on {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 1px var(--brand);
   }
   .style {
     display: grid;
@@ -263,7 +258,7 @@
     min-width: 0;
   }
   small.in {
-    color: var(--accent);
+    color: var(--brand);
   }
   .card:disabled {
     opacity: 0.6;
@@ -281,7 +276,7 @@
     font-weight: 600;
   }
   .card.on .name {
-    color: var(--accent);
+    color: var(--brand);
   }
   small {
     color: var(--text-faint);
@@ -298,19 +293,19 @@
     gap: 4px;
     padding: 5px;
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 6px;
     text-align: left;
   }
   .dcard:hover:not(:disabled) {
-    border-color: var(--accent);
+    border-color: var(--brand);
   }
   .dcard.on {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 1px var(--brand);
   }
   .dcard.on .name {
-    color: var(--accent);
+    color: var(--brand);
   }
   .pals {
     display: grid;
@@ -322,13 +317,13 @@
     align-items: center;
     gap: 8px;
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 6px;
     padding: 6px 8px;
     text-align: left;
   }
   .pal:hover {
-    border-color: var(--accent);
+    border-color: var(--brand);
   }
   .sw {
     display: flex;

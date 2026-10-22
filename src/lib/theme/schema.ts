@@ -248,6 +248,11 @@ export const ELEMENT_LABELS: Record<string, string> = {
   md_lastplayed: 'Last played',
   md_playcount: 'Play count',
   md_name: 'Game name',
+  // RetroBat's loading screens (splash.xml, gamesplash.xml).
+  splash: 'Screen colour',
+  label: 'Loading text',
+  progressbar: 'Progress bar',
+  'progressbar:active': 'Progress bar fill',
 };
 
 export const VIEW_ORDER = ['system', 'basic', 'detailed', 'video', 'grid', 'gamecarousel', 'menu', 'screen', 'splash'];

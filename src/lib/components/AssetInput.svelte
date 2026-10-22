@@ -180,7 +180,7 @@
     width: 34px;
     height: 24px;
     object-fit: contain;
-    background: repeating-conic-gradient(#2a2e36 0 25%, #353a44 0 50%) 0 0 / 8px 8px;
+    background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 8px 8px;
     border-radius: 4px;
     flex: none;
   }
@@ -219,7 +219,7 @@
     width: 100%;
     height: 54px;
     object-fit: contain;
-    background: repeating-conic-gradient(#20242b 0 25%, #2a2f38 0 50%) 0 0 / 10px 10px;
+    background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 10px 10px;
     border-radius: 4px;
   }
   .ftabs {

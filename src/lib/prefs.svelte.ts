@@ -1,71 +1,18 @@
-// User preferences and the workspace layout, kept in the webview's local storage.
+// User preferences, kept in the webview's local storage.
 
-export type PanelId = 'properties' | 'elements' | 'library' | 'assets' | 'presets' | 'variables' | 'options' | 'history' | 'files';
+/** The panels that open from the tool dock beside the preview. */
+export type PanelId = 'elements' | 'library' | 'assets' | 'presets' | 'variables' | 'options' | 'history' | 'files';
 
-export interface Workspace {
-  name: string;
-  dockSide: 'right' | 'left';
-  dockWidth: number;
-  /** Tabs in the upper and lower panel groups, in order. */
-  top: PanelId[];
-  bottom: PanelId[];
-  split: number;
-  /** Panels the user closed. */
-  hidden?: PanelId[];
-  showRail: boolean;
-  showOptionsBar: boolean;
-}
+export type Mode = 'system' | 'light' | 'dark';
 
 export const ACCENTS: Record<string, { label: string; base: string; strong: string }> = {
+  channelcraft: { label: 'ChannelCraft', base: '#6d7ff2', strong: '#5163e6' },
   blue: { label: 'Blue', base: '#378ef0', strong: '#2680eb' },
   violet: { label: 'Violet', base: '#9a7cf5', strong: '#7e5bef' },
   green: { label: 'Green', base: '#33b07a', strong: '#22975f' },
   orange: { label: 'Orange', base: '#f08a3a', strong: '#e2711d' },
   pink: { label: 'Pink', base: '#ec5b9c', strong: '#d93f84' },
 };
-
-export const BUILTIN_WORKSPACES: Workspace[] = [
-  {
-    name: 'Essentials',
-    dockSide: 'right',
-    dockWidth: 330,
-    top: ['properties'],
-    bottom: ['elements', 'library', 'assets', 'presets', 'variables', 'options', 'history', 'files'],
-    split: 0.56,
-    showRail: true,
-    showOptionsBar: true,
-  },
-  {
-    name: 'Layout',
-    dockSide: 'right',
-    dockWidth: 330,
-    top: ['elements', 'history'],
-    bottom: ['properties', 'presets', 'library', 'assets'],
-    split: 0.45,
-    showRail: true,
-    showOptionsBar: true,
-  },
-  {
-    name: 'Colour',
-    dockSide: 'right',
-    dockWidth: 360,
-    top: ['variables', 'options'],
-    bottom: ['properties', 'elements', 'presets'],
-    split: 0.55,
-    showRail: true,
-    showOptionsBar: false,
-  },
-  {
-    name: 'Focus',
-    dockSide: 'right',
-    dockWidth: 300,
-    top: ['properties'],
-    bottom: ['elements'],
-    split: 0.6,
-    showRail: false,
-    showOptionsBar: true,
-  },
-];
 
 const DEFAULTS = {
   snap: true,
@@ -77,11 +24,15 @@ const DEFAULTS = {
   autosaveMinutes: 0,
   keepRecovery: true,
   backupsKeep: 10,
-  accent: 'blue',
+  accent: 'channelcraft',
+  /** Light, dark, or whatever Windows uses. */
+  mode: 'system' as Mode,
   uiScale: 1,
   realArtwork: true,
-  workspace: BUILTIN_WORKSPACES[0] as Workspace,
-  customWorkspaces: [] as Workspace[],
+  /** The dock panel stays open while working on the preview. */
+  pinPanel: false,
+  panelWidth: 320,
+  inspectorWidth: 340,
 };
 
 type Values = typeof DEFAULTS;
@@ -90,12 +41,11 @@ function load(): Values {
   try {
     const raw = localStorage.getItem('ccs.prefs');
     if (raw) {
-      const v = { ...DEFAULTS, ...JSON.parse(raw) } as Values;
-      // Workspaces saved before a panel existed get it appended, so nothing goes missing.
-      const all: PanelId[] = ['properties', 'elements', 'library', 'assets', 'presets', 'variables', 'options', 'history', 'files'];
-      const seen = new Set([...v.workspace.top, ...v.workspace.bottom]);
-      v.workspace = { ...v.workspace, bottom: [...v.workspace.bottom, ...all.filter((p) => !seen.has(p) && !v.workspace.hidden?.includes(p))] };
-      return v;
+      const saved = JSON.parse(raw) as Record<string, unknown>;
+      // The docked-panel workspaces of older versions no longer apply.
+      delete saved.workspace;
+      delete saved.customWorkspaces;
+      return { ...DEFAULTS, ...saved } as Values;
     }
   } catch {
     // Unreadable preferences: fall back to defaults.
@@ -120,44 +70,39 @@ class Prefs {
     this.save();
   }
 
-  setWorkspace(ws: Workspace) {
-    this.v.workspace = structuredClone($state.snapshot(ws) as Workspace);
-    this.save();
-  }
+  /** Whether the app is drawn dark right now (the mode, or Windows' choice for "system"). */
+  dark = $state(false);
+  #watching = false;
 
-  saveWorkspaceAs(name: string) {
-    const ws = { ...structuredClone($state.snapshot(this.v.workspace) as Workspace), name };
-    this.v.customWorkspaces = [...this.v.customWorkspaces.filter((w) => w.name !== name), ws];
-    this.v.workspace = ws;
-    this.save();
-  }
-
-  deleteWorkspace(name: string) {
-    this.v.customWorkspaces = this.v.customWorkspaces.filter((w) => w.name !== name);
-    this.save();
-  }
-
-  /** Moves a panel tab to the other group, or hides it (group null). */
-  movePanel(id: PanelId, to: 'top' | 'bottom' | null) {
-    const ws = this.v.workspace;
-    ws.top = ws.top.filter((p) => p !== id);
-    ws.bottom = ws.bottom.filter((p) => p !== id);
-    ws.hidden = (ws.hidden ?? []).filter((p) => p !== id);
-    if (to === 'top') ws.top.push(id);
-    else if (to === 'bottom') ws.bottom.push(id);
-    else ws.hidden.push(id);
-    this.save();
-  }
-
-  /** Accent colour and UI size, applied as CSS on the document. */
+  /** Light or dark, accent colour and UI size, applied to the document and the window frame. */
   applyLook() {
     if (typeof document === 'undefined') return;
-    const a = ACCENTS[this.v.accent] ?? ACCENTS.blue;
-    const s = document.documentElement.style;
-    s.setProperty('--accent', a.base);
-    s.setProperty('--accent-strong', a.strong);
-    s.setProperty('--accent-soft', hexAlpha(a.base, 0.18));
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!this.#watching && media) {
+      this.#watching = true;
+      media.addEventListener('change', () => this.v.mode === 'system' && this.applyLook());
+    }
+    const mode = this.v.mode ?? 'system';
+    this.dark = mode === 'dark' || (mode === 'system' && !!media?.matches);
+    const root = document.documentElement;
+    root.classList.toggle('dark', this.dark);
+    root.style.colorScheme = this.dark ? 'dark' : 'light';
+    const a = ACCENTS[this.v.accent] ?? ACCENTS.channelcraft;
+    const s = root.style;
+    s.setProperty('--brand', a.base);
+    s.setProperty('--brand-strong', a.strong);
+    s.setProperty('--brand-soft', hexAlpha(a.base, this.dark ? 0.2 : 0.14));
     s.setProperty('zoom', String(this.v.uiScale));
+    // The title bar follows too (null hands it back to Windows).
+    if ('__TAURI_INTERNALS__' in window) {
+      import('@tauri-apps/api/window')
+        .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(mode === 'system' ? null : mode))
+        .catch(() => {});
+    }
+  }
+
+  setMode(mode: Mode) {
+    this.set('mode', mode);
   }
 }
 

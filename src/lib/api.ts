@@ -69,6 +69,27 @@ export interface ImportPlan {
   hasSplash: boolean;
 }
 
+/** RetroBat's intro video settings ([SplashScreen] in retrobat.ini). */
+export interface IntroSettings {
+  enableIntro: boolean;
+  fileName: string;
+  /** "default" (RetroBat's video folder) or a folder of your own. */
+  filePath: string;
+  randomVideo: boolean;
+  videoDelay: number;
+  waitForVideoEnd: boolean;
+  killVideoWhenEsReady: boolean;
+  gamepadVideoKill: boolean;
+}
+
+export interface IntroInfo {
+  settings: IntroSettings;
+  /** retrobat.ini exists (RetroBat makes it the first time it runs). */
+  found: boolean;
+  folder: string;
+  videos: { name: string; path: string; size: number }[];
+}
+
 export const api = {
   detectRetrobat: () => invoke<string | null>('detect_retrobat'),
   setRetrobatRoot: (path: string) => invoke<RootInfo>('set_retrobat_root', { path }),
@@ -133,6 +154,9 @@ export const api = {
   readThemesettings: (theme: string) => invoke<string>('read_themesettings', { theme }),
   setActiveTheme: (theme: string) => invoke<void>('set_active_theme', { theme }),
   launchRetrobat: () => invoke<void>('launch_retrobat'),
+  readIntro: () => invoke<IntroInfo>('read_intro'),
+  /** Writes the intro settings into retrobat.ini (backed up the first time). */
+  writeIntro: (settings: IntroSettings) => invoke<IntroInfo>('write_intro', { settings }),
 };
 
 export const tauriFs: ThemeFs = {

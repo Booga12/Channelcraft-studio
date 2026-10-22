@@ -526,7 +526,7 @@
     {@const list = carousel.systems}
     {@const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name))}
     <div
-      class="grid"
+      class="tiles"
       style:grid-template-columns="repeat({grid.cols}, minmax(0, 1fr))"
       style:grid-template-rows="repeat({grid.rows}, minmax(0, 1fr))"
       style:column-gap="{grid.gapX}px"
@@ -571,7 +571,7 @@
     cursor: pointer;
   }
   .el.selected {
-    outline: calc(2px / var(--s, 1)) solid var(--accent);
+    outline: calc(2px / var(--s, 1)) solid var(--brand);
     outline-offset: calc(1px / var(--s, 1));
     cursor: move;
   }
@@ -581,7 +581,7 @@
     width: calc(8px / var(--s, 1));
     height: calc(8px / var(--s, 1));
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--brand);
     left: var(--ox, 0);
     top: var(--oy, 0);
     transform: translate(-50%, -50%);
@@ -745,7 +745,7 @@
     font-size: 0.8em;
     font-weight: 700;
   }
-  .grid {
+  .tiles {
     display: grid;
     width: 100%;
     height: 100%;

@@ -6,7 +6,6 @@
   import { TYPE_ICON } from '$lib/render';
   import { lineOf } from '$lib/xml/cst';
   import PropRow from './PropRow.svelte';
-  import ConsoleScope from './ConsoleScope.svelte';
   import { ANIMATIONS, EXITS, exitOf, misplayed, presetOf, screenOf, STILL_TYPES, tuningOf } from '$lib/theme/animations';
   import { parsePair } from '$lib/theme/schema';
   import { SHADOW_DEFAULT, SHADOW_TYPES, shaderOf } from '$lib/theme/shadow';
@@ -20,6 +19,9 @@
     { id: 'content', label: 'Content' },
     { id: 'behavior', label: 'Behaviour' },
   ];
+
+  /** In the inspector, whose header already names the element. */
+  let { inInspector = false }: { inInspector?: boolean } = $props();
 
   const el = $derived(ed.selectedElement);
 
@@ -120,11 +122,11 @@
     {#if viewHelp(ed.view)}<p class="dim">{viewHelp(ed.view)}</p>{/if}
     <div class="pick">
       <span class="arrow">←</span>
-      <span>Click any part of the preview, or pick it from the list on the left, to change it here.</span>
+      <span>Click any part of the preview, or pick it in Layers, to change it here.</span>
     </div>
     <ul class="dim tips">
       <li>Drag the selected part to move it. Arrow keys move it a little; hold Shift for bigger steps.</li>
-      <li>Colours marked “Shared” change everywhere they are used. Find them all in the Colours tab.</li>
+      <li>Colours marked “Shared” change everywhere they are used. Find them all in Colours.</li>
       <li>Nothing is written until you press Save. A backup of the theme is made first, and Ctrl+Z undoes any change.</li>
     </ul>
     <button class="small" onclick={() => (ed.showGuide = true)}>Show the getting started guide</button>
@@ -137,7 +139,7 @@
   </div>
 {:else}
   <div class="head">
-    <div class="title">
+    <div class="title" class:hide={inInspector}>
       <span class="ic">{TYPE_ICON[el.type] ?? '•'}</span>
       <div>
         <div class="label">{ed.simple ? elementLabel(el.name) : (ELEMENT_LABELS[el.name] ?? el.name)}</div>
@@ -162,12 +164,10 @@
         </button>
       {/each}
     </div>
-    <div class="actions">
+    <div class="actions" class:hide={inInspector}>
       <button class="small" onclick={remove} title="Delete this element's own definitions">Delete</button>
     </div>
   </div>
-
-  <ConsoleScope />
 
   {#each GROUPS as g}
     {@const groupRows = visibleRows.filter((r) => r.spec.group === g.id)}
@@ -296,7 +296,7 @@
   {#if !ed.simple && el.complex.length}
     <h4>Animations and nested blocks</h4>
     {#each el.complex as c}
-      <button class="def ghost small block" onclick={() => ed.showInSource(c.file, c.node.start)}>
+      <button class="def ghost small def-block" onclick={() => ed.showInSource(c.file, c.node.start)}>
         <span class="mono">&lt;{c.name}&gt;</span>
         <span class="faint mono">{c.file.rel}:{lineOf(c.file.src, c.node.start)}</span>
       </button>
@@ -397,7 +397,7 @@
     background: var(--raised);
     border-radius: 6px;
     font-size: 15px;
-    color: var(--accent);
+    color: var(--brand);
     flex: none;
   }
   .label {
@@ -417,7 +417,7 @@
     padding: 2px 4px;
     font-size: 11px;
   }
-  .def.block {
+  .def.def-block {
     width: calc(100% - 16px);
     margin: 2px 8px;
   }
@@ -441,7 +441,7 @@
     display: flex;
     gap: 10px;
     align-items: center;
-    background: var(--accent-soft);
+    background: var(--brand-soft);
     color: var(--text);
     border-radius: 8px;
     padding: 10px 12px;
@@ -449,13 +449,15 @@
   }
   .arrow {
     font-size: 20px;
-    color: var(--accent);
+    color: var(--brand);
   }
   .shared {
     margin: 0;
     font-size: 12px;
     color: var(--warn);
   }
+  .title.hide,
+  .actions.hide,
   .defs.hide {
     display: none;
   }
@@ -470,7 +472,7 @@
   .more {
     width: calc(100% - 24px);
     margin: 8px 12px 0;
-    color: var(--accent);
+    color: var(--brand);
   }
   .add select {
     width: 100%;

@@ -29,6 +29,8 @@ import { DESIGNS, designAssets, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
 import { COVER_EL, FEATURED_FILE, FEATURED_MEDIA, featuredXml, pickGame, readFeatured, VIDEO_EL, type Choice, type FeaturedState } from './theme/featured';
+import { task } from './task.svelte';
+import { splashTemplate } from './theme/splash';
 
 /** RetroBat's loading screen files, read on their own (not through theme.xml). */
 export const SPLASH_FILES = ['splash.xml', 'gamesplash.xml'] as const;
@@ -44,6 +46,8 @@ export interface Toast {
   text: string;
   kind: 'info' | 'error';
   id: number;
+  /** How long it shows, if not the usual time. */
+  ms?: number;
 }
 
 const DEFAULT_SETTINGS: PreviewSettings = {
@@ -297,6 +301,21 @@ class Editor {
     for (const file of SPLASH_FILES) if (this.project?.fileAt(file)) tabs.push({ id: `@${file}`, view: 'splash', file });
     return tabs;
   });
+
+  /** Adds RetroBat's loading screen (splash.xml) or game launch screen (gamesplash.xml) to the theme and shows it. */
+  addLoadingScreen(file: (typeof SPLASH_FILES)[number]) {
+    const p = this.project;
+    if (!p) return;
+    if (!p.fileAt(file)) {
+      if (this.sharedOnly('Loading screens')) return;
+      // An empty <theme> until the edit below, so undoing it leaves nothing to save.
+      const f = p.addFile(file, '<theme>\n</theme>\n');
+      this.commit(file === 'splash.xml' ? 'add a loading screen' : 'add a game launch screen', [{ file: f, patch: { start: 0, end: f.src.length, text: splashTemplate(file === 'gamesplash.xml') } }]);
+      this.rev++;
+      this.notify(`${file === 'splash.xml' ? 'Loading screen' : 'Game launch screen'} added (${file}). Save to keep it, or Ctrl+Z to undo.`);
+    }
+    this.showScreen({ view: 'splash', file });
+  }
 
   showScreen(tab: { view: string; file: string }) {
     this.screenFile = tab.file;
@@ -1415,10 +1434,16 @@ class Editor {
     const p = this.project;
     if (!p) return;
     const design = DESIGNS.find((d) => d.id === choice.design);
-    // Copying logos and downloading the design's fonts can take a while; say so meanwhile.
-    this.notify(`Setting up “${p.name}”${choice.artFrom ? ': copying console logos and pictures' : ''}${design ? `${choice.artFrom ? ', then' : ':'} adding the ${design.label} design` : ''}…`, 'info', 120000);
-    if (choice.artFrom) await this.importConsoleArt(choice.artFrom);
-    if (design) await this.applyDesign(design, { hideOwn: true });
+    // Each step shows in the loading overlay (TaskOverlay) while it runs.
+    if (choice.artFrom) {
+      task.step('art');
+      await this.importConsoleArt(choice.artFrom);
+    }
+    if (design) {
+      task.step('design');
+      await this.applyDesign(design, { hideOwn: true });
+    }
+    task.step('save');
     await this.save();
     this.notify(`“${p.name}” is ready${design ? ` with the ${design.label} design` : ''}. It's saved; your changes from here can be undone.`);
     // The starting point is the saved theme, not something to undo back past.
@@ -1468,6 +1493,7 @@ class Editor {
     if (this.screenFile !== 'theme.xml') this.showScreen({ view: this.viewNames.includes('system') ? 'system' : (this.viewNames[0] ?? 'system'), file: 'theme.xml' });
     const artRel = `_inc/ccs/${design.id}`;
     const wrote = await this.writeArt(artRel, designAssets(design));
+    task.step('fonts');
     const font = await this.ensureFont(design.font);
     const titleFont = design.titleFont ? await this.ensureFont(design.titleFont) : null;
     // The theme may have been closed while the fonts downloaded.
@@ -2000,7 +2026,7 @@ class Editor {
 
   notify(text: string, kind: Toast['kind'] = 'info', ms?: number) {
     clearTimeout(this.toastTimer);
-    this.toast = { text, kind, id: Date.now() };
+    this.toast = { text, kind, id: Date.now(), ms };
     this.toastTimer = setTimeout(() => (this.toast = null), ms ?? (kind === 'error' ? 8000 : 2800));
   }
 }

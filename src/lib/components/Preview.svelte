@@ -18,7 +18,20 @@
   import PreviewElement from './PreviewElement.svelte';
   import ContactSheet from './ContactSheet.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
-  import Icon from './Icon.svelte';
+  import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
+  import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+  import Gamepad2Icon from '@lucide/svelte/icons/gamepad-2';
+  import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
+  import PlayIcon from '@lucide/svelte/icons/play';
+  import PauseIcon from '@lucide/svelte/icons/pause';
+  import MagnetIcon from '@lucide/svelte/icons/magnet';
+  import Grid3x3Icon from '@lucide/svelte/icons/grid-3x3';
+  import TvIcon from '@lucide/svelte/icons/tv';
+  import RulerIcon from '@lucide/svelte/icons/ruler';
+  import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
+  import ZoomInIcon from '@lucide/svelte/icons/zoom-in';
+  import ZoomOutIcon from '@lucide/svelte/icons/zoom-out';
+  import MaximizeIcon from '@lucide/svelte/icons/maximize';
 
   // The canvas host comes and goes with the contact sheet, so it's reactive.
   let host: HTMLDivElement | undefined = $state();
@@ -572,7 +585,7 @@
               {oncontextmenu}
             >
               {#if splash && bar}
-                <!-- RetroBat's progress bar, shown 60% full. -->
+                <!-- RetroBat's progress bar: 60% full, or filling up while animations play. -->
                 <div
                   class="splash-bar"
                   style:left="{bar.x * dims.width}px"
@@ -583,7 +596,7 @@
                   style:z-index={1000 + splash.barIndex}
                   style:background="linear-gradient(to right, {cssColor(bar.color)}, {cssColor(bar.colorEnd)})"
                 >
-                  <div style:width="60%" style:background="linear-gradient(to right, {cssColor(bar.activeColor)}, {cssColor(bar.activeColorEnd)})"></div>
+                  <div class:filling={ed.playAnimations} style:width="60%" style:background="linear-gradient(to right, {cssColor(bar.activeColor)}, {cssColor(bar.activeColorEnd)})"></div>
                 </div>
               {/if}
               {#each drawn as el, i (el.name)}
@@ -616,7 +629,7 @@
               <!-- Overlays: drawn above the theme, in screen pixels. -->
               <div class="overlay">
                 {#if prefs.v.showGrid}
-                  <div class="grid" style:background-size="{prefs.v.gridSize * dims.width}px {prefs.v.gridSize * dims.height}px"></div>
+                  <div class="tiles" style:background-size="{prefs.v.gridSize * dims.width}px {prefs.v.gridSize * dims.height}px"></div>
                 {/if}
                 {#if prefs.v.showSafeArea}
                   <div class="safe action" title="Action safe (5%)"></div>
@@ -652,50 +665,44 @@
       {/if}
     </div>
   {/if}
-  <footer class="status">
-    <div class="group" role="group" aria-label="Zoom">
-      <button onclick={() => zoomBy(-1)} title="Zoom out (Ctrl+−)"><Icon name="zoomOut" size={14} /></button>
-      <span class="pct" title="Zoom">{Math.round(scale * 100)}%</span>
-      <button onclick={() => zoomBy(1)} title="Zoom in (Ctrl++)"><Icon name="zoomIn" size={14} /></button>
-      <button class:on={ed.zoom === 'fit'} onclick={() => (ed.zoom = 'fit')} title="Fit to window (Ctrl+0)"><Icon name="fit" size={14} /></button>
-    </div>
-    <span class="sep"></span>
-    <div class="group" role="group" aria-label="Preview system">
-      <button onclick={() => ed.stepSystem(-1)} title="Previous system">‹</button>
+  <footer class="status ui-new">
+    <div class="pill" role="group" aria-label="Preview console and game">
+      <button class="ic" onclick={() => ed.stepSystem(-1)} title="Previous console (Page Up)"><ChevronLeftIcon /></button>
       <span class="sys" title="The console shown in the preview">{ed.settings.system.fullName}</span>
-      <button onclick={() => ed.stepSystem(1)} title="Next system">›</button>
+      <button class="ic" onclick={() => ed.stepSystem(1)} title="Next console (Page Down)"><ChevronRightIcon /></button>
+      <span class="div"></span>
+      {#if gamesHere}
+        <button class="ic" onclick={() => (ed.gameIndex = (ed.gameIndex - 1 + gamesHere) % gamesHere)} title="Previous game"><ChevronLeftIcon /></button>
+        <span class="sys game" title="One of your own scraped games ({(ed.gameIndex % gamesHere) + 1} of {gamesHere})"><Gamepad2Icon />{ed.currentGame?.name}</span>
+        <button class="ic" onclick={() => (ed.gameIndex = (ed.gameIndex + 1) % gamesHere)} title="Next game"><ChevronRightIcon /></button>
+      {:else}
+        <span class="sample" title="This console has no scraped games in RetroBat, so made-up sample details are shown. Scrape it in RetroBat to preview your own games.">Sample game</span>
+      {/if}
     </div>
-    {#if gamesHere}
-      <div class="group" role="group" aria-label="Preview game">
-        <button onclick={() => (ed.gameIndex = (ed.gameIndex - 1 + gamesHere) % gamesHere)} title="Previous game">‹</button>
-        <span class="sys game" title="One of your own scraped games">🎮 {ed.currentGame?.name}</span>
-        <button onclick={() => (ed.gameIndex = (ed.gameIndex + 1) % gamesHere)} title="Next game">›</button>
-      </div>
-    {:else}
-      <span class="faint" title="This console has no scraped games in RetroBat, so made-up sample details are shown. Scrape it in RetroBat to preview your own games.">Sample game (made-up details)</span>
-    {/if}
     {#if emptyOnConsoles.length}
-      <button class="warn-note ghost small" title="These use the current game's pictures or video, but RetroBat's console screen has no game, so they stay empty: {emptyOnConsoles.map((e) => e.name).join(', ')}. Click to select the first one and fix it." onclick={() => (ed.selection = [emptyOnConsoles[0].name])}>
-        ⚠ {emptyOnConsoles.length} element{emptyOnConsoles.length === 1 ? '' : 's'} will be empty in RetroBat
+      <button class="pill warn-note" title="These use the current game's pictures or video, but RetroBat's console screen has no game, so they stay empty: {emptyOnConsoles.map((e) => e.name).join(', ')}. Click to select the first one and fix it." onclick={() => (ed.selection = [emptyOnConsoles[0].name])}>
+        <TriangleAlertIcon />{emptyOnConsoles.length} will be empty in RetroBat
       </button>
     {/if}
     {#if splash?.ignored.length}
-      <span class="warn-note" title="On a loading screen RetroBat only draws its background, label and progress bar, plus elements marked extra=&quot;true&quot;. Not drawn: {splash.ignored.join(', ')}">
-        ⚠ {splash.ignored.length} element{splash.ignored.length === 1 ? '' : 's'} RetroBat won't draw here
+      <span class="pill warn-note" title="On a loading screen RetroBat only draws its background, label and progress bar, plus elements marked extra=&quot;true&quot;. Not drawn: {splash.ignored.join(', ')}">
+        <TriangleAlertIcon />{splash.ignored.length} RetroBat won't draw here
       </span>
     {/if}
     <span class="spacer"></span>
-    <div class="group toggles" role="group" aria-label="Canvas options">
-      <button class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title="Play animations">▶</button>
-      <button class:on={prefs.v.snap} onclick={() => prefs.set('snap', !prefs.v.snap)} title="Snap to guides (hold Alt to switch off while dragging)"><Icon name="fit" size={13} /></button>
-      <button class:on={prefs.v.showGrid} onclick={() => prefs.set('showGrid', !prefs.v.showGrid)} title="Grid"><Icon name="grid" size={13} /></button>
-      <button class:on={prefs.v.showSafeArea} onclick={() => prefs.set('showSafeArea', !prefs.v.showSafeArea)} title="TV safe area"><Icon name="monitor" size={13} /></button>
-      <button class:on={prefs.v.showRulers} onclick={() => prefs.set('showRulers', !prefs.v.showRulers)} title="Rulers">⊢</button>
-      <button class:on={ed.contactSheet} onclick={() => (ed.contactSheet = !ed.contactSheet)} title="Show six systems at once">▦ Systems</button>
+    <div class="pill" role="group" aria-label="Canvas options">
+      <button class="ic" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title="Play animations (P)">{#if ed.playAnimations}<PauseIcon />{:else}<PlayIcon />{/if}</button>
+      <button class="ic" class:on={prefs.v.snap} onclick={() => prefs.set('snap', !prefs.v.snap)} title="Snap to guides (hold Alt to switch off while dragging)"><MagnetIcon /></button>
+      <button class="ic" class:on={prefs.v.showGrid} onclick={() => prefs.set('showGrid', !prefs.v.showGrid)} title="Grid (Ctrl+')"><Grid3x3Icon /></button>
+      <button class="ic" class:on={prefs.v.showSafeArea} onclick={() => prefs.set('showSafeArea', !prefs.v.showSafeArea)} title="TV safe area"><TvIcon /></button>
+      <button class="ic" class:on={prefs.v.showRulers} onclick={() => prefs.set('showRulers', !prefs.v.showRulers)} title="Rulers"><RulerIcon /></button>
+      <button class="ic" class:on={ed.contactSheet} onclick={() => (ed.contactSheet = !ed.contactSheet)} title="Show six consoles at once"><LayoutDashboardIcon /></button>
+      <span class="div"></span>
+      <button class="ic" onclick={() => zoomBy(-1)} title="Zoom out (Ctrl+−)"><ZoomOutIcon /></button>
+      <button class="pct" onclick={() => (ed.zoom = ed.zoom === 'fit' ? 1 : 'fit')} title={ed.zoom === 'fit' ? 'Fitted to the window; click for actual size (Ctrl+1)' : 'Click to fit to the window (Ctrl+0)'}>{Math.round(scale * 100)}%</button>
+      <button class="ic" onclick={() => zoomBy(1)} title="Zoom in (Ctrl++)"><ZoomInIcon /></button>
+      <button class="ic" class:on={ed.zoom === 'fit'} onclick={() => (ed.zoom = 'fit')} title="Fit to window (Ctrl+0)"><MaximizeIcon /></button>
     </div>
-    {#if sel}
-      <span class="faint sel">· {elementLabel(sel.name)}{ed.selection.length > 1 ? ` + ${ed.selection.length - 1} more` : ''}</span>
-    {/if}
   </footer>
 </div>
 
@@ -705,6 +712,7 @@
 
 <style>
   .canvas-area {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -718,7 +726,9 @@
     display: flex;
     overflow: auto;
     background: var(--canvas);
-    padding: 20px;
+    /* The space the floating panels leave free (set by EditorView). */
+    padding: 20px var(--inset-r, 20px) var(--inset-b, 20px) var(--inset-l, 20px);
+    transition: padding var(--dur-slow) var(--ease-out);
   }
   .board {
     margin: auto;
@@ -736,10 +746,10 @@
     color: var(--text-faint);
   }
   .ruler.top {
-    border-bottom: 1px solid #3a3a3a;
+    border-bottom: 1px solid var(--line);
   }
   .ruler.left {
-    border-right: 1px solid #3a3a3a;
+    border-right: 1px solid var(--line);
   }
   .tick {
     position: absolute;
@@ -777,7 +787,7 @@
   }
   .mark {
     position: absolute;
-    background: var(--accent-soft);
+    background: var(--brand-soft);
   }
   .top .mark {
     top: 0;
@@ -789,7 +799,7 @@
   }
   .stage-wrap {
     position: relative;
-    box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+    box-shadow: var(--elev-3);
   }
   .stage {
     position: absolute;
@@ -802,8 +812,14 @@
     touch-action: none;
   }
   .warn-note {
+    gap: 6px;
+    padding: 0 10px;
     color: var(--warn);
-    font-size: 11.5px;
+    font-size: 12px;
+  }
+  .warn-note :global(svg) {
+    width: 14px;
+    height: 14px;
   }
   .splash-bar {
     position: absolute;
@@ -813,13 +829,25 @@
   .splash-bar > div {
     height: 100%;
   }
+  .splash-bar > div.filling {
+    animation: splash-fill 2.6s var(--ease-in-out) infinite;
+  }
+  @keyframes splash-fill {
+    0% {
+      width: 0;
+    }
+    80%,
+    100% {
+      width: 100%;
+    }
+  }
   .overlay {
     position: absolute;
     inset: 0;
     z-index: 9000000;
     pointer-events: none;
   }
-  .grid {
+  .tiles {
     position: absolute;
     inset: 0;
     background-image:
@@ -853,7 +881,7 @@
   }
   .selbox {
     position: absolute;
-    outline: calc(1px / var(--s, 1)) solid var(--accent);
+    outline: calc(1px / var(--s, 1)) solid var(--brand);
   }
   .selbox.primary {
     outline-width: calc(2px / var(--s, 1));
@@ -863,7 +891,7 @@
     width: calc(9px / var(--s, 1));
     height: calc(9px / var(--s, 1));
     background: #fff;
-    border: calc(1.5px / var(--s, 1)) solid var(--accent);
+    border: calc(1.5px / var(--s, 1)) solid var(--brand);
     border-radius: calc(2px / var(--s, 1));
     transform: translate(-50%, -50%);
     pointer-events: auto;
@@ -887,7 +915,7 @@
   .sizelabel {
     position: absolute;
     transform: translate(-50%, calc(10px / var(--s, 1)));
-    background: var(--accent-strong);
+    background: var(--brand-strong);
     color: #fff;
     font: 600 calc(11px / var(--s, 1)) 'Segoe UI', sans-serif;
     padding: calc(2px / var(--s, 1)) calc(6px / var(--s, 1));
@@ -896,66 +924,101 @@
   }
   .marquee {
     position: absolute;
-    border: calc(1px / var(--s, 1)) dashed var(--accent);
-    background: var(--accent-soft);
+    border: calc(1px / var(--s, 1)) dashed var(--brand);
+    background: var(--brand-soft);
   }
+  /* Floating controls along the bottom of the work area, between the side panels. */
   .status {
+    position: absolute;
+    left: var(--inset-l, 12px);
+    right: var(--inset-r, 12px);
+    bottom: 12px;
     display: flex;
     align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 10px;
-    background: var(--frame);
-    border-top: 1px solid var(--line);
-    font-size: 11px;
+    gap: 8px;
+    font-size: 12px;
     white-space: nowrap;
-    overflow: hidden;
+    pointer-events: none;
+    transition:
+      left var(--dur-slow) var(--ease-out),
+      right var(--dur-slow) var(--ease-out);
   }
-  .group {
+  .pill {
+    pointer-events: auto;
     display: flex;
     align-items: center;
     gap: 1px;
+    height: 34px;
+    padding: 0 3px;
+    min-width: 0;
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--card) 92%, transparent);
+    color: var(--card-foreground);
+    box-shadow: var(--highlight), var(--elev-2);
+    outline: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
+    backdrop-filter: blur(16px);
   }
-  .group button {
-    background: transparent;
-    padding: 3px 6px;
-    color: var(--text-dim);
-    font-size: 12px;
+  .pill .ic,
+  .pill .pct {
+    display: grid;
+    place-items: center;
+    height: 28px;
+    min-width: 28px;
+    padding: 0 6px;
+    border-radius: 8px;
+    color: var(--muted-foreground);
+    transition:
+      background var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
   }
-  .group button:hover {
-    color: var(--text);
-    background: var(--raised);
+  .pill .ic :global(svg) {
+    width: 15px;
+    height: 15px;
   }
-  .group button.on {
-    color: var(--accent);
+  .pill .ic:hover,
+  .pill .pct:hover {
+    background: var(--muted);
+    color: var(--foreground);
   }
-  .pct {
-    width: 40px;
-    text-align: center;
-    color: var(--text);
+  .pill .ic.on {
+    background: color-mix(in oklch, var(--primary) 14%, transparent);
+    color: var(--primary);
+  }
+  .pill .div {
+    width: 1px;
+    height: 16px;
+    margin: 0 4px;
+    background: var(--border);
+  }
+  .pill .sample {
+    padding: 0 8px;
+    color: var(--muted-foreground);
+  }
+  .pill .pct {
+    width: 48px;
+    font-variant-numeric: tabular-nums;
+    color: var(--foreground);
   }
   .sys {
     max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--text-dim);
+    padding: 0 4px;
   }
   .sys.game {
-    max-width: 220px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 240px;
+    color: var(--muted-foreground);
   }
-  .sep {
-    width: 1px;
-    height: 16px;
-    background: #444;
-    margin: 0 4px;
+  .sys.game :global(svg) {
+    flex: none;
+    width: 14px;
+    height: 14px;
   }
   .spacer {
     flex: 1;
-  }
-  .sel {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .menu-mock {
     position: absolute;

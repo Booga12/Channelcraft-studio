@@ -2,6 +2,7 @@ mod commands;
 mod storage;
 mod importing;
 mod assets;
+mod intro;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -111,6 +112,8 @@ pub fn run() {
             commands::read_themesettings,
             commands::set_active_theme,
             commands::launch_retrobat,
+            intro::read_intro,
+            intro::write_intro,
             storage::open_project,
             storage::close_project,
             storage::changed_files,

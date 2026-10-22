@@ -28,7 +28,7 @@
   {/if}
   {#if ed.view === 'system' && ed.screenFile === 'theme.xml'}
     <h4>Featured game</h4>
-    <div class="grid">
+    <div class="tiles">
       <button class="item" onclick={() => (ed.showFeatured = true)} title="One of your games per console: its video and its cover together">
         <span class="ic"><Icon name="video" size={18} /></span>
         <span class="txt">
@@ -41,7 +41,7 @@
   {/if}
   {#each groups as [cat, list]}
     <h4>{cat}</h4>
-    <div class="grid">
+    <div class="tiles">
       {#each list as i (i.id)}
         {@const here = onScreen(i)}
         <button class="item" class:here onclick={() => ed.addLibraryItem(i)} title={i.help}>
@@ -78,7 +78,7 @@
     letter-spacing: 0.06em;
     color: var(--text-faint);
   }
-  .grid {
+  .tiles {
     display: grid;
     gap: 4px;
   }
@@ -89,13 +89,13 @@
     text-align: left;
     white-space: normal;
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 6px;
     padding: 8px 10px;
   }
   .item:hover {
-    border-color: var(--accent);
-    background: #232a33;
+    border-color: var(--brand);
+    background: var(--bg);
   }
   .ic {
     width: 32px;
@@ -123,8 +123,8 @@
   }
   .data {
     font-size: 10px;
-    color: #7fc4ff;
-    background: rgba(55, 142, 240, 0.15);
+    color: var(--brand);
+    background: var(--brand-soft);
     border-radius: 3px;
     padding: 0 5px;
   }

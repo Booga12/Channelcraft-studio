@@ -11,7 +11,7 @@
 </script>
 
 <div class="wrap">
-  <section class="transition">
+  <section class="transition-opts">
     <label>
       <span>Screen transition</span>
       <select value={ed.themeTransition} onchange={(e) => ed.setThemeTransition(e.currentTarget.value)}>
@@ -69,11 +69,11 @@
     font-size: 12px;
     color: var(--text-dim);
   }
-  .transition {
+  .transition-opts {
     display: grid;
     gap: 4px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--line);
   }
   .note {
     margin: 0;

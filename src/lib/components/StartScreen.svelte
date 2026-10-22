@@ -1,9 +1,29 @@
 <script lang="ts">
+  import { task } from '$lib/task.svelte';
   import { ask, open } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
   import { fileUrl, type ThemeInfo } from '$lib/api';
   import NewThemeDialog, { type StarterChoice } from './NewThemeDialog.svelte';
-  import Icon from './Icon.svelte';
+  import { fade } from 'svelte/transition';
+  import PlusIcon from '@lucide/svelte/icons/plus';
+  import HouseIcon from '@lucide/svelte/icons/house';
+  import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+  import SettingsIcon from '@lucide/svelte/icons/settings';
+  import KeyboardIcon from '@lucide/svelte/icons/keyboard';
+  import FolderIcon from '@lucide/svelte/icons/folder';
+  import FolderInputIcon from '@lucide/svelte/icons/folder-input';
+  import SparklesIcon from '@lucide/svelte/icons/sparkles';
+  import CopyIcon from '@lucide/svelte/icons/copy';
+  import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+  import SearchIcon from '@lucide/svelte/icons/search';
+  import Trash2Icon from '@lucide/svelte/icons/trash-2';
+  import { Button } from '$lib/components/ui/button';
+  import { Badge } from '$lib/components/ui/badge';
+  import { Input } from '$lib/components/ui/input';
+  import { Checkbox } from '$lib/components/ui/checkbox';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import AppDialog from './AppDialog.svelte';
+  import ModeToggle from './editor/ModeToggle.svelte';
   import ImportThemeDialog from './ImportThemeDialog.svelte';
 
   let dialog = $state<{ mode: 'new' | 'duplicate'; source?: ThemeInfo } | null>(null);
@@ -11,11 +31,31 @@
   let choosing = $state<ThemeInfo | null>(null);
   let dontAsk = $state(false);
   let importing = $state(false);
+  /** The theme being opened, which shows a spinner on its card. */
+  let opening = $state<string | null>(null);
+
+  function open_(path: string) {
+    opening = path;
+    ed.openTheme(path);
+  }
 
   function openTheme(t: ThemeInfo) {
     if (ed.askCopy) choosing = t;
-    else ed.openTheme(t.path);
+    else open_(t.path);
   }
+
+  const QUICK = $derived([
+    { title: 'Start a new theme', help: 'A design to start from, with every RetroBat data element placed', icon: SparklesIcon, tone: 'bg-gradient-to-br from-blue-500 to-violet-600', run: () => (dialog = { mode: 'new' }) },
+    {
+      title: 'Remix the theme you use',
+      help: "Copy RetroBat's current theme and change the copy",
+      icon: CopyIcon,
+      tone: 'bg-gradient-to-br from-pink-500 to-orange-500',
+      run: () => ed.themes[0] && (dialog = { mode: 'duplicate', source: ed.themes.find((t) => t.name.toLowerCase() === ed.root?.activeTheme?.toLowerCase()) ?? ed.themes[0] }),
+    },
+    { title: 'Import a theme', help: 'From a .zip or folder someone shared, checked first', icon: FolderInputIcon, tone: 'bg-gradient-to-br from-amber-500 to-rose-500', run: () => (importing = true) },
+    { title: 'How it works', help: 'Four steps, two minutes', icon: CircleHelpIcon, tone: 'bg-gradient-to-br from-emerald-500 to-sky-500', run: () => (ed.showGuide = true) },
+  ]);
 
   async function removeTheme(t: ThemeInfo) {
     if (ed.root?.activeTheme?.toLowerCase() === t.name.toLowerCase()) {
@@ -42,7 +82,7 @@
     const t = choosing!;
     if (dontAsk) ed.setAskCopy(false);
     choosing = null;
-    ed.openTheme(t.path);
+    open_(t.path);
   }
 
   const shown = $derived(ed.themes.filter((t) => t.name.toLowerCase().includes(filter.trim().toLowerCase())));
@@ -54,8 +94,16 @@
 
   async function created(path: string, starter?: StarterChoice) {
     dialog = null;
+    if (starter) task.step('open');
     await ed.openTheme(path);
-    if (starter) await ed.applyStarter(starter);
+    if (!starter) return;
+    if (ed.project?.dir !== path) return task.fail('The new theme was created but could not be opened. Pick it from Your themes to try again.');
+    try {
+      await ed.applyStarter(starter);
+      task.finish();
+    } catch (e) {
+      task.fail(e);
+    }
   }
 </script>
 
@@ -69,425 +117,130 @@
   />
 {/if}
 
-<div class="start">
-  <aside class="side">
-    <div class="brand">
-      <div class="mark" aria-hidden="true">Cc</div>
-      <div>
-        <div class="app">ChannelCraft Studio</div>
-        <div class="faint">Theme editor for RetroBat</div>
+<div class="ui-new flex h-screen overflow-hidden bg-[var(--canvas)]">
+  <aside class="flex w-60 shrink-0 flex-col gap-4 border-r bg-card/60 p-4 backdrop-blur-xl">
+    <div class="flex items-center gap-2.5 px-1">
+      <div class="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-brand-from to-brand-to text-sm font-bold text-white shadow-elev-2" aria-hidden="true">Cc</div>
+      <div class="leading-tight">
+        <div class="text-sm font-semibold">ChannelCraft Studio</div>
+        <div class="text-xs text-muted-foreground">Theme editor for RetroBat</div>
       </div>
     </div>
-    <button class="primary create" onclick={() => (dialog = { mode: 'new' })} disabled={!ed.root}><Icon name="plus" size={14} /> New theme</button>
-    <nav>
-      <button class="nav on"><Icon name="home" size={16} /> Home</button>
-      <button class="nav" onclick={() => ed.refreshThemes()} disabled={!ed.root}><Icon name="redo" size={16} /> Refresh themes</button>
-      <button class="nav" onclick={() => (ed.showSettings = true)}><Icon name="settings" size={16} /> Settings</button>
-      <button class="nav" onclick={() => (ed.showShortcuts = true)}><Icon name="help" size={16} /> Keyboard shortcuts</button>
+    <Button class="shadow-elev-2" onclick={() => (dialog = { mode: 'new' })} disabled={!ed.root}><PlusIcon data-icon="inline-start" />New theme</Button>
+    <nav class="flex flex-col gap-0.5">
+      <Button variant="secondary" class="justify-start"><HouseIcon data-icon="inline-start" />Home</Button>
+      <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => ed.refreshThemes()} disabled={!ed.root}><RefreshCwIcon data-icon="inline-start" />Refresh themes</Button>
+      <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => (ed.showSettings = true)}><SettingsIcon data-icon="inline-start" />Settings</Button>
+      <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => (ed.showShortcuts = true)}><KeyboardIcon data-icon="inline-start" />Keyboard shortcuts</Button>
     </nav>
-    <div class="grow"></div>
+    <div class="flex-1"></div>
+    <ModeToggle side="top" />
     {#if ed.root}
-      <div class="rootbox">
-        <div class="faint label">RetroBat folder</div>
-        <div class="mono path" title={ed.root.root}>{ed.root.root}</div>
-        <button class="secondary small" onclick={pickRoot}><Icon name="folder" size={13} /> Change…</button>
+      <div class="flex flex-col gap-2 rounded-xl bg-muted/60 p-3 ring-1 ring-foreground/5">
+        <div class="text-[10.5px] font-semibold tracking-wider text-muted-foreground uppercase">RetroBat folder</div>
+        <div class="truncate font-mono text-xs" title={ed.root.root}>{ed.root.root}</div>
+        <Button variant="outline" size="sm" class="self-start" onclick={pickRoot}><FolderIcon data-icon="inline-start" />Change…</Button>
       </div>
     {/if}
   </aside>
 
   {#if !ed.root}
-    <section class="empty">
-      <Icon name="folder" size={40} />
-      <h2>Where is RetroBat installed?</h2>
-      <p class="dim">Pick the folder that contains <span class="mono">RetroBat.exe</span>. Themes are read from its <span class="mono">emulationstation\.emulationstation\themes</span> folder.</p>
-      <button class="primary" onclick={pickRoot}>Choose RetroBat folder…</button>
+    <section class="grid flex-1 place-items-center p-8">
+      <div class="flex max-w-md flex-col items-center gap-3 text-center">
+        <div class="grid size-16 place-items-center rounded-2xl bg-muted text-muted-foreground shadow-elev-1"><FolderIcon class="size-8" /></div>
+        <h2 class="m-0 text-xl font-semibold">Where is RetroBat installed?</h2>
+        <p class="m-0 text-sm text-muted-foreground">Pick the folder that contains <span class="font-mono">RetroBat.exe</span>. Themes are read from its <span class="font-mono">emulationstation\.emulationstation\themes</span> folder.</p>
+        <Button class="mt-2" onclick={pickRoot}>Choose RetroBat folder…</Button>
+      </div>
     </section>
   {:else}
-    <section class="themes">
-      <h1>Welcome to ChannelCraft Studio</h1>
-      <p class="dim lead">Change how RetroBat looks: colours, fonts, pictures and layouts, with a live preview. Nothing reaches RetroBat until you save, and a backup is made first.</p>
+    <section class="min-w-0 flex-1 overflow-auto px-10 py-8">
+      <div class="mx-auto flex max-w-6xl flex-col gap-8">
+        <header class="flex flex-col gap-2">
+          <h1 class="m-0 bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-3xl font-bold tracking-tight text-transparent">Welcome to ChannelCraft Studio</h1>
+          <p class="m-0 max-w-2xl text-sm text-muted-foreground">Change how RetroBat looks: colours, fonts, pictures and layouts, with a live preview. Nothing reaches RetroBat until you save, and a backup is made first.</p>
+        </header>
 
-      <div class="quick">
-        <button class="qcard" onclick={() => (dialog = { mode: 'new' })}>
-          <span class="qicon a"><Icon name="sparkle" size={22} /></span>
-          <span><strong>Start a new theme</strong><small>A simple starter with a light and a dark colour set</small></span>
-        </button>
-        <button class="qcard" onclick={() => ed.themes[0] && (dialog = { mode: 'duplicate', source: shown.find((t) => t.name.toLowerCase() === ed.root?.activeTheme?.toLowerCase()) ?? ed.themes[0] })}>
-          <span class="qicon b"><Icon name="copy" size={22} /></span>
-          <span><strong>Remix the theme you use</strong><small>Copy RetroBat's current theme and change the copy</small></span>
-        </button>
-        <button class="qcard" onclick={() => (importing = true)} disabled={!ed.root}>
-          <span class="qicon d"><Icon name="folder" size={22} /></span>
-          <span><strong>Import a theme</strong><small>From a .zip or folder someone shared, checked first</small></span>
-        </button>
-        <button class="qcard" onclick={() => (ed.showGuide = true)}>
-          <span class="qicon c"><Icon name="help" size={22} /></span>
-          <span><strong>How it works</strong><small>Four steps, two minutes</small></span>
-        </button>
-      </div>
-
-      <div class="bar">
-        <h2>Your themes <span class="faint">{ed.themes.length}</span></h2>
-        <input placeholder="Find a theme…" bind:value={filter} />
-      </div>
-
-      <div class="grid">
-        {#each shown as t (t.path)}
-          <article class="card">
-            <button class="thumb" onclick={() => openTheme(t)} title="Open {t.name}" disabled={ed.loading}>
-              {#if t.preview}
-                <img src={fileUrl(t.preview)} alt="" loading="lazy" />
-              {:else}
-                <div class="noimg">No preview</div>
-              {/if}
-              {#if ed.root.activeTheme?.toLowerCase() === t.name.toLowerCase()}
-                <span class="badge accent active">Active in RetroBat</span>
-              {/if}
+        <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {#each QUICK as q (q.title)}
+            <button
+              class="group flex items-center gap-3 rounded-2xl bg-card p-4 text-left shadow-elev-1 ring-1 ring-foreground/8 transition-all duration-200 ease-out-soft hover:-translate-y-0.5 hover:shadow-elev-3 disabled:pointer-events-none disabled:opacity-50"
+              onclick={q.run}
+              disabled={!ed.root}
+            >
+              <span class="grid size-11 shrink-0 place-items-center rounded-xl text-white shadow-elev-2 transition-transform duration-300 ease-spring group-hover:scale-110 group-hover:-rotate-6 {q.tone}"><q.icon class="size-5" /></span>
+              <span class="flex min-w-0 flex-col gap-0.5">
+                <strong class="text-sm font-semibold">{q.title}</strong>
+                <small class="text-xs text-muted-foreground">{q.help}</small>
+              </span>
             </button>
-            <div class="meta">
-              <div class="name" title={t.name}>{t.name}</div>
-              <div class="actions">
-                <button class="small icon-btn" onclick={() => removeTheme(t)} title="Delete this theme (moves it to the Recycle Bin)" aria-label="Delete {t.name}"><Icon name="trash" size={14} /></button>
-                <button class="small" onclick={() => (dialog = { mode: 'duplicate', source: t })} title="Copy this theme to a new folder and edit the copy">Duplicate</button>
-                <button class="small primary" onclick={() => openTheme(t)} disabled={ed.loading}>Edit</button>
-              </div>
+          {/each}
+        </div>
+
+        <div class="flex flex-col gap-4">
+          <div class="flex items-center gap-3">
+            <h2 class="m-0 flex items-center gap-2 text-lg font-semibold">Your themes <Badge variant="secondary">{ed.themes.length}</Badge></h2>
+            <div class="flex-1"></div>
+            <div class="relative w-64">
+              <SearchIcon class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input class="pl-8" placeholder="Find a theme…" bind:value={filter} />
             </div>
-          </article>
-        {/each}
+          </div>
+
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+            {#each shown as t (t.path)}
+              {@const active = ed.root.activeTheme?.toLowerCase() === t.name.toLowerCase()}
+              {@const busy = ed.loading && opening === t.path}
+              <article class="group flex flex-col overflow-hidden rounded-2xl bg-card shadow-elev-1 ring-1 ring-foreground/8 transition-all duration-200 ease-out-soft hover:-translate-y-0.5 hover:shadow-elev-3">
+                <button class="thumb relative aspect-video overflow-hidden bg-black" onclick={() => openTheme(t)} title="Open {t.name}" disabled={ed.loading}>
+                  {#if t.preview}
+                    <img class="size-full object-cover transition-transform duration-500 ease-out-soft group-hover:scale-[1.03]" src={fileUrl(t.preview)} alt="" loading="lazy" />
+                  {:else}
+                    <div class="grid size-full place-items-center bg-gradient-to-br from-muted to-muted/40 text-xs text-muted-foreground">No preview</div>
+                  {/if}
+                  {#if active}
+                    <Badge class="absolute top-2 left-2 shadow-elev-2">Active in RetroBat</Badge>
+                  {/if}
+                  {#if busy}
+                    <div class="absolute inset-0 grid place-items-center bg-black/50 backdrop-blur-sm" transition:fade={{ duration: 150 }}>
+                      <span class="flex items-center gap-2 rounded-full bg-background/90 px-3 py-1.5 text-xs font-medium text-foreground shadow-elev-2"><Spinner />Opening…</span>
+                    </div>
+                  {/if}
+                </button>
+                <div class="flex items-center gap-1 p-2.5 pl-3.5">
+                  <div class="min-w-0 flex-1 truncate text-sm font-medium" title={t.name}>{t.name}</div>
+                  <Button variant="ghost" size="icon-sm" class="text-muted-foreground hover:text-destructive" onclick={() => removeTheme(t)} title="Delete this theme (moves it to the Recycle Bin)" aria-label="Delete {t.name}"><Trash2Icon /></Button>
+                  <Button variant="ghost" size="sm" onclick={() => (dialog = { mode: 'duplicate', source: t })} title="Copy this theme to a new folder and edit the copy">Duplicate</Button>
+                  <Button size="sm" onclick={() => openTheme(t)} disabled={ed.loading}>Edit</Button>
+                </div>
+              </article>
+            {/each}
+          </div>
+        </div>
       </div>
-      {#if ed.loading}
-        <p class="dim loading">Loading theme…</p>
-      {/if}
     </section>
   {/if}
 </div>
 
 {#if choosing}
-  <div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && (choosing = null)} onkeydown={(e) => e.key === 'Escape' && (choosing = null)}>
-    <div class="choose" role="dialog" aria-modal="true">
-      <h2>Edit “{choosing.name}”</h2>
-      <p class="dim">Editing a copy keeps the original safe, so you can always switch back to it in RetroBat.</p>
-      <div class="opts">
-        <button class="opt primary" onclick={chooseCopy}>
-          <strong>Make a copy and edit it</strong>
-          <span>Recommended</span>
-        </button>
-        <button class="opt" onclick={chooseOriginal}>
-          <strong>Edit the original</strong>
-          <span>A backup is still made before the first save</span>
-        </button>
-      </div>
-      <div class="foot">
-        <label class="chk"><input type="checkbox" bind:checked={dontAsk} /> Don't ask again</label>
-        <button class="ghost" onclick={() => (choosing = null)}>Cancel</button>
-      </div>
+  <AppDialog title={`Edit “${choosing.name}”`} description="Editing a copy keeps the original safe, so you can always switch back to it in RetroBat." onclose={() => (choosing = null)} class="sm:max-w-[460px]">
+    {#snippet footer()}
+      <label class="mr-auto flex items-center gap-2 self-center text-xs text-muted-foreground"><Checkbox bind:checked={dontAsk} />Don't ask again</label>
+      <Button variant="ghost" onclick={() => (choosing = null)}>Cancel</Button>
+    {/snippet}
+    <div class="ui-new flex flex-col gap-2">
+      <button class="opt flex flex-col items-start gap-0.5 rounded-xl bg-primary p-3.5 text-left text-primary-foreground shadow-elev-2 transition-all hover:-translate-y-px hover:shadow-elev-3" onclick={chooseCopy}>
+        <strong class="text-sm">Make a copy and edit it</strong>
+        <span class="text-xs opacity-80">Recommended</span>
+      </button>
+      <button class="opt flex flex-col items-start gap-0.5 rounded-xl bg-muted p-3.5 text-left ring-1 ring-foreground/8 transition-all hover:-translate-y-px hover:bg-muted/70" onclick={chooseOriginal}>
+        <strong class="text-sm">Edit the original</strong>
+        <span class="text-xs text-muted-foreground">A backup is still made before the first save</span>
+      </button>
     </div>
-  </div>
+  </AppDialog>
 {/if}
 
 {#if dialog}
   <NewThemeDialog mode={dialog.mode} source={dialog.source} oncreated={created} oncancel={() => (dialog = null)} />
 {/if}
-
-<style>
-  .start {
-    height: 100vh;
-    display: flex;
-    overflow: hidden;
-    background: var(--frame);
-  }
-  .side {
-    width: 230px;
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 18px 14px;
-    background: var(--panel);
-    border-right: 1px solid var(--line);
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 4px;
-  }
-  .mark {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #2680eb, #7e4bd6);
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    color: #fff;
-  }
-  .app {
-    font-weight: 700;
-    font-size: 13px;
-  }
-  .create {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 14px;
-  }
-  nav {
-    display: grid;
-    gap: 2px;
-  }
-  .nav {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: transparent;
-    padding: 8px 10px;
-    text-align: left;
-    color: var(--text-dim);
-  }
-  .nav.on {
-    background: var(--raised);
-    color: var(--text);
-  }
-  .grow {
-    flex: 1;
-  }
-  .rootbox {
-    display: grid;
-    gap: 6px;
-    padding: 10px;
-    background: var(--bg);
-    border-radius: 6px;
-  }
-  .rootbox .label {
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .rootbox button {
-    justify-self: start;
-    display: flex;
-    gap: 5px;
-    align-items: center;
-  }
-  .path {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .empty {
-    margin: auto;
-    max-width: 480px;
-    text-align: center;
-    padding: 24px;
-    display: grid;
-    justify-items: center;
-    color: var(--text-dim);
-  }
-  .empty h2 {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .themes {
-    flex: 1;
-    overflow: auto;
-    padding: 34px 40px 48px;
-  }
-  h1 {
-    margin: 0;
-    font-size: 26px;
-    font-weight: 700;
-  }
-  .lead {
-    max-width: 640px;
-    font-size: 13px;
-    margin: 8px 0 22px;
-  }
-  .quick {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 14px;
-    margin-bottom: 32px;
-  }
-  .qcard {
-    display: flex;
-    gap: 14px;
-    align-items: center;
-    text-align: left;
-    white-space: normal;
-    background: var(--panel);
-    border: 1px solid #3a3a3a;
-    border-radius: 10px;
-    padding: 14px 16px;
-  }
-  .qcard:hover {
-    background: var(--panel-2);
-    border-color: #555;
-  }
-  .qcard strong {
-    display: block;
-    font-size: 13px;
-  }
-  .qcard small {
-    color: var(--text-faint);
-    font-size: 11.5px;
-  }
-  .qicon {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    flex: none;
-    color: #fff;
-  }
-  .qicon.a {
-    background: linear-gradient(135deg, #2680eb, #5c3bd6);
-  }
-  .qicon.b {
-    background: linear-gradient(135deg, #d6458d, #e8733d);
-  }
-  .qicon.d {
-    background: linear-gradient(135deg, #c27a1a, #d6455d);
-  }
-  .qicon.c {
-    background: linear-gradient(135deg, #2d9d78, #2680eb);
-  }
-  .bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-  .bar h2 {
-    font-size: 15px;
-    font-weight: 600;
-    margin: 0 auto 0 0;
-  }
-  .bar input {
-    width: 220px;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 18px;
-  }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-  .card:hover {
-    border-color: var(--line-strong);
-  }
-  .thumb {
-    position: relative;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    aspect-ratio: 16 / 9;
-    background: #0c0d10;
-    overflow: hidden;
-  }
-  .thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .noimg {
-    display: grid;
-    place-items: center;
-    height: 100%;
-    color: var(--text-faint);
-  }
-  .active {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    background: rgba(18, 20, 24, 0.85);
-  }
-  .meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-  }
-  .name {
-    flex: 1;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .actions {
-    display: flex;
-    gap: 6px;
-  }
-  .loading {
-    margin-top: 16px;
-  }
-  .icon-btn {
-    background: transparent;
-    padding: 3px 5px;
-    color: var(--text-faint);
-  }
-  .icon-btn:hover:not(:disabled) {
-    color: var(--danger);
-    background: var(--raised);
-  }
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.55);
-    display: grid;
-    place-items: center;
-    z-index: 100;
-  }
-  .choose {
-    width: min(480px, 92vw);
-    background: var(--panel);
-    border: 1px solid var(--line-strong);
-    border-radius: 12px;
-    padding: 20px 22px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  }
-  .choose h2 {
-    margin: 0 0 6px;
-    font-size: 16px;
-  }
-  .opts {
-    display: grid;
-    gap: 8px;
-    margin-top: 14px;
-  }
-  .opt {
-    display: grid;
-    gap: 2px;
-    text-align: left;
-    padding: 10px 14px;
-    white-space: normal;
-  }
-  .opt span {
-    font-size: 12px;
-    opacity: 0.8;
-  }
-  .foot {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 14px;
-  }
-  .chk {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-</style>

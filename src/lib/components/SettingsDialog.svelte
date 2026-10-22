@@ -1,10 +1,12 @@
 <script lang="ts">
+  import * as Dialog from '$lib/components/ui/dialog';
   import { open } from '@tauri-apps/plugin-dialog';
   import { revealItemInDir } from '@tauri-apps/plugin-opener';
   import { ed } from '$lib/editor.svelte';
-  import { ACCENTS, prefs } from '$lib/prefs.svelte';
+  import { ACCENTS, prefs, type Mode } from '$lib/prefs.svelte';
   import { api } from '$lib/api';
   import Icon from './Icon.svelte';
+  import IntroVideoSettings from './IntroVideoSettings.svelte';
   import { getVersion } from '@tauri-apps/api/app';
   import LICENSE from '../../../LICENSE?raw';
 
@@ -21,6 +23,7 @@
     { id: 'saving', label: 'Saving & backups', icon: 'save' },
     { id: 'look', label: 'Appearance', icon: 'palette' },
     { id: 'preview', label: 'Preview', icon: 'monitor' },
+    { id: 'intro', label: 'Intro video', icon: 'video' },
     { id: 'about', label: 'About', icon: 'help' },
   ] as const;
   let section = $state<(typeof SECTIONS)[number]['id']>('general');
@@ -48,10 +51,9 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (ed.showSettings = false)} />
-
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && (ed.showSettings = false)}>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label="Settings">
+<Dialog.Root open onOpenChange={(o) => !o && (ed.showSettings = false)}>
+  <Dialog.Content class="settings grid h-[min(560px,88vh)] w-[min(800px,94vw)] max-w-none grid-cols-[200px_1fr] gap-0 overflow-hidden p-0 shadow-elev-4 sm:max-w-none">
+    <Dialog.Title class="sr-only">Settings</Dialog.Title>
     <nav>
       <h2>Settings</h2>
       {#each SECTIONS as s}
@@ -145,6 +147,14 @@
       {:else if section === 'look'}
         <h3>Appearance</h3>
         <div class="row">
+          <div><strong>Light or dark</strong><small>System follows the Windows setting.</small></div>
+          <select value={prefs.v.mode} onchange={(e) => prefs.setMode(e.currentTarget.value as Mode)}>
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+        <div class="row">
           <div><strong>Accent colour</strong></div>
           <div class="accents">
             {#each Object.entries(ACCENTS) as [id, a]}
@@ -161,6 +171,8 @@
             <option value="1.25">Extra large (125%)</option>
           </select>
         </div>
+      {:else if section === 'intro'}
+        <IntroVideoSettings />
       {:else if section === 'about'}
         <h3>About</h3>
         <div class="row">
@@ -186,9 +198,8 @@
         </div>
       {/if}
     </section>
-    <button class="close ghost" onclick={() => (ed.showSettings = false)} aria-label="Close"><Icon name="close" size={16} /></button>
-  </div>
-</div>
+  </Dialog.Content>
+</Dialog.Root>
 
 <style>
   .licence {
@@ -200,28 +211,8 @@
     font-size: 11px;
     line-height: 1.45;
     background: var(--bg);
-    border: 1px solid #333;
+    border: 1px solid var(--line);
     border-radius: 8px;
-  }
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: grid;
-    place-items: center;
-    z-index: 400;
-  }
-  .dialog {
-    position: relative;
-    display: grid;
-    grid-template-columns: 200px 1fr;
-    width: min(760px, 94vw);
-    height: min(520px, 88vh);
-    background: var(--panel);
-    border: 1px solid #3a3a3a;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
   }
   nav {
     background: var(--frame);
@@ -261,7 +252,7 @@
     justify-content: space-between;
     gap: 18px;
     padding: 12px 0;
-    border-bottom: 1px solid #383838;
+    border-bottom: 1px solid var(--line);
   }
   .row > div:first-child {
     display: grid;
@@ -305,11 +296,5 @@
     box-shadow:
       0 0 0 2px var(--panel),
       0 0 0 4px #fff;
-  }
-  .close {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    padding: 5px;
   }
 </style>

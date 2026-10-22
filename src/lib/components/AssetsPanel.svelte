@@ -178,7 +178,7 @@
     </div>
   {:else}
     <p class="hint faint">Drag onto an element to use it. It's copied into the theme (<span class="mono">_inc/…</span>), so the theme keeps working on its own. Double-click to use it on the selected element.</p>
-    <div class="grid">
+    <div class="tiles">
       {#each shown as a (a.path)}
         <div
           class="tile"
@@ -261,8 +261,8 @@
     color: var(--text-dim);
   }
   .chips button.on {
-    background: var(--accent-soft);
-    border-color: var(--accent);
+    background: var(--brand-soft);
+    border-color: var(--brand);
     color: var(--text);
   }
   .n {
@@ -287,7 +287,7 @@
     margin: 0;
     font-size: 12px;
   }
-  .grid {
+  .tiles {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
     gap: 6px;
@@ -304,8 +304,8 @@
   }
   .tile:hover,
   .tile:focus-visible {
-    border-color: var(--accent);
-    background: #232a33;
+    border-color: var(--brand);
+    background: var(--bg);
     outline: none;
   }
   .thumb {
@@ -315,12 +315,12 @@
     display: grid;
     place-items: center;
     overflow: hidden;
-    background: repeating-conic-gradient(#20242b 0 25%, #2a2f38 0 50%) 0 0 / 10px 10px;
+    background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 10px 10px;
   }
   .thumb.video,
   .thumb.sound,
   .thumb.font {
-    background: #1b1f25;
+    background: var(--bg);
   }
   .thumb img,
   .thumb video {
@@ -352,7 +352,7 @@
     padding: 0;
   }
   .play.on {
-    color: var(--accent);
+    color: var(--brand);
   }
   .name {
     font-size: 10.5px;

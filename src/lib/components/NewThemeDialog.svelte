@@ -6,10 +6,14 @@
 </script>
 
 <script lang="ts">
+  import AppDialog from './AppDialog.svelte';
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
   import { ed } from '$lib/editor.svelte';
   import type { ThemeInfo } from '$lib/api';
   import { DESIGNS } from '$lib/theme/designs';
   import DesignThumb from './DesignThumb.svelte';
+  import { task } from '$lib/task.svelte';
 
   let {
     mode,
@@ -66,10 +70,25 @@
     if (!name.trim() || exists || working) return;
     working = true;
     error = '';
+    if (mode === 'new') {
+      // Setting up a new theme takes a while; the overlay shows each step as it happens.
+      const d = DESIGNS.find((x) => x.id === design);
+      task.start(`Building “${name.trim()}”`, [
+        ['folder', 'Creating the theme folder'],
+        ['open', 'Opening it'],
+        ['art', 'Copying console logos and pictures'],
+        ['design', d ? `Adding the ${d.label} design` : 'Adding the design'],
+        ['fonts', 'Downloading fonts'],
+        ['save', 'Saving'],
+      ]);
+      task.step('folder');
+    }
     try {
       const path = mode === 'new' ? await ed.createTheme(name.trim()) : await ed.duplicateTheme(source!.path, name.trim());
       oncreated(path, mode === 'new' ? { design, artFrom: artFrom || null } : undefined);
     } catch (err) {
+      // Back to the dialog, which says what went wrong.
+      task.close();
       error = String(err);
     } finally {
       working = false;
@@ -77,16 +96,22 @@
   }
 </script>
 
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && oncancel()} onkeydown={(e) => e.key === 'Escape' && oncancel()}>
-  <form class="dialog" class:wide={mode === 'new'} onsubmit={submit}>
-    <h2>{mode === 'new' ? 'New theme' : `Duplicate “${source?.name}”`}</h2>
-    <p class="dim">
-      {#if mode === 'new'}
-        Pick a design to start from. It comes with artwork, colours, a font, animations and every RetroBat data element already placed: box art, screenshots, videos, logos, descriptions and more.
-      {:else}
-        Copies every file of the theme to a new folder, so you can change the copy and keep the original.
-      {/if}
-    </p>
+<AppDialog
+  title={mode === 'new' ? 'New theme' : `Duplicate “${source?.name}”`}
+  description={mode === 'new'
+    ? 'Pick a design to start from. It comes with artwork, colours, a font, animations and every RetroBat data element already placed: box art, screenshots, videos, logos, descriptions and more.'
+    : 'Copies every file of the theme to a new folder, so you can change the copy and keep the original.'}
+  onclose={oncancel}
+  busy={working}
+  class={mode === 'new' ? 'sm:max-w-[880px]' : 'sm:max-w-[460px]'}
+>
+  {#snippet footer()}
+    <Button variant="outline" onclick={oncancel} disabled={working}>Cancel</Button>
+    <Button type="submit" form="new-theme-form" disabled={!name.trim() || exists || working}>
+      {#if working}<Spinner data-icon="inline-start" />Working…{:else}{mode === 'new' ? 'Create and open' : 'Duplicate and open'}{/if}
+    </Button>
+  {/snippet}
+  <form id="new-theme-form" onsubmit={submit}>
     <label class="field">
       <span>Name</span>
       <input bind:this={input} bind:value={name} spellcheck="false" />
@@ -124,40 +149,10 @@
     {#if error}
       <p class="err">{error}</p>
     {/if}
-    <div class="buttons">
-      <button type="button" class="secondary" onclick={oncancel}>Cancel</button>
-      <button type="submit" class="primary" disabled={!name.trim() || exists || working}>{working ? 'Working…' : mode === 'new' ? 'Create and open' : 'Duplicate and open'}</button>
-    </div>
   </form>
-</div>
+</AppDialog>
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: grid;
-    place-items: center;
-    z-index: 100;
-  }
-  .dialog {
-    width: min(460px, 92vw);
-    max-height: 92vh;
-    overflow: auto;
-    background: var(--panel);
-    border: 1px solid #3a3a3a;
-    border-radius: 12px;
-    padding: 20px 24px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  }
-  .dialog.wide {
-    width: min(880px, 95vw);
-  }
-  h2 {
-    margin: 0 0 6px;
-    font-size: 18px;
-    font-weight: 700;
-  }
   .field {
     display: grid;
     gap: 5px;
@@ -194,7 +189,7 @@
     align-content: start;
     padding: 6px;
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 8px;
     cursor: pointer;
   }
@@ -204,11 +199,11 @@
     pointer-events: none;
   }
   .choice.on {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 1px var(--brand);
   }
   .choice:has(input:focus-visible) {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--brand);
   }
   .dname {
     font-weight: 600;
@@ -228,11 +223,5 @@
   .err {
     color: var(--danger);
     margin: 8px 0 0;
-  }
-  .buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 20px;
   }
 </style>

@@ -14,7 +14,9 @@ import { isVisible } from '../render';
 
 /** Element types RetroBat always treats as extras (ThemeData.cpp `_autoExtraTypes`). */
 const AUTO_EXTRA = new Set(['stackpanel', 'container', 'screenshader', 'clock', 'networkIcon', 'webimage', 'batteryText', 'batteryIcon', 'rectangle']);
-const BUILT_IN = new Set(['background', 'label', 'progressbar', 'progressbar:active', 'splash']);
+/** The parts RetroBat always draws on a loading screen (by name). */
+export const BUILT_IN_SPLASH = new Set(['background', 'label', 'progressbar', 'progressbar:active', 'splash']);
+const BUILT_IN = BUILT_IN_SPLASH;
 
 export interface SplashBar {
   x: number;
@@ -122,4 +124,46 @@ export function splashScene(view: ResolvedView | null | undefined, file: ThemeFi
   const ignored = [...els.values()].filter((e) => !BUILT_IN.has(e.name) && !isSplashExtra(e)).map((e) => e.name);
   const bgColor = els.get('splash')?.props.get('backgroundColor')?.value ?? '000000FF';
   return { backgroundColor: bgColor, elements, bar, barIndex, ignored };
+}
+
+/**
+ * A new splash.xml or gamesplash.xml: RetroBat's own look, with its built-in parts written out
+ * so they can be changed (the label's text is set by RetroBat while it loads).
+ */
+export function splashTemplate(game: boolean): string {
+  const what = game ? 'while a game starts' : 'while RetroBat starts';
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!-- What RetroBat shows ${what}. Only the background, the label, the progress bar and
+     elements marked extra="true" are drawn here. Made with ChannelCraft Studio. -->
+<theme>
+  <formatVersion>7</formatVersion>
+  <view name="splash">
+    <splash name="splash">
+      <backgroundColor>000000FF</backgroundColor>
+    </splash>
+    <image name="background">
+      <pos>0.5 0.5</pos>
+      <origin>0.5 0.5</origin>
+      <maxSize>1 1</maxSize>
+    </image>
+    <text name="label">
+      <pos>0 0.78</pos>
+      <size>1 0.045</size>
+      <fontSize>0.045</fontSize>
+      <alignment>center</alignment>
+      <color>FFFFFFFF</color>
+    </text>
+    <image name="progressbar">
+      <pos>0.25 0.892</pos>
+      <size>0.5 0.036</size>
+      <color>6060607F</color>
+      <colorEnd>9090907F</colorEnd>
+    </image>
+    <image name="progressbar:active">
+      <color>DF1010FF</color>
+      <colorEnd>4F0000FF</colorEnd>
+    </image>
+  </view>
+</theme>
+`;
 }

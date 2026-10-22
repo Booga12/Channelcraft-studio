@@ -1,11 +1,16 @@
 <script lang="ts">
+  // The editor: one bar on top, and the preview filling the rest with floating tools over it
+  // (the dock and its panel on the left, the inspector on the right when something is selected).
+  import { fade, fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import { ed } from '$lib/editor.svelte';
   import { prefs, type PanelId } from '$lib/prefs.svelte';
-  import MenuBar from './MenuBar.svelte';
-  import OptionsBar from './OptionsBar.svelte';
-  import ToolRail from './ToolRail.svelte';
-  import ScreenTabs from './ScreenTabs.svelte';
-  import PanelGroup from './PanelGroup.svelte';
+  import { elementLabel, typeLabel } from '$lib/friendly';
+  import TopBar from './editor/TopBar.svelte';
+  import ToolDock, { PANELS } from './editor/ToolDock.svelte';
+  import FloatingPanel from './editor/FloatingPanel.svelte';
+  import QuickBar from './editor/QuickBar.svelte';
+  import { scope } from './editor/ScopeSwitch.svelte';
   import ElementList from './ElementList.svelte';
   import OptionsPanel from './OptionsPanel.svelte';
   import VariablesPanel from './VariablesPanel.svelte';
@@ -18,95 +23,36 @@
   import AssetDragLayer from './AssetDragLayer.svelte';
   import PresetsPanel from './PresetsPanel.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
-  import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
 
-  const ws = $derived(prefs.v.workspace);
+  /** The dock panel that is open, if any. */
+  let open = $state<PanelId | null>(null);
+  const info = $derived(PANELS.find((p) => p.id === open) ?? null);
+  const el = $derived(ed.selectedElement);
+  const inspecting = $derived(ed.selection.length > 0 && !ed.contactSheet);
+  const source = $derived(ed.showSource && !ed.simple);
 
-  const LABELS = $derived<Record<PanelId, { label: string; title: string; count?: number }>>({
-    properties: { label: 'Properties', title: 'Settings of the selected element' },
-    elements: { label: 'Layers', title: 'Everything drawn on this screen', count: [...(ed.currentView?.elements.values() ?? [])].filter((e) => e.type !== 'gameextras').length },
-    library: { label: 'Add', title: 'Ready-made elements that show RetroBat’s game and system data' },
-    assets: { label: 'Assets', title: 'Your own pictures, videos, sounds and fonts; drag one onto an element to use it', count: ed.library.length || undefined },
-    presets: { label: 'Presets', title: 'Designs, layouts, colour palettes' },
-    variables: { label: ed.simple ? 'Colours' : 'Variables', title: 'Colours and values shared across the theme' },
-    options: { label: 'Options', title: 'Choices the theme offers inside RetroBat', count: ed.res?.subsets.length },
-    history: { label: 'History', title: 'Every change; click one to go back to it', count: ed.history.done.length || undefined },
-    files: { label: 'Files', title: 'XML files in the theme' },
-  });
-
-  const visible = (ids: PanelId[]) => ids.filter((id) => !(ed.simple && id === 'files'));
-  const tabsFor = (ids: PanelId[]) => visible(ids).map((id) => ({ id, ...LABELS[id] }));
-
-  // Which tab each group shows. Asking for a panel (e.g. the Add button) brings it forward.
-  let topActive = $state<string>('properties');
-  let bottomActive = $state<string>('elements');
-  let topCollapsed = $state(false);
-  let bottomCollapsed = $state(false);
-
+  // Asking for a panel (the Insert menu, search, dropping a file…) opens it.
   $effect(() => {
     ed.panelRequest;
-    const want = ed.leftTab as PanelId;
-    if (ws.top.includes(want)) {
-      topActive = want;
-      topCollapsed = false;
-    } else if (ws.bottom.includes(want)) {
-      bottomActive = want;
-      bottomCollapsed = false;
-    } else if (ws.hidden?.includes(want)) {
-      prefs.movePanel(want, 'bottom');
-    }
+    const want = ed.leftTab;
+    if (want !== 'properties') open = want as PanelId;
   });
   $effect(() => {
-    if (!ws.top.includes(topActive as PanelId)) topActive = ws.top[0] ?? '';
-    if (!ws.bottom.includes(bottomActive as PanelId)) bottomActive = ws.bottom[0] ?? '';
+    if (ed.simple && open === 'files') open = null;
   });
 
-  let dock: HTMLElement;
-  function startSplit(e: PointerEvent) {
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => {
-      const r = dock.getBoundingClientRect();
-      ws.split = Math.min(0.85, Math.max(0.15, (ev.clientY - r.top) / r.height));
-    };
-    const up = () => {
-      target.removeEventListener('pointermove', move);
-      target.removeEventListener('pointerup', up);
-      prefs.save();
-    };
-    target.addEventListener('pointermove', move);
-    target.addEventListener('pointerup', up);
-  }
+  // The preview fits in the space the floating parts leave free.
+  const GAP = 12;
+  const DOCK = 44;
+  const insetL = $derived(GAP + DOCK + (open ? 8 + prefs.v.panelWidth : 0) + 16);
+  const insetR = $derived(inspecting ? GAP + prefs.v.inspectorWidth + 16 : 20);
+  const insetB = 56;
 
-  function startWidth(e: PointerEvent) {
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
-    const sx = e.clientX;
-    const w0 = ws.dockWidth;
-    const move = (ev: PointerEvent) => {
-      const d = ev.clientX - sx;
-      ws.dockWidth = Math.min(560, Math.max(260, ws.dockSide === 'right' ? w0 - d : w0 + d));
-    };
-    const up = () => {
-      target.removeEventListener('pointermove', move);
-      target.removeEventListener('pointerup', up);
-      prefs.save();
-    };
-    target.addEventListener('pointermove', move);
-    target.addEventListener('pointerup', up);
+  /** Clicking the empty area around the screen closes a panel that isn't pinned. */
+  function onbackground(e: PointerEvent) {
+    const t = e.target as HTMLElement;
+    if (open && !prefs.v.pinPanel && t.classList.contains('host')) open = null;
   }
-
-  let tabMenu = $state<{ x: number; y: number; id: PanelId; group: 'top' | 'bottom' } | null>(null);
-  const tabMenuItems = $derived<MenuItem[]>(
-    tabMenu
-      ? [
-          { label: tabMenu.group === 'top' ? 'Move to the lower panel' : 'Move to the upper panel', action: () => prefs.movePanel(tabMenu!.id, tabMenu!.group === 'top' ? 'bottom' : 'top') },
-          { label: 'Close this panel', action: () => prefs.movePanel(tabMenu!.id, null), disabled: tabMenu.id === 'properties' },
-          { separator: true },
-          { label: `Dock panels on the ${ws.dockSide === 'right' ? 'left' : 'right'}`, action: () => ((ws.dockSide = ws.dockSide === 'right' ? 'left' : 'right'), prefs.save()) },
-        ]
-      : [],
-  );
 
   function inField(t: EventTarget | null) {
     const el = t as HTMLElement | null;
@@ -115,6 +61,9 @@
 
   function onkeydown(e: KeyboardEvent) {
     if (ed.showSearch || ed.showSettings || ed.showShortcuts || ed.showGuide) return;
+    // A menu or popover handles its own keys (an Escape there closes only it).
+    if (document.querySelector('[data-slot$="-content"][data-state="open"]')) return;
+    if ((e.target as HTMLElement | null)?.closest?.('[data-slot$="-content"]')) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
     const typing = inField(e.target);
@@ -150,16 +99,18 @@
       const [dx, dy] = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key] ?? [0, 0];
       return run(() => ed.nudge(dx, dy));
     }
-    if (e.key === 'Escape') ed.selected = null;
+    if (e.key === 'Escape') {
+      // First the selection, then a panel that isn't pinned.
+      if (ed.selected) ed.selected = null;
+      else if (open && !prefs.v.pinPanel) open = null;
+    }
   }
 </script>
 
 <svelte:window {onkeydown} />
 
-{#snippet panelBody(id: string)}
-  {#if id === 'properties'}
-    <PropertyPanel />
-  {:else if id === 'elements'}
+{#snippet panelBody(id: PanelId)}
+  {#if id === 'elements'}
     <ElementList />
   {:else if id === 'library'}
     <LibraryPanel />
@@ -178,143 +129,75 @@
   {/if}
 {/snippet}
 
-<div
-  class="editor"
-  class:left-dock={ws.dockSide === 'left'}
-  class:no-rail={!ws.showRail}
-  class:no-opts={!ws.showOptionsBar}
-  style:--dock="{ws.dockWidth}px"
->
-  <MenuBar />
-  {#if ws.showOptionsBar}<OptionsBar />{/if}
-  {#if ws.showRail}<ToolRail />{/if}
-  <main class="main" class:with-source={ed.showSource && !ed.simple}>
-    <ScreenTabs />
-    <div class="canvas"><Preview /></div>
-    {#if ed.showSource && !ed.simple}
-      <section class="source"><SourceView /></section>
-    {/if}
-  </main>
-  <aside class="dock" bind:this={dock}>
-    <div class="width-grip" role="separator" aria-orientation="vertical" title="Drag to resize the panels" onpointerdown={startWidth}></div>
-    {#if visible(ws.top).length}
-      <div class="slot" style:flex={topCollapsed ? 'none' : bottomCollapsed || !visible(ws.bottom).length ? '1' : `${ws.split} 1 0`}>
-        <PanelGroup tabs={tabsFor(ws.top)} bind:active={topActive} bind:collapsed={topCollapsed} ontabmenu={(id, x, y) => (tabMenu = { id: id as PanelId, x, y, group: 'top' })}>
-          {@render panelBody(topActive)}
-        </PanelGroup>
+<div class="flex h-screen flex-col overflow-hidden bg-[var(--canvas)]">
+  <TopBar />
+  <div class="relative min-h-0 flex-1">
+    <main
+      class="absolute inset-0 flex flex-col"
+      style:--inset-l="{insetL}px"
+      style:--inset-r="{insetR}px"
+      style:--inset-b="{insetB}px"
+      onpointerdowncapture={onbackground}
+    >
+      <div class="min-h-0 flex-1"><Preview /></div>
+      {#if source}
+        <section
+          class="relative z-10 mb-3 h-[32vh] min-h-[150px] overflow-hidden rounded-2xl bg-card shadow-elev-3 ring-1 ring-foreground/8"
+          style:margin-left="{insetL - 16}px"
+          style:margin-right="{insetR - 16}px"
+          transition:fly={{ y: 24, duration: 240, easing: cubicOut }}
+        >
+          <SourceView />
+        </section>
+      {/if}
+    </main>
+
+    <!-- Where edits go: an amber edge around the work area while edits are limited to one console or game. -->
+    {#if scope.mode !== 'all'}
+      <div class="pointer-events-none absolute inset-0 z-[5] rounded-[2px] shadow-[inset_0_0_0_2px_var(--scope),inset_0_0_40px_-12px_var(--scope)]" transition:fade={{ duration: 200 }}></div>
+      <div class="pointer-events-none absolute top-3 z-[6] -translate-x-1/2 rounded-full bg-scope px-3 py-1 text-xs font-semibold text-black shadow-elev-2" style:left="calc(({insetL}px + 100% - {insetR}px) / 2)" transition:fly={{ y: -8, duration: 220, easing: cubicOut }}>
+        Changes only go to {scope.mode === 'game' ? ed.gameName : ed.consoleName}
       </div>
     {/if}
-    {#if visible(ws.top).length && visible(ws.bottom).length && !topCollapsed && !bottomCollapsed}
-      <div class="splitter" role="separator" aria-orientation="horizontal" title="Drag to resize" onpointerdown={startSplit}></div>
-    {/if}
-    {#if visible(ws.bottom).length}
-      <div class="slot" style:flex={bottomCollapsed ? 'none' : topCollapsed || !visible(ws.top).length ? '1' : `${1 - ws.split} 1 0`}>
-        <PanelGroup tabs={tabsFor(ws.bottom)} bind:active={bottomActive} bind:collapsed={bottomCollapsed} ontabmenu={(id, x, y) => (tabMenu = { id: id as PanelId, x, y, group: 'bottom' })}>
-          {@render panelBody(bottomActive)}
-        </PanelGroup>
+
+    <div class="pointer-events-none absolute top-3 bottom-3 left-3 z-10 flex items-start gap-2">
+      <div class="pointer-events-auto"><ToolDock bind:open /></div>
+      {#if open && info}
+        <div class="pointer-events-auto flex h-full" transition:fly={{ x: -16, duration: 220, easing: cubicOut }}>
+          <FloatingPanel
+            title={open === 'variables' && !ed.simple ? 'Variables' : info.label}
+            subtitle={info.help}
+            bind:width={prefs.v.panelWidth}
+            onresized={() => prefs.save()}
+            pinned={prefs.v.pinPanel}
+            onpin={() => prefs.set('pinPanel', !prefs.v.pinPanel)}
+            onclose={() => (open = null)}
+          >
+            {#key open}
+              <div class="h-full" in:fade={{ duration: 150 }}>{@render panelBody(open)}</div>
+            {/key}
+          </FloatingPanel>
+        </div>
+      {/if}
+    </div>
+
+    {#if inspecting}
+      <div class="absolute top-3 right-3 bottom-3 z-10 flex" transition:fly={{ x: 24, duration: 260, easing: cubicOut }}>
+        <FloatingPanel
+          title={ed.selection.length > 1 ? `${ed.selection.length} elements` : el ? (ed.simple ? elementLabel(el.name) : el.name) : 'Inspector'}
+          subtitle={ed.selection.length > 1 ? 'Line them up, or change them together' : el ? typeLabel(el.type) : ''}
+          edge="left"
+          min={280}
+          bind:width={prefs.v.inspectorWidth}
+          onresized={() => prefs.save()}
+          onclose={() => (ed.selected = null)}
+        >
+          <QuickBar />
+          <PropertyPanel inInspector />
+        </FloatingPanel>
       </div>
     {/if}
-  </aside>
+  </div>
 </div>
 
 <AssetDragLayer />
-
-{#if tabMenu}
-  <ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenuItems} onclose={() => (tabMenu = null)} />
-{/if}
-
-<style>
-  .editor {
-    height: 100vh;
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) var(--dock);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas:
-      'menu menu menu'
-      'opts opts opts'
-      'rail main dock';
-    background: var(--canvas);
-  }
-  .editor.left-dock {
-    grid-template-columns: var(--dock) minmax(0, 1fr) 44px;
-    grid-template-areas:
-      'menu menu menu'
-      'opts opts opts'
-      'dock main rail';
-  }
-  .editor.no-rail {
-    grid-template-columns: 0 minmax(0, 1fr) var(--dock);
-  }
-  .editor.no-rail.left-dock {
-    grid-template-columns: var(--dock) minmax(0, 1fr) 0;
-  }
-  .editor.no-opts {
-    grid-template-rows: auto 0 minmax(0, 1fr);
-  }
-  .main {
-    grid-area: main;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    min-width: 0;
-    min-height: 0;
-  }
-  .main.with-source {
-    grid-template-rows: auto minmax(0, 1fr) minmax(150px, 32vh);
-  }
-  .canvas {
-    min-height: 0;
-    min-width: 0;
-  }
-  .source {
-    min-height: 0;
-    border-top: 1px solid var(--line);
-    background: var(--panel);
-  }
-  .dock {
-    grid-area: dock;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    min-width: 0;
-    background: var(--line);
-    border-left: 1px solid var(--line);
-  }
-  .left-dock .dock {
-    border-left: none;
-    border-right: 1px solid var(--line);
-  }
-  .width-grip {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -3px;
-    width: 6px;
-    cursor: col-resize;
-    z-index: 5;
-  }
-  .left-dock .width-grip {
-    left: auto;
-    right: -3px;
-  }
-  .width-grip:hover {
-    background: var(--accent-soft);
-  }
-  .slot {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .slot > :global(.group) {
-    flex: 1;
-  }
-  .splitter {
-    height: 5px;
-    flex: none;
-    cursor: row-resize;
-    background: var(--line);
-  }
-  .splitter:hover {
-    background: var(--accent-strong);
-  }
-</style>

@@ -4,6 +4,7 @@
   import { ADDABLE_TYPES, ELEMENT_LABELS } from '$lib/theme/schema';
   import { elementLabel, TYPE_LABELS, typeLabel } from '$lib/friendly';
   import { isVisible, zOf } from '$lib/render';
+  import { BUILT_IN_SPLASH, isSplashExtra } from '$lib/theme/splash';
   import Icon, { TYPE_ICONS } from './Icon.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
 
@@ -24,6 +25,9 @@
       .filter((e) => !q || e.name.toLowerCase().includes(q) || e.type.includes(q) || elementLabel(e.name).toLowerCase().includes(q))
       .sort((a, b) => zOf(b) - zOf(a) || a.order - b.order);
   });
+
+  /** On a loading screen, RetroBat draws only its built-in parts and extras. */
+  const notDrawn = (e: { name: string; type: string; extra: string | null }) => ed.screenFile !== 'theme.xml' && !BUILT_IN_SPLASH.has(e.name) && !isSplashExtra(e as Parameters<typeof isSplashExtra>[0]);
 
   let listEl: HTMLUListElement;
   // Keep the selected layer in view when it's picked on the canvas.
@@ -154,6 +158,7 @@
             </span>
           {/if}
           {#if hidden}<span class="tag" title="Hidden on this screen in the theme">hidden</span>{/if}
+          {#if notDrawn(el)}<span class="tag warn" title="RetroBat doesn't draw this on a loading screen. Mark it extra=&quot;true&quot; (in Advanced mode) to have it drawn.">not drawn</span>{/if}
           {#if !ed.simple && el.conditional}<span class="tag" title="Some definitions only apply under conditions">if</span>{/if}
           {#if el.complex.some((c) => c.name === 'storyboard')}<span class="tag anim" title="Animated">✦</span>{/if}
           {#if !ed.simple}<span class="z mono" title="Layer (zIndex)">{zOf(el)}</span>{/if}
@@ -219,16 +224,16 @@
     display: flex;
     align-items: center;
     height: 32px;
-    border-bottom: 1px solid #262626;
+    border-bottom: 1px solid var(--line);
   }
   li.sel {
-    background: #3d3d3d;
+    background: var(--raised);
   }
   li.primary {
-    background: #4a4a4a;
+    background: var(--hover);
   }
   li.drop {
-    box-shadow: inset 0 2px 0 var(--accent);
+    box-shadow: inset 0 2px 0 var(--brand);
   }
   li.off .name,
   li.off .thumb {
@@ -245,7 +250,7 @@
     border-radius: 0;
   }
   .ico:first-child {
-    border-right: 1px solid #262626;
+    border-right: 1px solid var(--line);
   }
   .lock {
     color: transparent;
@@ -270,7 +275,7 @@
     min-width: 0;
   }
   .row:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: color-mix(in srgb, var(--text) 5%, transparent);
   }
   .thumb {
     width: 24px;
@@ -278,7 +283,7 @@
     display: grid;
     place-items: center;
     background: var(--bg);
-    border: 1px solid #4a4a4a;
+    border: 1px solid var(--line-strong);
     border-radius: 2px;
     color: var(--text-dim);
     flex: none;
@@ -301,12 +306,16 @@
   .tag {
     font-size: 10px;
     color: var(--text-faint);
-    border: 1px solid #555;
+    border: 1px solid var(--line-strong);
     border-radius: 3px;
     padding: 0 4px;
   }
+  .tag.warn {
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  }
   .tag.anim {
-    color: var(--accent);
+    color: var(--brand);
     border-color: transparent;
   }
   .z {
@@ -351,11 +360,11 @@
     bottom: calc(100% + 6px);
     z-index: 50;
     width: 270px;
-    background: #2f2f2f;
-    border: 1px solid #3f3f3f;
+    background: var(--popover);
+    border: 1px solid var(--line);
     border-radius: 6px;
     padding: 4px 0;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+    box-shadow: var(--highlight), var(--elev-3);
   }
   .item {
     width: 100%;
@@ -369,11 +378,11 @@
     white-space: normal;
   }
   .item:hover {
-    background: var(--accent-strong);
+    background: var(--brand-strong);
     color: #fff;
   }
   .item.more {
-    border-top: 1px solid #444;
+    border-top: 1px solid var(--line);
   }
   .txt {
     display: grid;

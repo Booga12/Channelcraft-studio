@@ -91,7 +91,7 @@
     font-family: var(--mono);
     font-size: 12px;
     line-height: 1.55;
-    background: #111317;
+    background: var(--bg);
     padding: 4px 0;
   }
   .ln {
@@ -99,10 +99,10 @@
     white-space: pre;
   }
   .ln.mark {
-    background: rgba(91, 157, 255, 0.08);
+    background: color-mix(in srgb, var(--brand) 8%, transparent);
   }
   .ln.target {
-    background: rgba(91, 157, 255, 0.22);
+    background: color-mix(in srgb, var(--brand) 22%, transparent);
   }
   .no {
     width: 52px;
@@ -113,7 +113,7 @@
     user-select: none;
   }
   .tx {
-    color: #cfd5df;
+    color: var(--text);
     padding-right: 20px;
   }
 </style>
