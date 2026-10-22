@@ -14,6 +14,8 @@
   import PropertyPanel from './PropertyPanel.svelte';
   import SourceView from './SourceView.svelte';
   import LibraryPanel from './LibraryPanel.svelte';
+  import AssetsPanel from './AssetsPanel.svelte';
+  import AssetDragLayer from './AssetDragLayer.svelte';
   import PresetsPanel from './PresetsPanel.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
@@ -24,6 +26,7 @@
     properties: { label: 'Properties', title: 'Settings of the selected element' },
     elements: { label: 'Layers', title: 'Everything drawn on this screen', count: ed.currentView?.elements.size },
     library: { label: 'Add', title: 'Ready-made elements that show RetroBat’s game and system data' },
+    assets: { label: 'Assets', title: 'Your own pictures, videos, sounds and fonts; drag one onto an element to use it', count: ed.library.length || undefined },
     presets: { label: 'Presets', title: 'Designs, layouts, colour palettes' },
     variables: { label: ed.simple ? 'Colours' : 'Variables', title: 'Colours and values shared across the theme' },
     options: { label: 'Options', title: 'Choices the theme offers inside RetroBat', count: ed.res?.subsets.length },
@@ -160,6 +163,8 @@
     <ElementList />
   {:else if id === 'library'}
     <LibraryPanel />
+  {:else if id === 'assets'}
+    <AssetsPanel />
   {:else if id === 'presets'}
     <PresetsPanel />
   {:else if id === 'variables'}
@@ -211,6 +216,8 @@
     {/if}
   </aside>
 </div>
+
+<AssetDragLayer />
 
 {#if tabMenu}
   <ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenuItems} onclose={() => (tabMenu = null)} />

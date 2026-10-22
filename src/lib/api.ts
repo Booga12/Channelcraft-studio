@@ -49,6 +49,16 @@ export interface ThemeFs {
   loadAll?(dir: string): Promise<{ entries: FileEntry[]; xml: TextFile[] }>;
 }
 
+export interface LibraryAsset {
+  path: string;
+  /** Path inside the library folder, with forward slashes. */
+  rel: string;
+  kind: 'image' | 'video' | 'sound' | 'font';
+  size: number;
+  /** Unix seconds. */
+  modified: number;
+}
+
 export interface ImportPlan {
   suggestedName: string;
   root: string;
@@ -111,6 +121,13 @@ export const api = {
   importTheme: (source: string, name: string) => invoke<string>('import_theme', { source, name }),
   importAsset: (themeDir: string, src: string, destRelDir: string) =>
     invoke<string>('import_asset', { themeDir, src, destRelDir }),
+  /** The asset library folder (in the app's data folder); created if needed. */
+  assetLibraryDir: () => invoke<string>('asset_library_dir'),
+  listLibraryAssets: () => invoke<LibraryAsset[]>('list_library_assets'),
+  /** Copies files into the library by kind; nothing there is overwritten. */
+  addLibraryAssets: (paths: string[]) => invoke<{ added: string[]; existing: string[]; problems: string[] }>('add_library_assets', { paths }),
+  /** Moves a library file to the Recycle Bin. */
+  removeLibraryAsset: (path: string) => invoke<void>('remove_library_asset', { path }),
   readThemesettings: (theme: string) => invoke<string>('read_themesettings', { theme }),
   setActiveTheme: (theme: string) => invoke<void>('set_active_theme', { theme }),
   launchRetrobat: () => invoke<void>('launch_retrobat'),

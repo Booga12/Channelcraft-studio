@@ -1,6 +1,6 @@
 // User preferences and the workspace layout, kept in the webview's local storage.
 
-export type PanelId = 'properties' | 'elements' | 'library' | 'presets' | 'variables' | 'options' | 'history' | 'files';
+export type PanelId = 'properties' | 'elements' | 'library' | 'assets' | 'presets' | 'variables' | 'options' | 'history' | 'files';
 
 export interface Workspace {
   name: string;
@@ -30,7 +30,7 @@ export const BUILTIN_WORKSPACES: Workspace[] = [
     dockSide: 'right',
     dockWidth: 330,
     top: ['properties'],
-    bottom: ['elements', 'library', 'presets', 'variables', 'options', 'history', 'files'],
+    bottom: ['elements', 'library', 'assets', 'presets', 'variables', 'options', 'history', 'files'],
     split: 0.56,
     showRail: true,
     showOptionsBar: true,
@@ -40,7 +40,7 @@ export const BUILTIN_WORKSPACES: Workspace[] = [
     dockSide: 'right',
     dockWidth: 330,
     top: ['elements', 'history'],
-    bottom: ['properties', 'presets', 'library'],
+    bottom: ['properties', 'presets', 'library', 'assets'],
     split: 0.45,
     showRail: true,
     showOptionsBar: true,
@@ -92,7 +92,7 @@ function load(): Values {
     if (raw) {
       const v = { ...DEFAULTS, ...JSON.parse(raw) } as Values;
       // Workspaces saved before a panel existed get it appended, so nothing goes missing.
-      const all: PanelId[] = ['properties', 'elements', 'library', 'presets', 'variables', 'options', 'history', 'files'];
+      const all: PanelId[] = ['properties', 'elements', 'library', 'assets', 'presets', 'variables', 'options', 'history', 'files'];
       const seen = new Set([...v.workspace.top, ...v.workspace.bottom]);
       v.workspace = { ...v.workspace, bottom: [...v.workspace.bottom, ...all.filter((p) => !seen.has(p) && !v.workspace.hidden?.includes(p))] };
       return v;

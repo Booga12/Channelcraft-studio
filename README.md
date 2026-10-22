@@ -5,6 +5,7 @@ A desktop theme editor for RetroBat (Batocera-EmulationStation themes), built wi
 - Opens any installed theme, resolves its includes, theme options (subsets), variables and conditions the way ES does, and shows a live mock preview per view and system.
 - Edit properties in typed form panels, drag elements in the preview, edit variables (e.g. colour sets), add or delete elements.
 - Saving edits the XML text in place, so comments, formatting, BOMs and line endings stay as they were. A zip backup of the theme goes to `%APPDATA%\com.channelcraft.studio\backups` before the first save of a session.
+- Assets panel: keep your own pictures, videos, sounds and fonts (in `%APPDATA%\com.channelcraft.studiossets`, added with Add or by dropping files from Explorer) and drag one onto an element in the preview, Layers or Properties. It is copied into the theme's `_inc` folder (never over a different file) and linked with a theme-relative path, as a normal undoable edit.
 - Create a theme from the bundled starter, or duplicate an existing one; set it as RetroBat's theme and launch RetroBat.
 
 ## Develop

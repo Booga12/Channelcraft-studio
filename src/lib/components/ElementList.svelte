@@ -103,6 +103,7 @@
         class:off={hidden || ed.hidden[el.name]}
         class:drop={dropOn === el.name && dragName !== el.name}
         role="option"
+        data-layer={el.name}
         aria-selected={ed.isSelected(el.name)}
         draggable={renaming !== el.name}
         ondragstart={(e) => {

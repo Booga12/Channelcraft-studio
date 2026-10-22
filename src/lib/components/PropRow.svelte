@@ -55,7 +55,7 @@
   }
 </script>
 
-<div class="row">
+<div class="row" data-asset-prop={assetKind ? spec.name : undefined} data-asset-element={assetKind ? el.name : undefined}>
   <div class="label">
     {#if ed.simple}
       <span class="name" title={spec.name}>{propLabel(spec.name)}</span>

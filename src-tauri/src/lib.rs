@@ -1,6 +1,7 @@
 mod commands;
 mod storage;
 mod importing;
+mod assets;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -122,6 +123,10 @@ pub fn run() {
             storage::write_report,
             importing::inspect_theme_import,
             importing::import_theme,
+            assets::asset_library_dir,
+            assets::list_library_assets,
+            assets::add_library_assets,
+            assets::remove_library_asset,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,8 +1,9 @@
 import { load, type Store } from '@tauri-apps/plugin-store';
 import { ask, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { api, registerVirtualFile, tauriFs, type RootInfo, type ThemeInfo } from './api';
+import { api, registerVirtualFile, tauriFs, type LibraryAsset, type RootInfo, type ThemeInfo } from './api';
 import { svgToPngBase64 } from './raster';
-import { join, relative, dirname, pathKey } from './path';
+import { join, relative, dirname, pathKey, basename } from './path';
+import { ASSET_THEME_DIR, dropFit, dropPropLabel, type AssetKind } from './theme/assetDrop';
 import { parseGamelist, type GameInfo } from './theme/games';
 import { screenSize, type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
@@ -19,7 +20,7 @@ import { frameOf, frameXml, type Frame } from './theme/frame';
 /** A number with at most four decimals, as theme files write them. */
 const r4 = (v: number) => String(Math.round(v * 10000) / 10000);
 import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
-import { consoleScreenPath, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
+import { consoleScreenPath, isDataBound, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
 import { appliedDesign, appliedSystemLayout, designChanges, designVarsChange, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
 import { planMenuOptions, readMenuState, type MenuChoices, type MenuState } from './theme/menuOptions';
@@ -118,7 +119,7 @@ class Editor {
   /** Bumped whenever a panel is asked for, so asking twice still brings it forward. */
   panelRequest = $state(0);
 
-  showPanel(id: 'elements' | 'library' | 'presets' | 'options' | 'variables' | 'files' | 'history' | 'properties') {
+  showPanel(id: 'elements' | 'library' | 'assets' | 'presets' | 'options' | 'variables' | 'files' | 'history' | 'properties') {
     this.leftTab = id as typeof this.leftTab;
     this.panelRequest++;
   }
@@ -145,7 +146,7 @@ class Editor {
   hidden = $state<Record<string, boolean>>({});
   sourceFile = $state<string | null>(null);
   sourceLine = $state<number | null>(null);
-  leftTab = $state<'elements' | 'library' | 'presets' | 'options' | 'variables' | 'files' | 'history' | 'properties'>('elements');
+  leftTab = $state<'elements' | 'library' | 'assets' | 'presets' | 'options' | 'variables' | 'files' | 'history' | 'properties'>('elements');
   showSource = $state(false);
   toast = $state<Toast | null>(null);
   busy = $state(false);
@@ -1538,14 +1539,101 @@ class Editor {
     return relative(dirname(holder?.abs ?? this.project!.dir), abs);
   }
 
-  async importAsset(srcPath: string, kind: 'image' | 'font' | 'sound' | 'video'): Promise<string | null> {
+  async importAsset(srcPath: string, kind: AssetKind): Promise<string | null> {
     const p = this.project;
     if (!p) return null;
-    const dir = { image: '_inc/images', font: '_inc/fonts', sound: '_inc/sounds', video: '_inc/videos' }[kind];
+    const dir = ASSET_THEME_DIR[kind];
     const rel = await api.importAsset(p.dir, srcPath, dir);
     p.setAssets(await api.listThemeFiles(p.dir));
     this.rev++;
     return join(p.dir, rel);
+  }
+
+  // ---- asset library -----------------------------------------------------------------------
+
+  /** The user's own pictures, videos, sounds and fonts (in the app's data folder, not a theme). */
+  library = $state.raw<LibraryAsset[]>([]);
+  libraryLoaded = $state(false);
+
+  async loadLibrary() {
+    try {
+      this.library = await api.listLibraryAssets();
+    } catch (e) {
+      this.notify(`Couldn't read the asset library: ${e}`, 'error');
+    }
+    this.libraryLoaded = true;
+  }
+
+  /** Copies files into the library (checked like imports, never over an existing file). */
+  async addToLibrary(paths: string[]) {
+    if (!paths.length) return;
+    try {
+      const r = await api.addLibraryAssets(paths);
+      await this.loadLibrary();
+      const parts: string[] = [];
+      if (r.added.length) parts.push(`Added ${r.added.length} file${r.added.length === 1 ? '' : 's'} to Assets`);
+      if (r.existing.length) parts.push(`${r.existing.length} ${r.existing.length === 1 ? 'was' : 'were'} already there`);
+      if (r.problems.length) parts.push(r.problems.slice(0, 3).join(' ') + (r.problems.length > 3 ? ` (and ${r.problems.length - 3} more)` : ''));
+      this.notify(parts.join('. ') + '.', r.problems.length && !r.added.length ? 'error' : 'info');
+    } catch (e) {
+      this.notify(String(e), 'error');
+    }
+  }
+
+  async removeFromLibrary(path: string) {
+    try {
+      await api.removeLibraryAsset(path);
+      this.library = this.library.filter((a) => a.path !== path);
+      this.notify(`${basename(path)} was moved to the Recycle Bin`);
+    } catch (e) {
+      this.notify(String(e), 'error');
+    }
+  }
+
+  /**
+   * Links a file (from the library or Explorer) to an element on this screen: copies it into the
+   * theme's _inc folder (an identical file there is reused, a different one with the same name is
+   * kept and this one gets "-2"), then sets the property like any other edit, so it can be undone.
+   */
+  async linkAsset(src: string, kind: AssetKind, elementName: string, forcedProp?: string): Promise<boolean> {
+    const p = this.project;
+    const el = this.currentView?.elements.get(elementName);
+    if (!p || !el) return false;
+    const fit = dropFit(el.type, el.name, kind, forcedProp);
+    if (!fit.ok) {
+      this.notify(fit.hint, 'error');
+      return false;
+    }
+    const def = el.props.get(fit.prop);
+    const raw = def?.raw ?? '';
+    // Game data or per-console paths would become one fixed file for every game and console.
+    if (isDataBound(raw) || /\{random|\$\{(?!\w+\})/.test(raw)) {
+      const yes = await ask(`${elementLabel(elementName)} now uses “${raw.trim()}”, which changes with each game or console. Use this one file everywhere instead?`, { title: 'Replace with one file?', kind: 'warning' });
+      if (!yes) return false;
+    }
+    let abs: string | null;
+    try {
+      abs = await this.importAsset(src, kind);
+    } catch (e) {
+      this.notify(String(e), 'error');
+      return false;
+    }
+    if (!abs || this.project !== p || !this.currentView?.elements.has(elementName)) return false;
+    // A path held by a single ${variable} is written relative to the variable's file, like typing it.
+    const now = this.currentView.elements.get(elementName)!.props.get(fit.prop);
+    const v = now ? varRef(now.raw) : null;
+    const varDef = v ? this.res?.vars.get(v) : undefined;
+    const rel = varDef ? relative(dirname(varDef.file.abs), abs) : this.relativeAssetPath(elementName, fit.prop, abs);
+    this.setProp(elementName, fit.prop, rel);
+    this.selected = elementName;
+    const renamed = basename(abs).toLowerCase() !== basename(src).toLowerCase();
+    const what = dropPropLabel(fit.prop, kind, propLabel);
+    this.notify(
+      `${what[0].toUpperCase()}${what.slice(1)} of ${elementLabel(elementName)} is now ${basename(abs)}${fit.note ? ` (${fit.note})` : ''}.` +
+        (renamed ? ` The theme already had a different ${basename(src)}, so this one was copied as ${basename(abs)}.` : '') +
+        ' Save to keep it, or Ctrl+Z to undo.',
+    );
+    return true;
   }
 
   // ---- saving ------------------------------------------------------------------------------
