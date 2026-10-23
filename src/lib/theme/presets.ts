@@ -400,11 +400,17 @@ export interface DesignOptions {
 export function designChanges(project: ThemeProject, res: Resolution, design: Design, ctx: DesignContext, views: string[], hideOwn: boolean, systemLayoutId = design.system, opts: DesignOptions = {}): Change[] {
   const out: Change[] = [];
   const layout = systemLayout(systemLayoutId) ?? systemLayout(design.system)!;
+  // What the screen's current layout of this design would draw, to tell your own changes from the layout's.
+  const before = (view: string) => {
+    if (appliedDesign(project, view)?.id !== design.id) return null;
+    const old = designElements(design, ctx, view, appliedSystemLayout(project) ?? undefined, appliedGameLayout(project, view));
+    return new Map(old.map((e) => [e.name, e.props]));
+  };
   for (const view of views) {
     const game = gameLayout(opts.gameLayouts?.[view] ?? opts.gameLayout) ?? gameLayout(designGameLayout(design))!;
     const els = designElements(design, ctx, view, layout.id, game.id);
     if (!els.length) continue;
-    const kept = opts.carry ? carryOver(project, res, view, els, opts.carry) : [];
+    const kept = opts.carry ? carryOver(project, res, view, els, opts.carry, (n) => before(view)?.get(n)) : [];
     const names = new Set(els.map((e) => e.name));
     const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
     const body = [...elementsMarkup(els, extras, view), ...kept];
@@ -458,7 +464,7 @@ const STYLE_KEYS = ['color', 'colorEnd', 'primaryColor', 'secondaryColor', 'sele
  * (looks and animations you set, parts you hid, the grid's tile style) and returns the markup of
  * elements you added yourself.
  */
-function carryOver(project: ThemeProject, res: Resolution, view: string, els: DesignEl[], mode: 'layout' | 'design'): string[] {
+function carryOver(project: ThemeProject, res: Resolution, view: string, els: DesignEl[], mode: 'layout' | 'design', drawn: (name: string) => DesignEl['props'] | undefined = () => undefined): string[] {
   const block = designBlock(project, view);
   const entry = project.entry;
   if (!block || !entry) return [];
@@ -472,14 +478,17 @@ function carryOver(project: ThemeProject, res: Resolution, view: string, els: De
     const el = byName.get(name);
     const props = new Map(elements(node).map((c) => [c.name, entry.src.slice(c.start, c.end).replace(/^<[^>]+>|<\/[^>]+>$/g, '')]));
     if (el) {
-      if (props.get('visible')?.trim() === 'false' && el.props.visible !== 'false') el.props = { ...el.props, visible: 'false' };
+      // Only what you changed: a value the old layout set itself belongs to that layout.
+      const own = drawn(name);
+      const yours = (k: string, v: string) => !own || String(own[k] ?? '') !== v;
+      if (props.get('visible')?.trim() === 'false' && el.props.visible !== 'false' && yours('visible', 'false')) el.props = { ...el.props, visible: 'false' };
       if (mode !== 'layout') continue;
       // A glow moved by glowOffset is the depth's text shadow, which follows the depth, not the old block.
       const depthGlow = props.has('glowOffset');
       for (const k of STYLE_KEYS) {
         const v = props.get(k);
         if (depthGlow && (k === 'glowColor' || k === 'glowSize')) continue;
-        if (v !== undefined && !v.includes('<')) el.props = { ...el.props, [k]: v };
+        if (v !== undefined && !v.includes('<') && yours(k, v)) el.props = { ...el.props, [k]: v };
       }
       // The background's slow zoom and the decorations' drift belong to the depth too.
       if (DEPTH_ANIMATED.includes(name)) continue;

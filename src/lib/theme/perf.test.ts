@@ -24,7 +24,7 @@ function time(fn: () => void, n = 20) {
 
 describe.skipIf(!existsSync(THEMES))('performance (read-only)', () => {
   for (const name of ["Booga's WiiTheme v5", 'es-theme-carbon', 'Alekfull-ARTFLIX']) {
-    it(`${name}: resolve and re-parse fast enough for live editing`, async () => {
+    it.skipIf(!existsSync(`${THEMES}\\${name}`))(`${name}: resolve and re-parse fast enough for live editing`, async () => {
       const p = await ThemeProject.load(`${THEMES}\\${name}`, nodeFs);
       const resolveMs = time(() => resolveTheme(p, env));
       const biggest = [...p.files.values()].sort((a, b) => b.src.length - a.src.length)[0];
