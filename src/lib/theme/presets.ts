@@ -250,6 +250,28 @@ export const PALETTES: Palette[] = [
   { id: 'retro', label: 'Retro red', colors: { bgColor: '1B0E0EFF', panelColor: 'FFFFFF12', textColor: 'FFF3E8FF', dimTextColor: 'D4B5A3FF', accentColor: 'E2382EFF', selectedTextColor: 'FFFFFFFF' } },
   { id: 'forest', label: 'Forest', colors: { bgColor: '0F1A14FF', panelColor: 'FFFFFF12', textColor: 'EAF5ECFF', dimTextColor: 'A3BFA9FF', accentColor: '3FB56BFF', selectedTextColor: 'FFFFFFFF' } },
   { id: 'pocket', label: 'Pocket green', colors: { bgColor: '0F380FFF', panelColor: '9BBC0F22', textColor: '9BBC0FFF', dimTextColor: '8BAC0FFF', accentColor: '306230FF', selectedTextColor: 'E0F8D0FF' } },
+  // Professional
+  { id: 'navy', label: 'Navy office', colors: { bgColor: '0E1A2BFF', panelColor: 'FFFFFF12', textColor: 'F3F6FAFF', dimTextColor: '9FB0C6FF', accentColor: '3D8BFFFF', selectedTextColor: 'FFFFFFFF' } },
+  { id: 'paper', label: 'Paper', colors: { bgColor: 'F4EEE4FF', panelColor: 'FFFFFFB3', textColor: '1E1A16FF', dimTextColor: '6B5F52FF', accentColor: 'C0392BFF', selectedTextColor: 'FFFFFFFF' } },
+  { id: 'gold', label: 'Black and gold', colors: { bgColor: '080706FF', panelColor: 'D4AF3714', textColor: 'F6EBD2FF', dimTextColor: 'B9A57DFF', accentColor: 'D4AF37FF', selectedTextColor: '080706FF' } },
+  // Gaming
+  { id: 'esports', label: 'Esports red', colors: { bgColor: '0A0C10FF', panelColor: 'FFFFFF12', textColor: 'F4F6F8FF', dimTextColor: '98A2B3FF', accentColor: 'FF3B4EFF', selectedTextColor: 'FFFFFFFF' } },
+  { id: 'lava', label: 'Lava', colors: { bgColor: '120405FF', panelColor: 'FF6A0018', textColor: 'FFF1E6FF', dimTextColor: 'D9A38CFF', accentColor: 'FF6A00FF', selectedTextColor: '120405FF' } },
+  // Cute
+  { id: 'bubblegum', label: 'Bubblegum', colors: { bgColor: 'FFE3F1FF', panelColor: 'FFFFFFE6', textColor: '4A1838FF', dimTextColor: '9A5A80FF', accentColor: 'FF3D9AFF', selectedTextColor: 'FFFFFFFF' } },
+  { id: 'lavender', label: 'Lavender', colors: { bgColor: 'F6F0FFFF', panelColor: 'FFFFFFE8', textColor: '3D2C5EFF', dimTextColor: '8C7BAEFF', accentColor: 'A66CFFFF', selectedTextColor: 'FFFFFFFF' } },
+  { id: 'sakura', label: 'Sakura', colors: { bgColor: 'FFF4F7FF', panelColor: 'FFFFFFDD', textColor: '4A2731FF', dimTextColor: '9B6B78FF', accentColor: 'E8507AFF', selectedTextColor: 'FFFFFFFF' } },
+  // Tech
+  { id: 'terminal', label: 'Terminal green', colors: { bgColor: '020604FF', panelColor: '00FF6614', textColor: 'B8FFCFFF', dimTextColor: '4FAF72FF', accentColor: '00FF66FF', selectedTextColor: '020604FF' } },
+  { id: 'hologram', label: 'Hologram', colors: { bgColor: '030A14FF', panelColor: '00E5FF14', textColor: 'E6FCFFFF', dimTextColor: '7FB8C8FF', accentColor: '00E5FFFF', selectedTextColor: '030A14FF' } },
+  // Anime
+  { id: 'shonen', label: 'Shonen orange', colors: { bgColor: '1A0B00FF', panelColor: 'FFFFFF14', textColor: 'FFF6ECFF', dimTextColor: 'E7B98FFF', accentColor: 'FF8A00FF', selectedTextColor: '1A0B00FF' } },
+  { id: 'starry', label: 'Starry night', colors: { bgColor: '070B24FF', panelColor: 'FFFFFF14', textColor: 'F1F3FFFF', dimTextColor: 'A3A8D9FF', accentColor: 'FFD66BFF', selectedTextColor: '070B24FF' } },
+  // Moods
+  { id: 'vaporwave', label: 'Vaporwave', colors: { bgColor: '1B0A33FF', panelColor: 'FFFFFF14', textColor: 'FFF0FBFF', dimTextColor: 'E5A8E0FF', accentColor: 'FF4FD8FF', selectedTextColor: '1B0A33FF' } },
+  { id: 'cabin', label: 'Cosy cabin', colors: { bgColor: '3A2416FF', panelColor: '1A0E0799', textColor: 'FFF3E2FF', dimTextColor: 'D9BC9CFF', accentColor: 'FFB45CFF', selectedTextColor: '2A1709FF' } },
+  { id: 'haunted', label: 'Haunted', colors: { bgColor: '07070AFF', panelColor: 'FFFFFF10', textColor: 'EDE7E3FF', dimTextColor: '9C8F8AFF', accentColor: 'C1121FFF', selectedTextColor: 'FFFFFFFF' } },
+  { id: 'comic', label: 'Comic yellow', colors: { bgColor: 'FFE14DFF', panelColor: 'FFFFFFF0', textColor: '111111FF', dimTextColor: '3A3A3AFF', accentColor: 'E62429FF', selectedTextColor: 'FFFFFFFF' } },
 ];
 
 export function layoutsFor(view: string): LayoutPreset[] {

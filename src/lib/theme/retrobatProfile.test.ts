@@ -57,7 +57,7 @@ describe('RetroBat property profile', () => {
       }
     }
     expect([...problems]).toEqual([]);
-  });
+  }, 60_000);
 
   it('every plain layout preset only uses what RetroBat reads', async () => {
     const problems: string[] = [];

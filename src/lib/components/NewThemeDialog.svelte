@@ -13,6 +13,8 @@
   import type { ThemeInfo } from '$lib/api';
   import { DESIGNS } from '$lib/theme/designs';
   import DesignThumb from './DesignThumb.svelte';
+  import DesignGroupChips from './DesignGroupChips.svelte';
+  import type { DesignGroup } from '$lib/theme/designs';
   import { task } from '$lib/task.svelte';
 
   let {
@@ -34,6 +36,8 @@
   let working = $state(false);
   let input: HTMLInputElement;
   let design = $state('cinema');
+  let group = $state<DesignGroup | 'all'>('all');
+  const shown = $derived(DESIGNS.filter((d) => group === 'all' || d.group === group));
   let artFrom = $state<string>('');
   let sources = $state<{ theme: ThemeInfo; logos: number; consoles: number }[]>([]);
   let scanning = $state(false);
@@ -123,8 +127,9 @@
     {#if mode === 'new'}
       <fieldset>
         <legend>Design</legend>
+        <DesignGroupChips bind:group />
         <div class="designs">
-          {#each DESIGNS as d (d.id)}
+          {#each shown as d (d.id)}
             <label class="choice" class:on={design === d.id} title={d.description}>
               <input type="radio" name="design" value={d.id} bind:group={design} />
               <DesignThumb design={d} />

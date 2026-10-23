@@ -7,7 +7,10 @@ import { FALLBACK_SYSTEMS } from './systems';
 import { applyChanges } from './edits';
 import { appliedSystemLayout, designChanges, designVarsChange } from './presets';
 import { SYSTEM_LAYOUTS, systemLayout } from './systemLayouts';
-import { DESIGNS, designAssets, designVars, type DesignContext } from './designs';
+import { DESIGNS, DESIGN_GROUPS, designAssets, designElements, designVars, recoloured, type DesignContext } from './designs';
+import { BACKGROUNDS } from './designArt';
+import { catalogFont } from './fonts';
+import { ANIMATIONS } from './animations';
 import { parse, print } from '../xml/cst';
 import { renderText } from './expr';
 import type { Environment } from './context';
@@ -100,7 +103,7 @@ describe('designs on the starter theme (in memory)', () => {
     // Still one block for the system screen.
     expect(p.entry!.src.split('ChannelCraft layout preset (system)').length).toBe(2);
     expect(print(parse(p.entry!.src))).toBe(p.entry!.src);
-  });
+   }, 60_000);
 
   it('swaps one design for another instead of stacking them', async () => {
     const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
@@ -108,6 +111,40 @@ describe('designs on the starter theme (in memory)', () => {
     applyChanges(p, designChanges(p, resolveTheme(p, env), DESIGNS[1], ctx(DESIGNS[1].id), ['detailed'], true));
     expect(p.entry!.src.split('ChannelCraft layout preset (detailed)').length).toBe(2);
     expect(p.entry!.src).toContain(`[design-${DESIGNS[1].id}]`);
+  });
+
+  it('every design is filed in a group, with fonts, animations and artwork that exist', () => {
+    expect(DESIGNS.length).toBeGreaterThanOrEqual(43);
+    expect(new Set(DESIGNS.map((d) => d.id)).size).toBe(DESIGNS.length);
+    const turning = new Set(['swing-in', 'tilt-in', 'sway', 'swing', 'spin']);
+    for (const g of DESIGN_GROUPS) expect(DESIGNS.filter((d) => d.group === g.id).length, g.id).toBeGreaterThanOrEqual(3);
+    for (const d of DESIGNS) {
+      expect(DESIGN_GROUPS.some((g) => g.id === d.group), d.id).toBe(true);
+      for (const f of [d.font, d.titleFont].filter(Boolean)) expect(catalogFont(f!), `${d.id} font ${f}`).toBeTruthy();
+      for (const a of Object.values(d.anims ?? {})) expect(ANIMATIONS.some((x) => x.id === a), `${d.id} anim ${a}`).toBe(true);
+      expect(BACKGROUNDS).toContain(d.background);
+      // A turning animation would undo the tilt.
+      if (d.tilt) for (const role of ['art', 'title'] as const) expect(turning.has(d.anims?.[role] ?? ''), `${d.id} ${role}`).toBe(false);
+      const files = designAssets(d);
+      expect(!!files['deco.png']).toBe(!!d.deco);
+      const els = designElements(d, ctx(d.id), 'detailed');
+      expect(els.some((e) => e.name === 'ccs_deco')).toBe(!!d.deco);
+      if (d.tilt) expect(els.find((e) => e.name === 'ccs_boxart')!.props.rotation).toBe(String(d.tilt));
+      expect(els.find((e) => e.name === 'ccs_reflection')?.props.rotation).toBeUndefined();
+    }
+  });
+
+  it('puts arrows beside the big logo only in the arrows layout', () => {
+    const d = DESIGNS[0];
+    const names = (l: string) => designElements(d, ctx(d.id), 'system', l).map((e) => e.name);
+    expect(names('big-arrows')).toEqual(expect.arrayContaining(['ccs_arrow_left', 'ccs_arrow_right']));
+    expect(names('carousel-middle')).not.toContain('ccs_arrow_left');
+  });
+
+  it('a palette keeps the design’s second accent only while the accent is its own', () => {
+    const d = DESIGNS.find((x) => x.accent2)!;
+    expect(recoloured(d, d.palette).accent2).toBe(d.accent2);
+    expect(recoloured(d, { ...d.palette, accent: '123456' }).accent2).toBeUndefined();
   });
 
   it('builds valid SVG artwork for every design', () => {

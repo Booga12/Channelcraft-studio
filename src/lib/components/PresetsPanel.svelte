@@ -7,12 +7,15 @@
   import { appliedDesign, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
   import Icon from './Icon.svelte';
   import DesignThumb from './DesignThumb.svelte';
-  import { DESIGNS, designAssets, type Design } from '$lib/theme/designs';
+  import { DESIGNS, DESIGN_GROUPS, type Design, type DesignGroup } from '$lib/theme/designs';
+  import DesignGroupChips from './DesignGroupChips.svelte';
+  import { backgroundSvg } from '$lib/theme/designArt';
 
   const GAME_LISTS = ['basic', 'detailed', 'video'];
 
   let allLists = $state(true);
   let hideOwn = $state(true);
+  let designGroup = $state<DesignGroup | 'all'>('all');
   let applying = $state(false);
 
   async function applyDesign(d: Design) {
@@ -53,7 +56,7 @@
   const bgCache = new Map<string, string>();
   function bgOf(d: Design) {
     let u = bgCache.get(d.id);
-    if (!u) bgCache.set(d.id, (u = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(designAssets(d)['background.png'])}")`));
+    if (!u) bgCache.set(d.id, (u = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(backgroundSvg(d))}")`));
     return u;
   }
   const hexA = (h: string, a: number) => `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
@@ -107,8 +110,9 @@
     <h4>Designs</h4>
     <p class="dim note">A complete look for every screen: artwork, colours, font, animations, and all of RetroBat's game and system data placed for you.</p>
     <label class="chk"><input type="checkbox" bind:checked={hideOwn} /> Hide this theme's own decorations</label>
+    <DesignGroupChips bind:group={designGroup} />
     <div class="designs">
-      {#each DESIGNS as d (d.id)}
+      {#each DESIGNS.filter((d) => designGroup === 'all' || d.group === designGroup) as d (d.id)}
         <button class="dcard" class:on={current === `design-${d.id}`} onclick={() => applyDesign(d)} title={d.description} disabled={applying}>
           <DesignThumb design={d} />
           <span class="name">
@@ -133,9 +137,11 @@
             <option value="auto">{sysDesign ? `Current design (${sysDesign.label})` : 'Matching design for each layout'}</option>
             {#if sysDesign}<option value="match">Matching design for each layout</option>{/if}
             <option value="plain">No design: keep the theme's own look</option>
-            <optgroup label="Designs">
-              {#each DESIGNS as d (d.id)}<option value={d.id}>{d.label}</option>{/each}
-            </optgroup>
+            {#each DESIGN_GROUPS as g (g.id)}
+              <optgroup label="{g.label} designs">
+                {#each DESIGNS.filter((d) => d.group === g.id) as d (d.id)}<option value={d.id}>{d.label}</option>{/each}
+              </optgroup>
+            {/each}
           </select>
         </label>
         {#if styleChoice === 'plain'}

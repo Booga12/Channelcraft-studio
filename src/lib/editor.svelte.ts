@@ -28,7 +28,7 @@ import { reorder, zIndexFor } from './theme/layers';
 import { TILE_DIR, TILE_STYLES, tileArt, tileColoursFrom, tileStyleOfPath, tileStyleProps, type TileColours } from './theme/tiles';
 import { appliedDesign, appliedSystemLayout, coloursFromVars, designChanges, designVarsChange, LAYOUTS, layoutChanges, paletteDesignVars, type LayoutPreset, type Palette } from './theme/presets';
 import { planMenuOptions, readMenuState, type MenuChoices, type MenuState } from './theme/menuOptions';
-import { DESIGNS, designAssets, type Design } from './theme/designs';
+import { DESIGNS, designAssets, depthLogoScale, recoloured, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
 import { COVER_EL, FEATURED_FILE, FEATURED_MEDIA, featuredXml, pickGame, readFeatured, VIDEO_EL, type Choice, type FeaturedState } from './theme/featured';
@@ -1501,7 +1501,7 @@ class Editor {
     const dirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/([^/]+)\//)?.[1]).filter(Boolean));
     const tileDirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/tiles\/([^/]+)\//)?.[1]).filter(Boolean));
     const jobs = [
-      ...DESIGNS.filter((d) => dirs.has(d.id)).map((d) => ({ dir: `_inc/ccs/${d.id}`, files: () => designAssets({ ...d, palette: colours }, this.depth ?? d.depth), id: d.id })),
+      ...DESIGNS.filter((d) => dirs.has(d.id)).map((d) => ({ dir: `_inc/ccs/${d.id}`, files: () => designAssets(recoloured(d, colours), this.depth ?? d.depth), id: d.id })),
       ...TILE_STYLES.filter((t) => tileDirs.has(t.id)).map((t) => ({ dir: `${TILE_DIR}/${t.id}`, files: () => tileArt(t, this.tileColours()), id: `tiles/${t.id}` })),
     ];
     if (!jobs.length) return null;
@@ -1589,6 +1589,7 @@ class Editor {
     const res = this.themeRes ?? this.res;
     if (!res || this.depth === null) return void this.notify('Depth works on themes made from a design (New theme, or a design in Presets).', 'error');
     const lv = depthLevel(id);
+    const from = this.depth ?? 'subtle';
     const keep = { view: this.view, file: this.screenFile, consoleOnly: this.consoleOnly, selected: this.selected, selection: this.selection };
     this.consoleOnly = false;
     this.group(`depth “${lv.label}”`, () => {
@@ -1612,7 +1613,10 @@ class Editor {
           const f = el(n) && frameOf(el(n)!);
           if (f && f.frame.shadow !== lv.frameShadow) this.setFrame(n, { ...f.frame, shadow: lv.frameShadow });
         }
-        for (const e of [...(this.currentView?.elements.values() ?? [])].filter((x) => x.type === 'carousel')) this.setProps(e.name, { logoScale: String(lv.logoScale) });
+        for (const e of [...(this.currentView?.elements.values() ?? [])].filter((x) => x.type === 'carousel')) {
+          const now = Number(e.props.get('logoScale')?.value ?? depthLevel(from).logoScale) || depthLevel(from).logoScale;
+          this.setProps(e.name, { logoScale: depthLogoScale(now, from, id) });
+        }
         const bg = el(PARALLAX[kind]);
         if (bg) {
           const now = presetOf(bg, screenOf(view));
@@ -1828,7 +1832,7 @@ class Editor {
     let wrote = true;
     for (const a of plan.art) {
       if (p.assets.some((x) => x.rel.toLowerCase().startsWith(`${a.dir.toLowerCase()}/`))) continue;
-      wrote = (await this.writeArt(a.dir, designAssets({ ...a.design, palette: a.palette }))) && wrote;
+      wrote = (await this.writeArt(a.dir, designAssets(recoloured(a.design, a.palette)))) && wrote;
     }
     if (this.project !== p) return false;
     const changes: Change[] = plan.changes(p);

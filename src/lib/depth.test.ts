@@ -20,7 +20,7 @@ const { presetOf, tuningOf } = await import('./theme/animations');
 
 const el = (view: string, name: string) => ed.themeRes!.views.get(view)!.elements.get(name)!;
 
-async function fresh(design = 'cinema') {
+async function fresh(design = 'magazine') {
   const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
   ed.project = p;
   ed.screenFile = 'theme.xml';
