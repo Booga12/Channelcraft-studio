@@ -1,5 +1,6 @@
 <script lang="ts">
   // Layout presets for the current screen and colour palettes for the whole theme.
+  import { DEPTHS, MOTION_FEELS } from '$lib/theme/depth';
   import TileStylePicker from './TileStylePicker.svelte';
   import { ed } from '$lib/editor.svelte';
   import { viewLabel } from '$lib/friendly';
@@ -174,6 +175,38 @@
         {/each}
       </div>
     {/if}
+  </section>
+
+  <section>
+    <h4>Depth and motion</h4>
+    <div class="ui-new flex flex-col gap-3">
+      {#if ed.depth !== null}
+        <div class="flex flex-col gap-1.5">
+          <span class="text-xs font-medium">3D depth</span>
+          <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted p-0.5" role="radiogroup" aria-label="3D depth">
+            {#each DEPTHS as d (d.id)}
+              <button
+                role="radio"
+                aria-checked={ed.depth === d.id}
+                class="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-all duration-150 hover:text-foreground aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-elev-1"
+                onclick={() => ed.setDepth(d.id)}
+                title={d.help}>{d.label}</button
+              >
+            {/each}
+          </div>
+          <p class="text-xs text-muted-foreground">{DEPTHS.find((d) => d.id === ed.depth)?.help} RetroBat can't turn things in 3D, so depth comes from shadows, lift and layers moving at different speeds.</p>
+        </div>
+      {/if}
+      <div class="flex flex-col gap-1.5">
+        <span class="text-xs font-medium">How everything moves</span>
+        <div class="grid grid-cols-3 gap-1">
+          {#each Object.entries(MOTION_FEELS) as [id, f] (id)}
+            <button class="rounded-md px-2 py-1 text-xs font-medium ring-1 ring-border transition-colors duration-150 hover:bg-muted" onclick={() => ed.setMotionFeel(id as keyof typeof MOTION_FEELS)} title={f.help}>{f.label}</button>
+          {/each}
+        </div>
+        <p class="text-xs text-muted-foreground">Sets the size and speed of every animation in the theme at once.</p>
+      </div>
+    </div>
   </section>
 
   {#if ed.tileStyle !== null}

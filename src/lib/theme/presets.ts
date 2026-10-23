@@ -6,6 +6,7 @@
 import { attr, patchInsertChild, patchReplaceSpan, type XElement, type XNode } from '../xml/cst';
 import { DESIGNS, designElements, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext, type DesignVar, type Palette6 } from './designs';
 import type { Change } from './edits';
+import { DEPTH_VAR, type Depth } from './depth';
 import type { ThemeProject } from './project';
 import type { Resolution } from './resolver';
 import { SYSTEM_LAYOUTS, systemLayout, type SystemLayout } from './systemLayouts';
@@ -403,11 +404,12 @@ const VARS_MARK = 'ChannelCraft design colours';
  * another design is applied). The design's parts refer to them, and RetroBat's Color set option
  * can redefine them. A file's variables are read before the rest of it, so placement is free.
  */
-export function designVarsChange(project: ThemeProject, design: Design): Change {
+export function designVarsChange(project: ThemeProject, design: Design, depth: Depth = design.depth ?? 'subtle'): Change {
   const entry = project.entry!;
   const root = entry.doc.root!;
-  // designArtSet names the colour set whose artwork the menu options use (see menuOptions.ts).
-  const body = [`  <designArtSet>d-${design.id}</designArtSet>`, ...Object.entries(designVars(design.palette)).map(([k, v]) => `  <${k}>${v}</${k}>`)];
+  // designArtSet names the colour set whose artwork the menu options use (see menuOptions.ts);
+  // designDepth is ChannelCraft's own (RetroBat ignores it), see depth.ts.
+  const body = [`  <designArtSet>d-${design.id}</designArtSet>`, `  <${DEPTH_VAR}>${depth}</${DEPTH_VAR}>`, ...Object.entries(designVars(design.palette)).map(([k, v]) => `  <${k}>${v}</${k}>`)];
   const markup = [`<!-- ${VARS_MARK} (${design.label}). The design's parts use these; change them in the Colours tab. -->`, '<variables>', ...body, '</variables>'].join('\n');
   const kids = root.children;
   for (let i = 0; i < kids.length; i++) {

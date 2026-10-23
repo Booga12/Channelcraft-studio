@@ -238,7 +238,6 @@
     const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${z ?? Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
     const anim = animate ? animationCss(el, W, H, base, { screen: screenOf(view), token: play?.token, dir: play?.dir }) : null;
     if (anim) s.push(`animation:${anim}`, `--ccs-w:${W}px`, `--ccs-h:${H}px`);
-    if (shadowFilter) s.push(`filter:${shadowFilter}`);
     if (outer.w !== null) s.push(`width:${outer.w}px`);
     if (outer.h !== null) s.push(`height:${outer.h}px`);
     const op = num('opacity', 1);
@@ -413,7 +412,7 @@
   data-name={el.name}
   style={wrapStyle}
   style:translate={slide.by && slide.mode === 'slide' && el.type !== 'carousel' ? (slide.axis === 'x' ? `${slide.by * W}px 0` : `0 ${slide.by * H}px`) : undefined}
-  style:filter={slide.by && slide.mode === 'fade' && el.type !== 'carousel' ? `${shadowFilter} brightness(${Math.max(0, 1 - Math.abs(slide.by) * 2)})` : undefined}
+  style:filter={slide.by && slide.mode === 'fade' && el.type !== 'carousel' ? `${shadowFilter} brightness(${Math.max(0, 1 - Math.abs(slide.by) * 2)})` : shadowFilter || undefined}
 >
   {#if el.type === 'image'}
     {#if imgPath}

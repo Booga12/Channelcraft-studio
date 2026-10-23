@@ -146,6 +146,43 @@ export const ANIMATIONS: AnimPreset[] = [
     build: (_p, a, sp, s) => appear(s, [{ property: 'scale', from: r(1 + 0.6 * a), to: '1', duration: ms(500, sp), mode: 'easeOutCubic' }, fade(400, sp)]),
   },
   {
+    id: 'glide-up',
+    label: 'Glide up',
+    help: 'Glides up into place and slows down gently at the end. Smooth and calm.',
+    kind: 'entrance',
+    amount: true,
+    build: ([, y], a, sp, s) => appear(s, [{ property: 'y', from: r(y + 0.035 * a), to: r(y), duration: ms(900, sp), mode: 'easeOutQuint' }, fade(700, sp)]),
+  },
+  {
+    id: 'soft-zoom',
+    label: 'Soft zoom',
+    help: 'Grows the last little bit into place while fading in, like coming into focus.',
+    kind: 'entrance',
+    amount: true,
+    build: (_p, a, sp, s) => appear(s, [{ property: 'scale', from: r(Math.max(0.05, 1 - 0.08 * a)), to: '1', duration: ms(800, sp), mode: 'easeOutQuint' }, fade(600, sp)]),
+  },
+  {
+    id: 'drift-in',
+    label: 'Drift in',
+    help: 'Drifts in slowly from the left and settles. Good for big artwork.',
+    kind: 'entrance',
+    amount: true,
+    build: ([x], a, sp, s) => appear(s, [{ property: 'x', from: r(x - 0.035 * a), to: r(x), duration: ms(1100, sp), mode: 'easeOutQuint' }, fade(800, sp)]),
+  },
+  {
+    id: 'tilt-in',
+    label: 'Tilt in',
+    help: 'Turns upright while growing into place, as if tipping towards you.',
+    kind: 'entrance',
+    amount: true,
+    build: (_p, a, sp, s) =>
+      appear(s, [
+        { property: 'rotation', from: r(-6 * a), to: '0', duration: ms(750, sp), mode: 'easeOutCubic' },
+        { property: 'scale', from: '0.94', to: '1', duration: ms(750, sp), mode: 'easeOutCubic' },
+        fade(450, sp),
+      ]),
+  },
+  {
     id: 'rise-float',
     label: 'Rise, then float',
     help: 'Rises into place, then keeps bobbing gently.',
@@ -178,6 +215,39 @@ export const ANIMATIONS: AnimPreset[] = [
     kind: 'loop',
     amount: true,
     build: ([, y], a, sp) => loop([{ property: 'y', from: r(y), to: r(y - 0.008 * a), duration: ms(3000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
+  },
+  {
+    id: 'hover',
+    label: 'Hover',
+    help: 'Floats up and comes a little closer, then back, like it is hovering. Adds depth.',
+    kind: 'loop',
+    amount: true,
+    build: ([, y], a, sp) =>
+      loop([
+        { property: 'y', from: r(y), to: r(y - 0.007 * a), duration: ms(3200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+        { property: 'scale', from: '1', to: r(1 + 0.018 * a), duration: ms(3200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+      ]),
+  },
+  {
+    id: 'sway',
+    label: 'Gentle sway',
+    help: 'Rocks very slightly and bobs, like it is floating on water.',
+    kind: 'loop',
+    amount: true,
+    build: ([, y], a, sp) =>
+      loop([
+        { property: 'rotation', from: r(-1.5 * a), to: r(1.5 * a), duration: ms(4200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+        { property: 'y', from: r(y), to: r(y - 0.005 * a), duration: ms(2700, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+      ]),
+  },
+  {
+    id: 'slow-zoom',
+    label: 'Slow zoom',
+    help: 'Zooms in very slowly and back out, so a background seems to move behind the rest.',
+    kind: 'loop',
+    amount: true,
+    // Starts a little above full size, which also tells it apart from Pulse when read back.
+    build: (_p, a, sp) => loop([{ property: 'scale', from: '1.03', to: r(1.03 + 0.06 * a), duration: ms(16000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
   },
   {
     id: 'pulse',

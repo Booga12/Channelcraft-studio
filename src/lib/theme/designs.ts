@@ -8,6 +8,8 @@ import type { AnimPreset } from './animations';
 import { ANIMATIONS, screenOf, storyboardXml } from './animations';
 import { systemLayout, type SystemLayout } from './systemLayouts';
 import { frameXml, type Frame } from './frame';
+import { shadowXml } from './shadow';
+import { depthLevel, PARALLAX, PARALLAX_ANIM, SHADOWED, type Depth } from './depth';
 
 export interface Palette6 {
   bg: string;
@@ -40,6 +42,8 @@ export interface Design {
   uppercase?: boolean;
   /** Animation preset id per role. */
   anims?: Partial<Record<'title' | 'art' | 'logo' | 'list' | 'console', string>>;
+  /** How much depth the design has (see depth.ts); Subtle when not given. */
+  depth?: Depth;
 }
 
 const P = (bg: string, bg2: string, surface: string, text: string, dim: string, accent: string, accentText: string): Palette6 => ({ bg, bg2, surface, text, dim, accent, accentText });
@@ -316,7 +320,7 @@ export const DESIGNS: Design[] = [
 const hex = (c: string) => `#${c.slice(0, 6)}`;
 
 /** SVG files for a design, by file name. */
-export function designAssets(d: Design): Record<string, string> {
+export function designAssets(d: Design, depth: Depth = d.depth ?? 'subtle'): Record<string, string> {
   const p = d.palette;
   const W = 1920;
   const H = 1080;
@@ -428,7 +432,16 @@ export function designAssets(d: Design): Record<string, string> {
   const panel =
     d.id === 'pixel'
       ? svg(96, 96, `<path d="M8 0H88V8H96V88H88V96H8V88H0V8H8Z" fill="#ffffff"/><path d="M8 4H88V8H92V88H88V92H8V88H4V8H8Z" fill="none" stroke="#000" stroke-opacity="0.35" stroke-width="4"/>`)
-      : svg(Math.max(96, r * 3), Math.max(96, r * 3), `<rect x="1" y="1" width="${Math.max(96, r * 3) - 2}" height="${Math.max(96, r * 3) - 2}" rx="${r}" fill="#ffffff"/>`);
+      : (() => {
+          // With depth, a light top edge and a darker bottom edge make the panel look raised
+          // (the panel is tinted, so these stay lighter and darker than its colour).
+          const n = Math.max(96, r * 3);
+          const b = depthLevel(depth).bevel;
+          const bevel = b
+            ? `<defs><linearGradient id="v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="${(0.28 * b).toFixed(2)}"/></linearGradient></defs><rect x="1" y="1" width="${n - 2}" height="${n - 2}" rx="${r}" fill="url(#v)"/><rect x="2" y="2" width="${n - 4}" height="${n - 4}" rx="${Math.max(0, r - 1)}" fill="none" stroke="#000" stroke-opacity="${(0.22 * b).toFixed(2)}" stroke-width="2"/><path d="M${r + 2} 2.5H${n - r - 2}" stroke="#fff" stroke-opacity="${(0.55 * b).toFixed(2)}" stroke-width="2" stroke-linecap="round"/>`
+            : '';
+          return svg(n, n, `<rect x="1" y="1" width="${n - 2}" height="${n - 2}" rx="${r}" fill="#ffffff"/>${bevel}`);
+        })();
 
   // Console tiles: a tile with a soft inner edge, and the selected tile with a ring and a glow
   // (white, tinted by the theme). Both leave the same margin round the tile for the glow.
@@ -473,9 +486,10 @@ export function tileGeometry(d: Design): { size: number; margin: number; radius:
  * The frame round a design's screenshots and videos (RetroBat's border shader): rounded unless
  * the design is square or pixel-cornered, a thin light border, and a soft drop shadow.
  */
-export function designFrame(d: Design, accent = `${d.palette.accent.slice(0, 6)}FF`): Frame {
+export function designFrame(d: Design, accent = `${d.palette.accent.slice(0, 6)}FF`, depth: Depth = d.depth ?? 'subtle'): Frame {
   const square = d.id === 'pixel' || d.radius === 0;
-  return { corners: square ? 0 : Math.min(0.06, Math.max(0.02, d.radius / 500)), border: d.id === 'pixel' ? 4 : 2, borderColor: d.id === 'pixel' ? accent : 'FFFFFF55', shadow: 12, shadowColor: '00000088' };
+  const lv = depthLevel(depth);
+  return { corners: square ? 0 : Math.min(0.06, Math.max(0.02, d.radius / 500)), border: d.id === 'pixel' ? 4 : 2, borderColor: d.id === 'pixel' ? accent : 'FFFFFF55', shadow: lv.frameShadow, shadowColor: lv.id === 'strong' ? '000000AA' : '00000088' };
 }
 
 // ---- layouts -------------------------------------------------------------------------------
@@ -499,6 +513,8 @@ export interface DesignContext {
   /** Folders of console art copied into the theme, if any. */
   logos: string | null;
   consoles: string | null;
+  /** Depth to build with; the design's own when not given. */
+  depth?: Depth;
 }
 
 const LABELS_AND_EXTRAS = ['md_lbl_rating', 'md_lbl_releasedate', 'md_lbl_developer', 'md_lbl_publisher', 'md_lbl_genre', 'md_lbl_players', 'md_lbl_lastplayed', 'md_lbl_playcount', 'md_publisher', 'md_playcount', 'md_lastplayed'];
@@ -606,9 +622,10 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
   // Covers get rounded corners; screenshots and videos a frame with a border and soft shadow.
   const round: Record<string, string> = d.id === 'pixel' || d.radius === 0 ? {} : { roundCorners: '0.025' };
   const boxart = (pos: string, max: string, z = 32, extra: Record<string, string> = {}) => art('ccs_boxart', pos, max, z, { path: 'firstfile({game:boxart}, {game:thumbnail}, {game:image})', ...round, ...extra }, d.anims?.art);
-  const framed = (e: DesignEl): DesignEl => ({ ...e, blocks: [frameXml(designFrame(d, K(d, c, 'designAccent')))] });
+  const framed = (e: DesignEl): DesignEl => ({ ...e, blocks: [frameXml(designFrame(d, K(d, c, 'designAccent'), depthOf(d, c)))] });
   const screenshot = (pos: string, max: string, extra: Record<string, string> = {}) => framed(video ? art('md_video', pos, max, 31, { delay: '0.8', showSnapshotNoVideo: 'true', ...extra }) : art('md_image', pos, max, 31, extra));
-  const fanart = (opacityHex: string) => ({ type: 'image', name: 'ccs_fanart', props: { pos: '0 0', size: '1 1', path: 'firstfile({game:fanart}, {game:image})', color: `FFFFFF${opacityHex}`, zIndex: '1' } }) as DesignEl;
+  // Full-screen and centred, so a slow zoom (depth) never shows its edges.
+  const fanart = (opacityHex: string) => ({ type: 'image', name: 'ccs_fanart', props: { pos: '0.5 0.5', origin: '0.5 0.5', size: '1 1', path: 'firstfile({game:fanart}, {game:image})', color: `FFFFFF${opacityHex}`, zIndex: '1' } }) as DesignEl;
   const systemLogo = (pos: string, origin: string, max: string): DesignEl => ({
     type: 'image',
     name: 'logo',
@@ -770,15 +787,28 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
   return els;
 }
 
+const depthOf = (d: Design, c: DesignContext): Depth => c.depth ?? d.depth ?? 'subtle';
+
 /** Elements of a design for one screen. */
 export function designElements(d: Design, c: DesignContext, view: string, systemLayoutId = d.system): DesignEl[] {
-  if (view === 'system') return systemScreen(d, c, systemLayout(systemLayoutId) ?? systemLayout(d.system)!);
+  if (view === 'system') return withDepth(systemScreen(d, c, systemLayout(systemLayoutId) ?? systemLayout(d.system)!), depthOf(d, c), 'system');
   if (['basic', 'detailed', 'video'].includes(view)) {
     const els = gameScreen(d, c, view);
     for (const n of LABELS_AND_EXTRAS) els.push({ type: n === 'md_lastplayed' ? 'datetime' : 'text', name: n, props: { visible: 'false' } });
-    return els;
+    return withDepth(els, depthOf(d, c), 'game');
   }
   return [];
+}
+
+/** Shadows under art, the selected logo's lift and the background's slow zoom for a depth. */
+function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game'): DesignEl[] {
+  const lv = depthLevel(depth);
+  return els.map((e) => {
+    if (lv.shadow && e.type === 'image' && SHADOWED[kind].includes(e.name) && Object.keys(e.props).length > 1) return { ...e, blocks: [...(e.blocks ?? []), shadowXml(lv.shadow)] };
+    if (e.type === 'carousel') return { ...e, props: { ...e.props, logoScale: String(lv.logoScale) } };
+    if (lv.parallax && e.name === PARALLAX[kind] && !e.anim) return { ...e, anim: PARALLAX_ANIM };
+    return e;
+  });
 }
 
 /** Markup lines (two-space indented, inside a <view>) for elements, with their animations. */

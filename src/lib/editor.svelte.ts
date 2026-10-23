@@ -12,7 +12,8 @@ import { isGameListView, isOwnGamePath, perGameApplies, resolveTheme, romStem, t
 import { applyToText, copyOfShared, draftFile, EMPTY_GAME_FILE, GAMES_README, gameEditChanges, gameExtrasChange, ownFileGuards, screensWithoutGameExtras, type GameEdit } from './theme/perGame';
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
-import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
+import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, presetOf, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
+import { DEPTH_VAR, depthLevel, FRAMED, MOTION_FEELS, PARALLAX, PARALLAX_ANIM, SHADOWED, type Depth } from './theme/depth';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
 import { shaderOf, shadowXml } from './theme/shadow';
@@ -42,6 +43,8 @@ interface HistoryEntry {
   applied: Applied[];
   time: number;
   coalesce?: string;
+  /** Several edits made one after another as one step (see `group`), in the order made. */
+  parts?: Applied[][];
 }
 
 export interface Toast {
@@ -586,10 +589,36 @@ class Editor {
     this.rev++;
   }
 
+  /**
+   * Runs several edits (each its own commit) and keeps them as one undo step. Each edit sees
+   * the theme as the earlier ones left it.
+   */
+  group(label: string, fn: () => void) {
+    const mark = this.undoStack.at(-1);
+    fn();
+    const at = mark ? this.undoStack.lastIndexOf(mark) + 1 : 0;
+    const added = this.undoStack.slice(at);
+    if (added.length < 2) {
+      if (added.length) this.undoStack = [...this.undoStack.slice(0, at), { ...added[0], label, coalesce: undefined }];
+      return;
+    }
+    const parts = added.flatMap((e) => e.parts ?? [e.applied]);
+    this.undoStack = [...this.undoStack.slice(0, at), { label, applied: [], parts, time: Date.now() }];
+  }
+
   undo(quiet = false) {
     const p = this.project;
     const e = this.undoStack[this.undoStack.length - 1];
     if (!p || !e) return;
+    if (e.parts) {
+      // Last edit first; the redo step replays them in the order they were made.
+      const back = [...e.parts].reverse().map((part) => applyChanges(p, inverse(p, part)));
+      this.undoStack = this.undoStack.slice(0, -1);
+      this.redoStack = [...this.redoStack, { label: e.label, applied: [], parts: back.reverse(), time: 0 }];
+      this.rev++;
+      if (!quiet) this.notify(`Undid ${e.label}`);
+      return;
+    }
     const redo = applyChanges(p, inverse(p, e.applied));
     this.undoStack = this.undoStack.slice(0, -1);
     this.redoStack = [...this.redoStack, { label: e.label, applied: redo, time: 0 }];
@@ -601,6 +630,14 @@ class Editor {
     const p = this.project;
     const e = this.redoStack[this.redoStack.length - 1];
     if (!p || !e) return;
+    if (e.parts) {
+      const again = e.parts.map((part) => applyChanges(p, inverse(p, part)));
+      this.redoStack = this.redoStack.slice(0, -1);
+      this.undoStack = [...this.undoStack, { label: e.label, applied: [], parts: again, time: 0 }];
+      this.rev++;
+      if (!quiet) this.notify(`Redid ${e.label}`);
+      return;
+    }
     const undo = applyChanges(p, inverse(p, e.applied));
     this.redoStack = this.redoStack.slice(0, -1);
     this.undoStack = [...this.undoStack, { label: e.label, applied: undo, time: 0 }];
@@ -1200,11 +1237,19 @@ class Editor {
     if (!el) return;
     const now = frameOf(el);
     const sh = shaderOf(el);
-    if (sh && !now) {
-      this.notify(sh.shadow ? 'Remove the soft shadow first: a picture can have one RetroBat shader, and the frame has its own shadow.' : 'This picture already uses another RetroBat shader, so it can’t have a frame. Remove that shader in Advanced mode first.', 'error');
+    if (sh && !now && !sh.shadow) {
+      this.notify('This picture already uses another RetroBat shader, so it can’t have a frame. Remove that shader in Advanced mode first.', 'error');
       return;
     }
     const round = el.props.get('roundCorners');
+    // A picture has one RetroBat shader, and the frame draws its own shadow: it takes the soft
+    // shadow's place (and the place of roundCorners, which the frame's corners replace).
+    if (frame && sh?.shadow && !now) {
+      const { file, node } = sh.def;
+      const ownRound = round && round.node.parent === node.parent ? [{ file: round.file, patch: patchRemoveNode(round.file.doc, round.node) }] : [];
+      this.commit(`frame on ${elementLabel(name)}`, [{ file, patch: patchReplaceSpan(file.doc, node, node, frameXml(frame)) }, ...ownRound]);
+      return;
+    }
     if (!frame) {
       if (!now) return;
       const { file, node } = now.def;
@@ -1456,11 +1501,11 @@ class Editor {
     const dirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/([^/]+)\//)?.[1]).filter(Boolean));
     const tileDirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/tiles\/([^/]+)\//)?.[1]).filter(Boolean));
     const jobs = [
-      ...DESIGNS.filter((d) => dirs.has(d.id)).map((d) => ({ dir: `_inc/ccs/${d.id}`, files: () => designAssets({ ...d, palette: colours }), id: d.id })),
+      ...DESIGNS.filter((d) => dirs.has(d.id)).map((d) => ({ dir: `_inc/ccs/${d.id}`, files: () => designAssets({ ...d, palette: colours }, this.depth ?? d.depth), id: d.id })),
       ...TILE_STYLES.filter((t) => tileDirs.has(t.id)).map((t) => ({ dir: `${TILE_DIR}/${t.id}`, files: () => tileArt(t, this.tileColours()), id: `tiles/${t.id}` })),
     ];
     if (!jobs.length) return null;
-    return { key: `${jobs.map((j) => j.id).join(',')}|${Object.values(colours).join(',')}`, jobs };
+    return { key: `${jobs.map((j) => j.id).join(',')}|${Object.values(colours).join(',')}|${this.depth ?? ''}`, jobs };
   }
 
   /** Colours for grid tiles: the design colours, else the tiles' own colours on this screen. */
@@ -1523,6 +1568,95 @@ class Editor {
       this.#artDrawn.set(p.dir, again.key);
       for (const j of again.jobs) await this.writeArt(j.dir, j.files());
     }, 350);
+  }
+
+  // ---- depth (see theme/depth.ts) ----
+
+  /** This design theme's depth, or null for a theme that wasn't made from a design. */
+  get depth(): Depth | null {
+    const res = this.themeRes ?? this.res;
+    if (!res?.vars.has('designAccent')) return null;
+    return depthLevel(res.vars.get(DEPTH_VAR)?.value).id;
+  }
+
+  /**
+   * Gives a design theme more or less depth on every screen at once, as one undo step: drop
+   * shadows under art, frame shadows, the selected logo's lift, the background's slow zoom, and
+   * the panel bevel (the artwork follows through syncDesignArt).
+   */
+  setDepth(id: Depth) {
+    if (this.sharedOnly('Depth settings')) return;
+    const res = this.themeRes ?? this.res;
+    if (!res || this.depth === null) return void this.notify('Depth works on themes made from a design (New theme, or a design in Presets).', 'error');
+    const lv = depthLevel(id);
+    const keep = { view: this.view, file: this.screenFile, consoleOnly: this.consoleOnly, selected: this.selected, selection: this.selection };
+    this.consoleOnly = false;
+    this.group(`depth “${lv.label}”`, () => {
+      const def = sharedIn(res.varHistory.get(DEPTH_VAR)) ?? res.vars.get(DEPTH_VAR);
+      const accent = sharedIn(res.varHistory.get('designAccent')) ?? res.vars.get('designAccent');
+      if (def) this.commit('depth', [setTextChange(def.file, def.node, id)]);
+      else if (accent?.node.parent) this.commit('depth', [{ file: accent.file, patch: patchInsertChild(accent.file.doc, accent.node.parent as XElement, `<${DEPTH_VAR}>${id}</${DEPTH_VAR}>`, { first: true }) }]);
+      if (this.screenFile !== 'theme.xml') this.screenFile = 'theme.xml';
+      for (const view of ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v))) {
+        this.view = view;
+        const kind = view === 'system' ? 'system' : 'game';
+        const el = (n: string) => this.currentView?.elements.get(n);
+        for (const n of SHADOWED[kind]) {
+          const e = el(n);
+          if (!e || e.type !== 'image' || frameOf(e)) continue;
+          const sh = shaderOf(e);
+          if (lv.shadow && (!sh || sh.shadow)) this.setShadow(n, lv.shadow);
+          else if (!lv.shadow && sh?.shadow) this.setShadow(n, null);
+        }
+        for (const n of FRAMED) {
+          const f = el(n) && frameOf(el(n)!);
+          if (f && f.frame.shadow !== lv.frameShadow) this.setFrame(n, { ...f.frame, shadow: lv.frameShadow });
+        }
+        for (const e of [...(this.currentView?.elements.values() ?? [])].filter((x) => x.type === 'carousel')) this.setProps(e.name, { logoScale: String(lv.logoScale) });
+        const bg = el(PARALLAX[kind]);
+        if (bg) {
+          const now = presetOf(bg, screenOf(view));
+          if (lv.parallax && !now) this.setAnimation(bg.name, PARALLAX_ANIM);
+          else if (!lv.parallax && now === PARALLAX_ANIM) this.setAnimation(bg.name, null);
+        }
+      }
+    });
+    if (keep.file !== this.screenFile) this.screenFile = keep.file;
+    this.view = keep.view;
+    this.consoleOnly = keep.consoleOnly;
+    this.selection = keep.selection;
+    this.selected = keep.selected;
+    this.notify(`Depth “${lv.label}”: ${lv.help} Ctrl+Z to undo.`);
+  }
+
+  /**
+   * One feel for every animation in theme.xml's screens: calm (smaller, slower), normal (each
+   * preset's own) or lively (bigger, quicker). One undo step.
+   */
+  setMotionFeel(feel: keyof typeof MOTION_FEELS) {
+    if (this.sharedOnly('Motion settings')) return;
+    const f = MOTION_FEELS[feel];
+    const keep = { view: this.view, file: this.screenFile, consoleOnly: this.consoleOnly };
+    this.consoleOnly = false;
+    let count = 0;
+    this.group(`${f.label.toLowerCase()} motion`, () => {
+      if (this.screenFile !== 'theme.xml') this.screenFile = 'theme.xml';
+      for (const view of this.viewNames) {
+        this.view = view;
+        for (const e of [...(this.currentView?.elements.values() ?? [])]) {
+          const t = tuningOf(e, screenOf(view));
+          // The background's slow zoom keeps its pace: it belongs to the depth setting.
+          if (!t || t.preset.id === PARALLAX_ANIM) continue;
+          const before = this.history.done.length;
+          this.tuneAnimation(e.name, t.preset.amount ? f.amount : 1, f.speed);
+          if (this.history.done.length > before) count++;
+        }
+      }
+    });
+    if (keep.file !== this.screenFile) this.screenFile = keep.file;
+    this.view = keep.view;
+    this.consoleOnly = keep.consoleOnly;
+    this.notify(count ? `${f.label} motion for ${count} animation${count === 1 ? '' : 's'}. Ctrl+Z to undo.` : 'Nothing to change: no animations here yet, or they already move like this.');
   }
 
   /** Writes generated SVG artwork into the theme (and shows it straight away). Returns false if it couldn't be written. */
@@ -1610,7 +1744,9 @@ class Editor {
     // Designs style theme.xml's screens, not the loading screens.
     if (this.screenFile !== 'theme.xml') this.showScreen({ view: this.viewNames.includes('system') ? 'system' : (this.viewNames[0] ?? 'system'), file: 'theme.xml' });
     const artRel = `_inc/ccs/${design.id}`;
-    const wrote = await this.writeArt(artRel, designAssets(design));
+    // A depth chosen for this theme stays when another design is applied.
+    const depth = this.depth ?? design.depth ?? 'subtle';
+    const wrote = await this.writeArt(artRel, designAssets(design, depth));
     // Drawn in the design's own colours, which the commit below sets: note them afresh.
     this.#artDrawn.delete(p.dir);
     task.step('fonts');
@@ -1626,6 +1762,7 @@ class Editor {
       titleFont: titleFont ? `./${titleFont}` : null,
       logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null,
       consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null,
+      depth,
     };
     this.rev++;
     const res = this.res;
@@ -1633,7 +1770,7 @@ class Editor {
     const views = opts.views ?? ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v));
     const label = opts.systemLayout ? `“${LAYOUTS.find((l) => l.id === opts.systemLayout)?.label ?? opts.systemLayout}” in the ${design.label} style` : `design “${design.label}”`;
     // The design's colours become shared colours (variables) its parts refer to.
-    this.commit(label, [designVarsChange(p, design), ...designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout)]);
+    this.commit(label, [designVarsChange(p, design, depth), ...designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout)]);
     this.selected = null;
     const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
     if (opts.systemLayout) return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to the System screen.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
