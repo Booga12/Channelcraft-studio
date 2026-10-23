@@ -1863,10 +1863,18 @@ class Editor {
     }
   }
 
-  /**
-   * Applies a design: writes its artwork into the theme, fetches its fonts, and replaces the
-   * layout of each screen with the design's (one undo step for the layout).
-   */
+  /** Downloads any Google Fonts family into the theme (with its licence); its theme-relative path. */
+  async ensureGoogleFont(family: string): Promise<string> {
+    const p = this.project;
+    if (!p) throw new Error('No theme is open');
+    const f = await api.googleFontFile(family);
+    const existing = p.assets.find((a) => a.rel.toLowerCase() === `_inc/fonts/${f.file_name}`.toLowerCase());
+    if (existing) return existing.rel;
+    const rel = await api.downloadFont(p.dir, f.url, f.file_name);
+    p.setAssets([...p.assets, { rel, kind: 'font', size: 0 }]);
+    return rel;
+  }
+
   /**
    * Applies a design to the theme's screens. `carry: 'layout'` re-lays out the design that's already
    * there: the theme's colours, fonts, animations, tile style and your own elements all stay.

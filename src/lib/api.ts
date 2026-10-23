@@ -133,6 +133,10 @@ export const api = {
   listFonts: () => invoke<{ name: string; path: string; source: string }[]>('list_fonts'),
   addFontToTheme: (themeDir: string, src: string) => invoke<string>('add_font_to_theme', { themeDir, src }),
   downloadFont: (themeDir: string, url: string, fileName: string) => invoke<string>('download_font', { themeDir, url, fileName }),
+  /** Every Google Fonts family, by name and category. */
+  googleFonts: () => invoke<{ family: string; category: string }[]>('google_fonts'),
+  /** Where a Google Fonts family's regular font file is (Open Font License families only). */
+  googleFontFile: (family: string) => invoke<{ url: string; file_name: string }>('google_font_file', { family }),
   backupsDir: () => invoke<string>('backups_dir'),
   noticesPath: () => invoke<string>('notices_path'),
   copyTheme: (src: string, name: string) => invoke<string>('copy_theme', { src, name }),

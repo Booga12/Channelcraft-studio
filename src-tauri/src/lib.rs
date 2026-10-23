@@ -105,6 +105,8 @@ pub fn run() {
             commands::list_fonts,
             commands::add_font_to_theme,
             commands::download_font,
+            commands::google_fonts,
+            commands::google_font_file,
             storage::copy_theme,
             commands::delete_theme,
             storage::create_theme_from_starter,

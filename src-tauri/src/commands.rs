@@ -787,3 +787,80 @@ mod tests {
         assert_eq!(timestamp().len(), 15);
     }
 }
+
+// ---- the whole Google Fonts library ----
+
+#[derive(Serialize, Clone)]
+pub struct GoogleFont {
+    family: String,
+    category: String,
+}
+
+static GOOGLE_FONTS: Mutex<Option<Vec<GoogleFont>>> = Mutex::new(None);
+
+/// Every family in Google Fonts (name and category), fetched once per session.
+#[tauri::command]
+pub fn google_fonts() -> CmdResult<Vec<GoogleFont>> {
+    if let Some(list) = GOOGLE_FONTS.lock().map_err(err)?.as_ref() {
+        return Ok(list.clone());
+    }
+    let resp = ureq::get("https://fonts.google.com/metadata/fonts").call().map_err(|e| format!("The Google Fonts list couldn't be downloaded ({e})"))?;
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut std::io::Read::take(resp.into_reader(), 20 * 1024 * 1024), &mut text).map_err(err)?;
+    // The reply may start with a guard line before the JSON.
+    let json = text.trim_start_matches(|c| c != '{');
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|e| format!("The Google Fonts list couldn't be read ({e})"))?;
+    let list: Vec<GoogleFont> = v["familyMetadataList"]
+        .as_array()
+        .ok_or("The Google Fonts list is in an unexpected format")?
+        .iter()
+        .filter_map(|f| Some(GoogleFont { family: f["family"].as_str()?.to_string(), category: f["category"].as_str().unwrap_or("").to_string() }))
+        .collect();
+    *GOOGLE_FONTS.lock().map_err(err)? = Some(list.clone());
+    Ok(list)
+}
+
+#[derive(Serialize)]
+pub struct GoogleFontFile {
+    url: String,
+    file_name: String,
+}
+
+/// Where a Google Fonts family's regular font file is in the Google Fonts repository (Open Font
+/// License families only, so the licence can travel with the font).
+#[tauri::command]
+pub fn google_font_file(family: String) -> CmdResult<GoogleFontFile> {
+    let dir: String = family.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
+    if dir.is_empty() {
+        return Err("No such font".into());
+    }
+    let api = format!("https://api.github.com/repos/google/fonts/contents/ofl/{dir}");
+    let resp = ureq::get(&api)
+        .set("User-Agent", "ChannelCraft-Studio")
+        .set("Accept", "application/vnd.github+json")
+        .call()
+        .map_err(|e| match e {
+            ureq::Error::Status(404, _) => format!("“{family}” isn't under the Open Font License in Google Fonts, so it can't be added to a shareable theme."),
+            e => format!("Google Fonts couldn't be reached ({e})"),
+        })?;
+    let mut body = String::new();
+    std::io::Read::read_to_string(&mut std::io::Read::take(resp.into_reader(), 4 * 1024 * 1024), &mut body).map_err(err)?;
+    let v: serde_json::Value = serde_json::from_str(&body).map_err(|e| format!("Unexpected reply from GitHub ({e})"))?;
+    let files: Vec<(String, String)> = v
+        .as_array()
+        .ok_or("Unexpected reply from GitHub")?
+        .iter()
+        .filter_map(|f| Some((f["name"].as_str()?.to_string(), f["download_url"].as_str()?.to_string())))
+        .filter(|(n, _)| n.to_ascii_lowercase().ends_with(".ttf"))
+        .collect();
+    let upright = |n: &str| !n.to_ascii_lowercase().contains("italic");
+    let pick = files
+        .iter()
+        .find(|(n, _)| n.ends_with("-Regular.ttf"))
+        .or_else(|| files.iter().find(|(n, _)| n.contains('[') && upright(n)))
+        .or_else(|| files.iter().find(|(n, _)| upright(n)))
+        .or_else(|| files.first())
+        .ok_or_else(|| format!("No font file found for “{family}”"))?;
+    let file_name = pick.0.replace(['[', ']', ','], "_");
+    Ok(GoogleFontFile { url: pick.1.clone(), file_name })
+}
