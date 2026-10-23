@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { updates } from '$lib/updates.svelte';
+  let updateMsg = $state('');
   import * as Dialog from '$lib/components/ui/dialog';
   import { open } from '@tauri-apps/plugin-dialog';
   import { revealItemInDir } from '@tauri-apps/plugin-opener';
@@ -186,6 +188,10 @@
           <button class="secondary small" onclick={() => (showLicence = !showLicence)}>{showLicence ? 'Hide' : 'Read it'}</button>
         </div>
         {#if showLicence}<pre class="licence">{licenceText}</pre>{/if}
+        <div class="row">
+          <div><strong>Updates</strong><small>{updateMsg || 'The studio looks for a newer version on its own a few seconds after starting. Updates are checked and signed, then installed with a restart.'}</small></div>
+          <button class="secondary small" disabled={updates.state === 'checking'} onclick={async () => (updateMsg = (await updates.check()) ?? '')}>{updates.state === 'checking' ? 'Checking…' : 'Check for updates'}</button>
+        </div>
         <div class="row">
           <div><strong>Open-source licences</strong><small>The open-source software this app is built with, and their licences.</small></div>
           <button class="secondary small" onclick={showNotices}>Show file</button>

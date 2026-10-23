@@ -78,6 +78,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        // Opens at the size and place it was closed at.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Updates from the GitHub releases (signed, see scripts/release.mjs), and restarting after one.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(commands::Roots::default())
         .manage(storage::Projects::default())
         .invoke_handler(tauri::generate_handler![
