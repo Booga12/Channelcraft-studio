@@ -409,7 +409,11 @@ export function designChanges(project: ThemeProject, res: Resolution, design: De
     const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
     const body = [...elementsMarkup(els, extras, view), ...kept];
     if (hideOwn) {
+      // Only the theme's own parts: ones defined just in ChannelCraft's block are kept or dropped above.
+      const block = designBlock(project, view);
+      const onlyInBlock = (e: { defs: { file: unknown; node: XElement }[] }) => !!block && e.defs.every((d) => d.file === project.entry && d.node.start >= block.view.start && d.node.end <= block.view.end);
       for (const e of res.views.get(view)?.elements.values() ?? []) {
+        if (onlyInBlock(e)) continue;
         if (e.extra && !names.has(e.name) && !isDesignExtra(e.name)) body.push(`  <${e.type} name="${e.name}" extra="${e.extra}">`, '    <visible>false</visible>', `  </${e.type}>`);
         // The theme's own game parts the design doesn't place (e.g. md_image on the video screen,
         // where the design shows md_video) would stay where the theme put them, over the design.
@@ -553,3 +557,33 @@ function findBlock(children: XNode[], src: string, view: string): { comment: XNo
   return null;
 }
 
+
+// ---- readability ----
+
+const channel = (h: string, i: number) => (parseInt(h.slice(i, i + 2), 16) || 0) / 255;
+/** Relative luminance of an RRGGBB colour (WCAG). */
+function luminance(h: string): number {
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return 0.2126 * lin(channel(h, 0)) + 0.7152 * lin(channel(h, 2)) + 0.0722 * lin(channel(h, 4));
+}
+/** WCAG contrast ratio between two RRGGBB colours (1 to 21). */
+export function contrast(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+/** An RRGGBBAA colour laid over an RRGGBB one. */
+export function over(top: string, under: string): string {
+  const a = top.length >= 8 ? parseInt(top.slice(6, 8), 16) / 255 : 1;
+  return mix(under, top.slice(0, 6), a);
+}
+/**
+ * How readable a design's text is: the worse of text on the background and text on a panel.
+ * Under 3 is hard to read; `text` is the better of near-black and white for that background.
+ */
+export function readability(c: Palette6): { ratio: number; ok: boolean; text: string; dim: string } {
+  const bg = c.bg.slice(0, 6);
+  const panel = over(c.surface, bg);
+  const ratio = Math.min(contrast(c.text.slice(0, 6), bg), contrast(c.text.slice(0, 6), panel));
+  const text = contrast('111111', bg) >= contrast('FFFFFF', bg) ? '111111' : 'FFFFFF';
+  return { ratio: Math.round(ratio * 10) / 10, ok: ratio >= 3, text, dim: mix(text, bg, 0.35) };
+}

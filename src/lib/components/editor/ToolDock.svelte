@@ -65,7 +65,9 @@
     options: ed.res?.subsets.length || undefined,
     history: ed.history.done.length || undefined,
   });
-  const panels = $derived(PANELS.filter((p) => !(ed.simple && p.id === 'files')));
+  // Simple mode keeps to what a first theme needs: looks, colours, what's on screen, and undo.
+  const SIMPLE: PanelId[] = ['presets', 'variables', 'elements', 'history'];
+  const panels = $derived(ed.simple ? SIMPLE.map((id) => PANELS.find((p) => p.id === id)!) : PANELS);
   const label = (p: PanelInfo) => (p.id === 'variables' && !ed.simple ? 'Variables' : p.label);
   const item = 'relative flex w-full flex-col items-center gap-1 rounded-xl px-1 pt-1.5 pb-1 text-[10px] leading-none font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&_svg]:size-[18px] [&_svg]:shrink-0';
   const on = 'bg-primary/12 font-semibold text-primary hover:bg-primary/18 hover:text-primary';

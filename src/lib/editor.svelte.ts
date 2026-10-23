@@ -26,8 +26,10 @@ import { consoleScreenPath, isDataBound, NATIVE_BINDINGS, type LibraryItem } fro
 import { prefs } from './prefs.svelte';
 import { reorder, zIndexFor } from './theme/layers';
 import { TILE_DIR, TILE_STYLES, tileArt, tileColoursFrom, tileStyleOfPath, tileStyleProps, type TileColours } from './theme/tiles';
-import { appliedDesign, appliedGameLayout, appliedSystemLayout, coloursFromVars, hidesOwn, designChanges, designVarsChange, LAYOUTS, layoutChanges, paletteDesignVars, type LayoutPreset, type Palette } from './theme/presets';
+import { appliedDesign, appliedGameLayout, appliedSystemLayout, coloursFromVars, hidesOwn, readability, designChanges, designVarsChange, LAYOUTS, layoutChanges, paletteDesignVars, type LayoutPreset, type Palette } from './theme/presets';
 import { planMenuOptions, readMenuState, type MenuChoices, type MenuState } from './theme/menuOptions';
+import { SYSTEM_LAYOUTS } from './theme/systemLayouts';
+import { GAME_LAYOUTS } from './theme/gameLayouts';
 import { DESIGNS, designAssets, depthLogoScale, GAME_VIEWS, recoloured, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
@@ -1775,7 +1777,7 @@ class Editor {
   }
 
   /** Applies the choices from the New theme dialog to a freshly created theme and saves it. */
-  async applyStarter(choice: { design: string; artFrom: string | null }) {
+  async applyStarter(choice: { design: string; artFrom: string | null; systemLayout?: string; gameLayout?: string }) {
     const p = this.project;
     if (!p) return;
     const design = DESIGNS.find((d) => d.id === choice.design);
@@ -1786,7 +1788,7 @@ class Editor {
     }
     if (design) {
       task.step('design');
-      await this.applyDesign(design, { hideOwn: true });
+      await this.applyDesign(design, { hideOwn: true, systemLayout: choice.systemLayout, gameLayout: choice.gameLayout });
     }
     task.step('save');
     await this.save();
@@ -1835,7 +1837,7 @@ class Editor {
    * Otherwise your own elements and hidden parts stay, and the design brings its colours (unless it
    * only goes on some screens of a theme that already has design colours).
    */
-  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string; gameLayout?: string; carry?: 'layout' | 'design' } = {}) {
+  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string; gameLayout?: string; carry?: 'layout' | 'design' | 'none' } = {}) {
     if (this.sharedOnly('Designs')) return;
     const p = this.project;
     if (!p) return;
@@ -1872,9 +1874,11 @@ class Editor {
     this.rev++;
     const res = this.res;
     if (!res) return;
-    const layoutId = opts.systemLayout ?? opts.gameLayout;
+    // A layout on some screens, rather than a whole design with layouts picked for it.
+    const layoutId = views.length < allViews.length ? (opts.systemLayout ?? opts.gameLayout) : undefined;
     const label = layoutId ? `“${LAYOUTS.find((l) => l.id === layoutId)?.label ?? layoutId}” in the ${design.label} style` : `design “${design.label}”`;
-    const changes = designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout, { gameLayout: opts.gameLayout, carry: opts.carry ?? 'design' });
+    const carry = opts.carry === 'none' ? undefined : (opts.carry ?? 'design');
+    const changes = designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout, { gameLayout: opts.gameLayout, carry });
     // The design's colours become shared colours (variables) its parts refer to.
     this.commit(label, keepColours ? changes : [designVarsChange(p, design, depth, this.motionFeel), ...changes]);
     this.selected = null;
@@ -2072,6 +2076,44 @@ class Editor {
   }
 
   /** Sets every colour of a palette that this theme has a variable for. Returns how many were set. */
+  /** How readable a design theme's text is on its background and panels, or null for other themes. */
+  get readability() {
+    const c = this.designColours();
+    return c ? readability(c) : null;
+  }
+
+  /** Makes a design theme's text readable again: near-black or white, whichever suits the background. */
+  fixReadability() {
+    const r = this.readability;
+    if (!r) return;
+    const changes = [this.varChange('designText', `${r.text}FF`), this.varChange('designDimText', `${r.dim}FF`)].filter((c): c is Change => !!c);
+    if (changes.length) this.commit('readable text', changes);
+    this.notify('Text colours changed so everything is easy to read. Ctrl+Z to undo.');
+  }
+
+  /**
+   * Puts one screen back to its design as it comes, at the theme's colours and depth, keeping its
+   * layouts. What you added or changed on that screen goes; other screens aren't touched.
+   */
+  async resetScreen(view: string) {
+    const p = this.project;
+    const d = p ? appliedDesign(p, view) : null;
+    if (!p || !d) return;
+    await this.applyDesign(d, { views: [view], carry: 'none', systemLayout: view === 'system' ? (appliedSystemLayout(p) ?? undefined) : undefined, gameLayout: appliedGameLayout(p, view) ?? undefined });
+    this.notify(`${viewLabel(view)} is back to the ${d.label} design. Ctrl+Z to undo.`);
+  }
+
+  /** A random design with random layouts that go together (Surprise me). */
+  async surprise(opts: { hideOwn?: boolean; group?: string } = {}) {
+    const pool = DESIGNS.filter((d) => !opts.group || opts.group === 'all' || d.group === opts.group);
+    const d = pool[Math.floor(Math.random() * pool.length)];
+    const sys = SYSTEM_LAYOUTS[Math.floor(Math.random() * SYSTEM_LAYOUTS.length)];
+    const games = GAME_LAYOUTS.filter((l) => !l.flipOf || Math.random() < 0.3);
+    const game = games[Math.floor(Math.random() * games.length)];
+    await this.applyDesign(d, { hideOwn: opts.hideOwn ?? true, systemLayout: sys.id, gameLayout: game.id });
+    this.notify(`Surprise: ${d.label}, with ${sys.label} and ${game.label}. Press again for another, or Ctrl+Z to undo.`);
+  }
+
   applyPalette(palette: Palette): number {
     const res = this.res;
     if (!res || this.sharedOnly('Colour palettes')) return 0;

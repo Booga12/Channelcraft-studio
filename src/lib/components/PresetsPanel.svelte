@@ -145,6 +145,10 @@
     <p class="dim note">A complete look for every screen: artwork, colours, font, animations, and all of RetroBat's game and system data placed for you.</p>
     <label class="chk"><input type="checkbox" bind:checked={hideOwn} /> Hide this theme's own decorations</label>
     <label class="chk" title="The new design is laid out the way your screens are now, instead of with its own layouts."><input type="checkbox" bind:checked={keepLayouts} /> Keep my layouts</label>
+    <button class="secondary small surprise" disabled={applying} onclick={async () => { applying = true; try { await ed.surprise({ hideOwn, group: designGroup }); } finally { applying = false; } }} title="A random design with layouts that go together. Press again for another; Ctrl+Z goes back.">Surprise me</button>
+    {#if ed.readability && !ed.readability.ok}
+      <p class="warn note">Text is hard to read on this background (contrast {ed.readability.ratio}:1). <button class="small" onclick={() => ed.fixReadability()}>Make it readable</button></p>
+    {/if}
     <DesignGroupChips bind:group={designGroup} />
     <div class="designs">
       {#each DESIGNS.filter((d) => designGroup === 'all' || d.group === designGroup) as d (d.id)}
@@ -184,6 +188,7 @@
         {/if}
       {:else if listDesign}
         <p class="dim note">Where everything goes, drawn in {listDesign.label}: your colours, fonts, animations and anything you added stay.</p>
+        <button class="ghost small" onclick={() => ed.resetScreen(ed.view)} title="Undo everything you changed on this screen, keeping the design, colours and layout. Other screens aren't touched.">Reset this screen to the design</button>
       {:else}
         <p class="dim note">This theme isn't made from a design, so you can choose: just move RetroBat's own parts (list, picture, description), or restyle the screen with a design.</p>
       {/if}
@@ -362,6 +367,9 @@
   }
   small.in {
     color: var(--brand);
+  }
+  .surprise {
+    margin: 2px 0 8px;
   }
   .ask {
     display: grid;

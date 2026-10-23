@@ -623,7 +623,7 @@ export const DESIGNS: Design[] = [
     description: 'Four shades of green and a dot-matrix screen, like an old handheld.',
     group: 'retro',
     tags: ['retro', 'pixel', 'green'],
-    palette: P('9BBC0F', '8BAC0F', '306230', '0F380F', '306230', '0F380F', '9BBC0F'),
+    palette: P('9BBC0F', '8BAC0F', '8BAC0FCC', '0F380F', '306230', '0F380F', '9BBC0F'),
     font: 'silkscreen',
     background: 'dots',
     radius: 6,
