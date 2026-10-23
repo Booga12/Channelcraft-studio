@@ -178,6 +178,7 @@ export function registerVirtualFile(path: string, content: string, mime = 'image
 
 /** URL the webview can load a local file from. */
 export function fileUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
   const v = virtualFiles.get(path.toLowerCase().replace(/\//g, '\\'));
   if (v) return v;
   let u = urlCache.get(path);

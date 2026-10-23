@@ -463,6 +463,10 @@
           style:transform={`scale(${val('flipX') === 'true' ? -1 : 1}, ${val('flipY') === 'true' ? -1 : 1})`}
           style:-webkit-box-reflect={reflectCss(val('reflexion'))}
           onload={onImgLoad}
+          onerror={(e) => {
+            // An online picture that doesn't exist (libretro-thumbnails has no art for this game): show nothing, as RetroBat would.
+            if (/^https?:/.test(url)) (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';
+          }}
         />
       {/if}
       {#if !isWhite(tint) || (tintEnd && !isWhite(tintEnd))}

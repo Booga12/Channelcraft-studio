@@ -196,6 +196,10 @@
           <div><strong>Show my own games</strong><small>Uses the box art, screenshots, videos and descriptions RetroBat scraped for your games ({ed.gameSystems.length} systems have them). Off shows sample games.</small></div>
           <input type="checkbox" checked={prefs.v.realArtwork} onchange={(e) => prefs.set('realArtwork', e.currentTarget.checked)} />
         </div>
+        <div class="row">
+          <div><strong>Fill missing pictures from libretro-thumbnails</strong><small>Games RetroBat hasn't scraped pictures for get free box art, title screens and screenshots from the libretro-thumbnails project online, found by the game's file name. Preview only: nothing is downloaded into your theme or RetroBat.</small></div>
+          <input type="checkbox" checked={prefs.v.onlineArt} onchange={(e) => prefs.set('onlineArt', e.currentTarget.checked)} />
+        </div>
       {/if}
     </section>
   </Dialog.Content>

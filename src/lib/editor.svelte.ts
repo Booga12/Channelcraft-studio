@@ -32,6 +32,7 @@ import { SYSTEM_LAYOUTS } from './theme/systemLayouts';
 import { GAME_LAYOUTS } from './theme/gameLayouts';
 import { DESIGNS, designAssets, depthLogoScale, GAME_VIEWS, recoloured, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
+import { withOnlineArt } from './theme/libretro';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
 import { COVER_EL, FEATURED_FILE, FEATURED_MEDIA, featuredXml, pickGame, readFeatured, VIDEO_EL, type Choice, type FeaturedState } from './theme/featured';
 import { task } from './task.svelte';
@@ -244,7 +245,12 @@ class Editor {
   /** Which game of the list the preview shows. */
   gameIndex = $state(0);
 
-  currentGames = $derived(prefs.v.realArtwork ? (this.games[this.settings.system.name] ?? []) : []);
+  currentGames = $derived.by(() => {
+    if (!prefs.v.realArtwork) return [];
+    const list = this.games[this.settings.system.name] ?? [];
+    // Pictures RetroBat hasn't scraped come from libretro-thumbnails, for the preview only.
+    return prefs.v.onlineArt ? withOnlineArt(this.settings.system.name, list) : list;
+  });
   currentGame = $derived<GameInfo | undefined>(this.currentGames.length ? this.currentGames[this.gameIndex % this.currentGames.length] : undefined);
 
   env = $derived<Environment>({
