@@ -68,10 +68,20 @@ function filesUnder(dir) {
     .map((e) => join(e.parentPath ?? e.path, e.name));
 }
 
+// The one place a personal word may appear: the GitHub releases address the in-app updater checks
+// (from the updater endpoints in tauri.conf.json). It's public on the release page anyway.
+const allowed = (JSON.parse(readFileSync(join(TAURI, 'tauri.conf.json'), 'utf8')).plugins?.updater?.endpoints ?? [])
+  .map((u) => u.match(/github\.com\/[\w.-]+\/[\w.-]+/i)?.[0])
+  .filter(Boolean)
+  .map((a) => a.toLowerCase());
+const strip = (t) => allowed.reduce((s, a) => s.split(a).join(''), t.toLowerCase());
+
 function scan(file) {
   const buf = readFileSync(file);
+  // Text as it can be stored: UTF-8 or Latin-1, and UTF-16 at either byte alignment.
+  const texts = [buf.toString('utf8'), buf.toString('latin1'), buf.toString('utf16le'), buf.subarray(1).toString('utf16le')].map(strip);
   for (const w of words) {
-    const hit = buf.includes(Buffer.from(w, 'utf8')) || buf.includes(Buffer.from(w, 'utf16le')) || buf.toString('latin1').toLowerCase().includes(w.toLowerCase());
+    const hit = texts.some((t) => t.includes(w.toLowerCase()));
     if (!hit) continue;
     const msg = `${relative(ROOT, file)} contains “${w}”`;
     if (COMMON.has(w.toLowerCase())) notes.push(msg);
