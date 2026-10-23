@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ed } from '$lib/editor.svelte';
+  import { prefs } from '$lib/prefs.svelte';
   import { fileUrl } from '$lib/api';
   import { renderText, type ExprEnv } from '$lib/theme/expr';
   import { resolveAsset, resolveAssetWithFallbacks, type ResolvedElement } from '$lib/theme/resolver';
@@ -256,7 +257,7 @@
   const wrapStyle = $derived.by(() => {
     const base = `translate(${-box.ox * 100}%, ${-box.oy * 100}%) rotate(${box.rotation}deg)`;
     const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${z ?? Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
-    const anim = animate ? animationCss(el, W, H, base, { screen: screenOf(view), token: play?.token, dir: play?.dir }) : null;
+    const anim = animate ? animationCss(el, W, H, base, { screen: screenOf(view), token: play?.token, dir: play?.dir, boost: prefs.v.boostMotion ? 3 : 1 }) : null;
     if (anim) s.push(`animation:${anim}`, `--ccs-w:${W}px`, `--ccs-h:${H}px`);
     if (outer.w !== null) s.push(`width:${outer.w}px`);
     if (outer.h !== null) s.push(`height:${outer.h}px`);

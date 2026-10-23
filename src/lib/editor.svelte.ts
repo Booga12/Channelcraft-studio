@@ -121,6 +121,28 @@ class Editor {
   get playAnimations() {
     return prefs.v.playAnimations;
   }
+
+  /** Goes up each time the entrance animations should play again (Replay, a new animation). */
+  replay = $state(0);
+  /** The side the last replay came from: +1 as if moving down the list, -1 up. */
+  replayDir = $state(0);
+
+  /** Plays every entrance animation in the preview again, as RetroBat does when you move to a game. */
+  replayAnimations(dir = 0) {
+    this.playAnimations = true;
+    this.replayDir = dir;
+    this.replay++;
+  }
+
+  /**
+   * The next (+1) or previous (-1) game in the preview, like moving down or up RetroBat's list, so
+   * the animations play again. With sample data there's only one game: the animations just replay.
+   */
+  stepGame(dir: number) {
+    const n = this.currentGames.length;
+    if (n > 1) this.gameIndex = (this.gameIndex + dir + n) % n;
+    else this.replayAnimations(dir);
+  }
   set playAnimations(on: boolean) {
     if (prefs.v.playAnimations !== on) prefs.set('playAnimations', on);
   }
@@ -1159,7 +1181,8 @@ class Editor {
     const pos = parsePair(el.props.get('pos')?.value) ?? [0, 0];
     const xml = storyboardXml(preset, pos, 1, 1, screenOf(this.view));
     this.commit(`animation “${preset.label}”`, this.replaceBoards(existing, target, xml, removeAll));
-    this.playAnimations = true;
+    // Shown straight away, as it will look when you move to a game or console in RetroBat.
+    this.replayAnimations();
   }
 
   /** Replaces the first storyboard in place (the others go), or adds the markup. */

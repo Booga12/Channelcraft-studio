@@ -31,6 +31,8 @@ const DEFAULTS = {
   realArtwork: true,
   /** Animations play in the preview. */
   playAnimations: true,
+  /** Small movements are shown bigger in the preview, to check them (never saved into the theme). */
+  boostMotion: false,
   /** The dock panel stays open while working on the preview. */
   pinPanel: false,
   panelWidth: 320,

@@ -26,6 +26,8 @@
   import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
   import PlayIcon from '@lucide/svelte/icons/play';
   import PauseIcon from '@lucide/svelte/icons/pause';
+  import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
+  import MoveIcon from '@lucide/svelte/icons/move';
   import MagnetIcon from '@lucide/svelte/icons/magnet';
   import Grid3x3Icon from '@lucide/svelte/icons/grid-3x3';
   import TvIcon from '@lucide/svelte/icons/tv';
@@ -535,15 +537,19 @@
   // from the side the list moved, as in RetroBat.
   let play = $state({ token: '', dir: 0 });
   let lastPlace = { system: '', game: -1 };
+  let lastReplay = 0;
   $effect(() => {
     const system = ed.settings.system.name;
     const game = ed.gameIndex;
+    const replay = ed.replay;
     const n = Math.max(1, gamesHere);
     let dir = 0;
-    if (system !== lastPlace.system) dir = 0;
+    if (replay !== lastReplay) dir = untrack(() => ed.replayDir);
+    else if (system !== lastPlace.system) dir = 0;
     else if (game !== lastPlace.game) dir = (game - lastPlace.game + n) % n <= n / 2 ? 1 : -1;
     lastPlace = { system, game };
-    play = { token: `${system}|${game}`, dir };
+    lastReplay = replay;
+    play = { token: `${system}|${game}|${replay}`, dir };
   });
 
   // On the console screen, changing console scrolls the carousel over 500 ms (cubic ease-out, as
@@ -757,7 +763,9 @@
     {/if}
     <span class="spacer"></span>
     <div class="pill" role="group" aria-label="Canvas options">
-      <button class="ic" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title="Play animations (P)">{#if ed.playAnimations}<PauseIcon />{:else}<PlayIcon />{/if}</button>
+      <button class="ic wide" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title={ed.playAnimations ? 'Animations are playing. Click (or press P) to stop them.' : 'Animations are stopped. Click (or press P) to play them.'} aria-pressed={ed.playAnimations}>{#if ed.playAnimations}<PauseIcon />{:else}<PlayIcon />{/if}<span>{ed.playAnimations ? 'Animations on' : 'Animations off'}</span></button>
+      <button class="ic" onclick={() => ed.replayAnimations()} title="Play the animations again, as when you move to a game in RetroBat (R, or ↓ ↑ to change game)"><RotateCcwIcon /></button>
+      <button class="ic" class:on={prefs.v.boostMotion} onclick={() => prefs.set('boostMotion', !prefs.v.boostMotion)} title="Show small movements bigger, to check them. Preview only: RetroBat plays them as they are." aria-pressed={prefs.v.boostMotion}><MoveIcon /></button>
       <button class="ic" class:on={prefs.v.snap} onclick={() => prefs.set('snap', !prefs.v.snap)} title="Snap to guides (hold Alt to switch off while dragging)"><MagnetIcon /></button>
       <button class="ic" class:on={prefs.v.showGrid} onclick={() => prefs.set('showGrid', !prefs.v.showGrid)} title="Grid (Ctrl+')"><Grid3x3Icon /></button>
       <button class="ic" class:on={prefs.v.showSafeArea} onclick={() => prefs.set('showSafeArea', !prefs.v.showSafeArea)} title="TV safe area"><TvIcon /></button>
@@ -1052,6 +1060,14 @@
   .pill .ic.on {
     background: color-mix(in oklch, var(--primary) 14%, transparent);
     color: var(--primary);
+  }
+  .pill .ic.wide {
+    display: inline-flex;
+    gap: 5px;
+    padding: 0 9px 0 7px;
+    font-size: 11.5px;
+    font-weight: 500;
+    white-space: nowrap;
   }
   .pill .div {
     width: 1px;

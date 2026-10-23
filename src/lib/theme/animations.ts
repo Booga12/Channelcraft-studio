@@ -591,6 +591,8 @@ export interface PlayOptions {
   token?: string;
   /** +1 after moving down the list, -1 after moving up. */
   dir?: number;
+  /** Preview only: movement, turning and growth times this, to make small motion easy to see. */
+  boost?: number;
 }
 
 /** The storyboard RetroBat plays on this screen (see the notes at the top). */
@@ -622,8 +624,11 @@ export function animationCss(el: ResolvedElement, W: number, H: number, base: st
     const opacity = v.opacity === undefined ? null : v.opacity > 1 ? v.opacity / 255 : v.opacity;
     // Movement in screen fractions, times the screen size the element carries in --ccs-w / --ccs-h,
     // so zooming the preview doesn't make new keyframes (which would restart the motion).
-    const dx = (v.x !== undefined ? v.x - pos[0] : 0) + (v.offsetX ?? 0);
-    const dy = (v.y !== undefined ? v.y - pos[1] : 0) + (v.offsetY ?? 0);
+    const k = o.boost ?? 1;
+    const dx = ((v.x !== undefined ? v.x - pos[0] : 0) + (v.offsetX ?? 0)) * k;
+    const dy = ((v.y !== undefined ? v.y - pos[1] : 0) + (v.offsetY ?? 0)) * k;
+    if (v.rotation !== undefined) v.rotation *= k;
+    if (v.scale !== undefined) v.scale = 1 + (v.scale - 1) * k;
     const f = (n: number) => Math.round(n * 1000) / 1000;
     const g = (n: number) => Math.round(n * 1e6) / 1e6;
     const move = dx || dy ? ` translate(calc(var(--ccs-w, ${W}px) * ${g(dx)}), calc(var(--ccs-h, ${H}px) * ${g(dy)}))` : '';
@@ -636,7 +641,7 @@ export function animationCss(el: ResolvedElement, W: number, H: number, base: st
     for (let i = 0; i <= steps; i++) out.push(`${r((i / steps) * 100)}% { ${frame(from + (span * i) / steps)} }`);
     inject(name, `@keyframes ${name} { ${out.join(' ')} }`);
   };
-  const id = hash(`${el.name}|${src(anims)}|${base}|${o.token ?? ''}|${o.dir ?? 0}`);
+  const id = hash(`${el.name}|${src(anims)}|${base}|${o.token ?? ''}|${o.dir ?? 0}|${o.boost ?? 1}`);
   const forever = tracks.filter((k) => k.repeat === 0 && cycle(k) > 0);
   if (!forever.length) {
     const end = Math.max(50, ...tracks.map((k) => k.begin + cycle(k) * k.repeat));

@@ -202,9 +202,15 @@
         </optgroup>
       {/if}
     </select>
-    <button class="secondary small" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title="Play animations in the preview">{ed.playAnimations ? '■ Stop' : '▶ Play'}</button>
+    <button class="secondary small" onclick={() => ed.replayAnimations()} title="Play it again in the preview (R)">↻ Replay</button>
   </div>
   {#if tuning}<p class="faint note">{tuning.preset.help}</p>{/if}
+  {#if tuning && tuning.preset.kind !== 'loop'}
+    <p class="faint note">It plays as the screen opens and every time you move to another {screen === 'console' ? 'console' : 'game'}. Press ↻ Replay, R, or ↓ ↑ in the preview to see it again.</p>
+  {/if}
+  {#if tuning && !ed.playAnimations}
+    <p class="warn note">Animations are switched off in the preview. <button class="small" onclick={() => ed.replayAnimations()}>Turn them on</button></p>
+  {/if}
   {#if wontPlay}
     <p class="warn note">
       RetroBat doesn't play this animation on the console screen: it was written for game lists.

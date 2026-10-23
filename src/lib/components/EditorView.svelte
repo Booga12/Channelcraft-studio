@@ -100,6 +100,12 @@
     if (e.key === 'PageDown') return run(() => ed.stepSystem(1));
     if (e.key === 'PageUp') return run(() => ed.stepSystem(-1));
     if (!mod && k === 'p') return run(() => (ed.playAnimations = !ed.playAnimations));
+    if (!mod && k === 'r') return run(() => ed.replayAnimations());
+    // With nothing selected, the arrows move through games (or consoles), as in RetroBat, and the animations play.
+    if (!ed.selection.length && !mod && e.key.startsWith('Arrow')) {
+      const dir = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
+      return run(() => (ed.view === 'system' ? ed.stepSystem(dir) : ed.stepGame(dir)));
+    }
     if (e.key === '?') return run(() => (ed.showShortcuts = true));
     if (ed.selection.length && e.key.startsWith('Arrow')) {
       const step = e.shiftKey ? 0.01 : 0.001;
