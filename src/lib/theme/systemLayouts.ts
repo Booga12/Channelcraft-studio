@@ -35,6 +35,8 @@ export interface SystemLayout {
   fade?: boolean;
   /** Left and right arrow pictures beside a single big logo (pos of each centre), in designs. */
   arrows?: [string, string];
+  /** The logos stand on a shelf or floor, so on Strong depth they're reflected in it. */
+  floor?: boolean;
 }
 
 /** Diagram cells for a grid. */
@@ -271,6 +273,7 @@ export const SYSTEM_LAYOUTS: SystemLayout[] = [
     carousel: { type: 'horizontal', pos: '0 0.34', size: '1 0.34', logoSize: '0.12 0.15', maxLogoCount: '7', logoScale: '1.9', minLogoOpacity: '0.18' },
     info: ['0 0.72', '1 0.05', 'center'],
     band: ['0 0.6', '1 0.09'],
+    floor: true,
     name: ['0.1 0.72', '0.8 0.07', 'center'],
     maker: ['0.1 0.79', '0.8 0.04', 'center'],
     count: ['0.1 0.835', '0.8 0.04', 'center'],
@@ -359,6 +362,7 @@ export const SYSTEM_LAYOUTS: SystemLayout[] = [
     carousel: { type: 'horizontal', pos: '0 0.38', size: '1 0.26', logoSize: '0.15 0.13', maxLogoCount: '5', logoAlignment: 'bottom', logoScale: '1.35' },
     info: ['0 0.72', '1 0.05', 'center'],
     band: ['0 0.635', '1 0.05'],
+    floor: true,
     name: ['0.1 0.72', '0.8 0.07', 'center'],
     maker: ['0.1 0.79', '0.8 0.04', 'center'],
     count: ['0.1 0.835', '0.8 0.04', 'center'],

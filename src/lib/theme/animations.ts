@@ -241,6 +241,18 @@ export const ANIMATIONS: AnimPreset[] = [
       ]),
   },
   {
+    id: 'drift',
+    label: 'Drift',
+    help: 'Drifts slowly sideways and back, so a layer seems to move at its own distance.',
+    kind: 'loop',
+    amount: true,
+    build: ([x, y], a, sp) =>
+      loop([
+        { property: 'x', from: r(x), to: r(x + 0.008 * a), duration: ms(9000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+        { property: 'y', from: r(y), to: r(y - 0.004 * a), duration: ms(6000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+      ]),
+  },
+  {
     id: 'slow-zoom',
     label: 'Slow zoom',
     help: 'Zooms in very slowly and back out, so a background seems to move behind the rest.',

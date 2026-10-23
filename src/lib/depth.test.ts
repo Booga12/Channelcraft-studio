@@ -44,7 +44,7 @@ describe('depth', () => {
     const p = await fresh();
     const before = p.entry!.src;
     const view = ed.view;
-    ed.setDepth('strong');
+    await ed.setDepth('strong');
     expect(ed.depth).toBe('strong');
     expect(shaderOf(el('system', 'ccs_console'))?.offset).toBe(9);
     expect(frameOf(el('detailed', 'md_image'))?.frame.shadow).toBe(24);
@@ -56,7 +56,7 @@ describe('depth', () => {
     expect(ed.view).toBe(view);
     expect(ed.history.done).toHaveLength(1);
 
-    ed.setDepth('off');
+    await ed.setDepth('off');
     expect(shaderOf(el('system', 'ccs_console'))).toBeNull();
     expect(presetOf(el('detailed', 'ccs_fanart'), 'list')).toBeNull();
 
@@ -65,6 +65,38 @@ describe('depth', () => {
     expect(p.entry!.src).toBe(before);
     ed.redo();
     expect(ed.depth).toBe('strong');
+  });
+
+  it('Strong puts depth on text, panels, reflections and layers, and Off takes it all away', async () => {
+    await fresh('studio');
+    ed.view = 'detailed';
+    ed.addElement('text');
+    const mine = ed.selected!;
+    await ed.setDepth('strong');
+    const title = el('detailed', 'ccs_title');
+    expect(title.props.get('glowOffset')?.value).toBe('3 3');
+    expect(el('detailed', 'gamelist').props.get('glowOffset')?.value).toBe('3 3');
+    expect(el('detailed', 'ccs_heroband_shadow')).toBeTruthy();
+    expect(presetOf(el('detailed', 'ccs_fanart'), 'list')).toBe('slow-zoom');
+    // Studio's system screen is Cover flow 3D: logos stand on a floor, so they're reflected.
+    expect(el('system', 'logo').props.get('reflexion')?.value).toBe('0.22 0');
+    // What you added stays through depth changes.
+    expect(el('detailed', mine)).toBeTruthy();
+
+    await ed.setDepth('off');
+    expect(el('detailed', 'ccs_title').props.get('glowOffset')).toBeUndefined();
+    expect(ed.themeRes!.views.get('detailed')!.elements.has('ccs_heroband_shadow')).toBe(false);
+    expect(el('system', 'logo').props.get('reflexion')).toBeUndefined();
+    expect(el('detailed', mine)).toBeTruthy();
+  });
+
+  it('decorations drift on Strong, and a one-row grid gets reflections and a bigger lift', async () => {
+    await fresh('glass');
+    await ed.setDepth('strong');
+    expect(presetOf(el('detailed', 'ccs_deco'), 'list')).toBe('drift');
+    // Midnight Glass uses Big tiles: one row.
+    expect(el('system', 'default').props.get('reflexion')?.value).toBe('0.18 0');
+    expect(Number(el('system', 'imagegrid').props.get('autoLayoutSelectedZoom')!.value)).toBeGreaterThan(1.12);
   });
 
   it('motion feel retunes every animation', async () => {

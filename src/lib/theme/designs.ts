@@ -9,7 +9,7 @@ import { ANIMATIONS, screenOf, storyboardXml } from './animations';
 import { systemLayout, type SystemLayout } from './systemLayouts';
 import { frameXml, type Frame } from './frame';
 import { shadowXml } from './shadow';
-import { depthLevel, PARALLAX, PARALLAX_ANIM, SHADOWED, type Depth } from './depth';
+import { depthLevel, DRIFT_ANIM, PARALLAX, PARALLAX_ANIM, SHADOWED, TITLES, type Depth } from './depth';
 import { backgroundSvg, decoSvg, hex, svg as svgDoc, type Background, type Deco } from './designArt';
 import { defaultGameLayout, gameLayout, type GameArchetype } from './gameLayouts';
 
@@ -727,7 +727,11 @@ const depthOf = (d: Design, c: DesignContext): Depth => c.depth ?? d.depth ?? 's
  * layout (game list screens); the design's own when not given.
  */
 export function designElements(d: Design, c: DesignContext, view: string, systemLayoutId = d.system, gameLayoutId?: string | null): DesignEl[] {
-  if (view === 'system') return withMotion(withDepth(systemScreen(d, c, systemLayout(systemLayoutId) ?? systemLayout(d.system)!), depthOf(d, c), 'system'), c);
+  if (view === 'system') {
+    const l = systemLayout(systemLayoutId) ?? systemLayout(d.system)!;
+    const oneRow = !!l.grid && l.grid.autoLayout?.split(' ')[1] === '1';
+    return withMotion(withDepth(systemScreen(d, c, l), depthOf(d, c), 'system', { floor: !!l.floor, oneRow }), c);
+  }
   if (GAME_VIEWS.includes(view)) {
     const gl = gameLayout(gameLayoutId) ?? defaultGameLayout(d.game);
     let els = settled(gameScreen(d, c, view, gl.archetype));
@@ -794,15 +798,48 @@ export function depthLogoScale(now: number, from: Depth, to: Depth): string {
   return String(Math.round(Math.max(1, v) * 100) / 100);
 }
 
-/** Shadows under art, the selected logo's lift and the background's slow zoom for a depth. */
-function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game'): DesignEl[] {
+const TEXT_TYPES = new Set(['text', 'textlist']);
+const r2 = (n: number) => String(Math.round(n * 100) / 100);
+const r4 = (n: number) => String(Math.round(n * 10000) / 10000);
+
+/**
+ * Depth on everything RetroBat can draw it on: shadows under art, text and panels, the selected
+ * logo's lift, reflections on a shelf or floor, the selected tile's lift, and layers moving at
+ * different distances (the background's slow zoom, decorations drifting).
+ */
+function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game', o: { floor?: boolean; oneRow?: boolean } = {}): DesignEl[] {
   const lv = depthLevel(depth);
-  return els.map((e) => {
-    if (lv.shadow && e.type === 'image' && SHADOWED[kind].includes(e.name) && Object.keys(e.props).length > 1) return { ...e, blocks: [...(e.blocks ?? []), shadowXml(lv.shadow)] };
-    if (e.type === 'carousel' || e.type === 'gamecarousel') return { ...e, props: { ...e.props, logoScale: depthLogoScale(Number(e.props.logoScale ?? 1.25), 'subtle', depth) } };
-    if (lv.parallax && e.name === PARALLAX[kind] && !e.anim) return { ...e, anim: PARALLAX_ANIM };
-    return e;
-  });
+  const ts = lv.textShadow;
+  const ps = lv.panelShadow;
+  const out: DesignEl[] = [];
+  for (const e0 of els) {
+    let e = e0;
+    const hidden = e.props.visible === 'false';
+    if (lv.shadow && e.type === 'image' && SHADOWED[kind].includes(e.name) && Object.keys(e.props).length > 1) e = { ...e, blocks: [...(e.blocks ?? []), shadowXml(lv.shadow)] };
+    if (e.type === 'carousel' || e.type === 'gamecarousel') e = { ...e, props: { ...e.props, logoScale: depthLogoScale(Number(e.props.logoScale ?? 1.25), 'subtle', depth) } };
+    if (lv.parallax && e.name === PARALLAX[kind] && !e.anim) e = { ...e, anim: PARALLAX_ANIM };
+    if (lv.parallax && e.name === 'ccs_deco') e = { ...e, anim: DRIFT_ANIM };
+    // Text shadows: titles on Subtle, all text on Strong; text that glows keeps its glow.
+    if (ts && !hidden && TEXT_TYPES.has(e.type) && !e.props.glowColor && (ts.on === 'all' || TITLES.includes(e.name))) e = { ...e, props: { ...e.props, glowColor: `000000${ts.alpha}`, glowSize: String(ts.size), glowOffset: `${ts.offset} ${ts.offset}` } };
+    // Reflections: logos on a shelf or floor, and tiles in a single row.
+    if (lv.reflect && kind === 'system' && o.floor && e.type === 'image' && e.name === 'logo') e = { ...e, props: { ...e.props, reflexion: `${lv.reflect} 0` } };
+    if (lv.reflect && kind === 'system' && o.oneRow && e.type === 'gridtile') e = { ...e, props: { ...e.props, reflexion: `${r2(lv.reflect * 0.8)} 0` } };
+    if (lv.lift !== 1 && e.type === 'imagegrid') e = { ...e, props: { ...e.props, autoLayoutSelectedZoom: r2(Number(e.props.autoLayoutSelectedZoom ?? 1.06) * lv.lift) } };
+    // Panels float on a soft shadow (kept on screen, so one along an edge just doesn't show there).
+    if (ps && e.type === 'ninepatch' && e.name.startsWith('ccs_') && typeof e.props.pos === 'string' && typeof e.props.size === 'string') {
+      const [x, y] = e.props.pos.split(' ').map(Number);
+      const [w, h] = e.props.size.split(' ').map(Number);
+      const sx = x + ps.dx;
+      const sy = y + ps.dy;
+      out.push({
+        type: 'ninepatch',
+        name: `${e.name}_shadow`,
+        props: { ...e.props, pos: `${r4(sx)} ${r4(sy)}`, size: `${r4(Math.min(w, 1 - sx))} ${r4(Math.min(h, 1 - sy))}`, color: `000000${ps.alpha}`, zIndex: r2(Number(e.props.zIndex ?? 5) - 0.5) },
+      });
+    }
+    out.push(e);
+  }
+  return out;
 }
 
 /** Markup lines (two-space indented, inside a <view>) for elements, with their animations. */

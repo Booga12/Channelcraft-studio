@@ -386,6 +386,8 @@ const isShown = (e: { props: Map<string, { value: string }> }) => !['false', '0'
 export interface DesignOptions {
   /** Game layout for the game list screens; the design's own when not given. */
   gameLayout?: string | null;
+  /** A game layout per screen, where screens differ (taking over from `gameLayout`). */
+  gameLayouts?: Record<string, string | null>;
   /**
    * What to keep from the screen's current ChannelCraft block. Always: elements you added and
    * parts you hid. 'layout' (same design, new placement) also keeps colours, fonts and
@@ -398,8 +400,8 @@ export interface DesignOptions {
 export function designChanges(project: ThemeProject, res: Resolution, design: Design, ctx: DesignContext, views: string[], hideOwn: boolean, systemLayoutId = design.system, opts: DesignOptions = {}): Change[] {
   const out: Change[] = [];
   const layout = systemLayout(systemLayoutId) ?? systemLayout(design.system)!;
-  const game = gameLayout(opts.gameLayout) ?? gameLayout(designGameLayout(design))!;
   for (const view of views) {
+    const game = gameLayout(opts.gameLayouts?.[view] ?? opts.gameLayout) ?? gameLayout(designGameLayout(design))!;
     const els = designElements(design, ctx, view, layout.id, game.id);
     if (!els.length) continue;
     const kept = opts.carry ? carryOver(project, res, view, els, opts.carry) : [];
@@ -420,8 +422,29 @@ export function designChanges(project: ThemeProject, res: Resolution, design: De
   return out;
 }
 
+/** Whether ChannelCraft's blocks on these screens hide the theme's own decorations (so a rebuild does too). */
+export function hidesOwn(project: ThemeProject, res: Resolution, views: string[]): boolean {
+  let own = false;
+  for (const view of views) {
+    const block = designBlock(project, view);
+    if (!block) continue;
+    for (const node of elements(block.view)) {
+      const r = res.views.get(view)?.elements.get(attr(node, 'name') ?? '');
+      const elsewhere = r?.defs.some((d) => d.file !== project.entry || d.node.start < block.view.start || d.node.end > block.view.end);
+      if (!elsewhere) continue;
+      own = true;
+      const kids = elements(node);
+      if (kids.length === 1 && kids[0].name === 'visible') return true;
+    }
+  }
+  return !own;
+}
+
 /** RetroBat's own element names (a design places these; they're never "yours"). */
 const isNativeName = (n: string) => n in NATIVE_TYPES || n.startsWith('md_') || n === 'help' || n === 'logoText';
+
+/** Parts whose animation comes from the depth setting. */
+const DEPTH_ANIMATED = ['ccs_fanart', 'ccs_systemart', 'ccs_deco'];
 
 /** Properties of a design part that are look, not placement: kept when only the layout changes. */
 const STYLE_KEYS = ['color', 'colorEnd', 'primaryColor', 'secondaryColor', 'selectedColor', 'selectorColor', 'glowColor', 'glowSize', 'textColor', 'iconColor', 'unfilledColor', 'fontPath', 'forceUppercase', 'opacity', 'saturation'];
@@ -447,10 +470,15 @@ function carryOver(project: ThemeProject, res: Resolution, view: string, els: De
     if (el) {
       if (props.get('visible')?.trim() === 'false' && el.props.visible !== 'false') el.props = { ...el.props, visible: 'false' };
       if (mode !== 'layout') continue;
+      // A glow moved by glowOffset is the depth's text shadow, which follows the depth, not the old block.
+      const depthGlow = props.has('glowOffset');
       for (const k of STYLE_KEYS) {
         const v = props.get(k);
+        if (depthGlow && (k === 'glowColor' || k === 'glowSize')) continue;
         if (v !== undefined && !v.includes('<')) el.props = { ...el.props, [k]: v };
       }
+      // The background's slow zoom and the decorations' drift belong to the depth too.
+      if (DEPTH_ANIMATED.includes(name)) continue;
       const r = resolved?.get(name);
       const t = r ? tuningOf(r, screenOf(view)) : null;
       if (t) Object.assign(el, { anim: t.preset.id, animAmount: t.amount, animSpeed: t.speed });

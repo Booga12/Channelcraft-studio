@@ -26,9 +26,9 @@ import { consoleScreenPath, isDataBound, NATIVE_BINDINGS, type LibraryItem } fro
 import { prefs } from './prefs.svelte';
 import { reorder, zIndexFor } from './theme/layers';
 import { TILE_DIR, TILE_STYLES, tileArt, tileColoursFrom, tileStyleOfPath, tileStyleProps, type TileColours } from './theme/tiles';
-import { appliedDesign, appliedSystemLayout, coloursFromVars, designChanges, designVarsChange, LAYOUTS, layoutChanges, paletteDesignVars, type LayoutPreset, type Palette } from './theme/presets';
+import { appliedDesign, appliedGameLayout, appliedSystemLayout, coloursFromVars, hidesOwn, designChanges, designVarsChange, LAYOUTS, layoutChanges, paletteDesignVars, type LayoutPreset, type Palette } from './theme/presets';
 import { planMenuOptions, readMenuState, type MenuChoices, type MenuState } from './theme/menuOptions';
-import { DESIGNS, designAssets, depthLogoScale, recoloured, type Design } from './theme/designs';
+import { DESIGNS, designAssets, depthLogoScale, GAME_VIEWS, recoloured, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
 import { COVER_EL, FEATURED_FILE, FEATURED_MEDIA, featuredXml, pickGame, readFeatured, VIDEO_EL, type Choice, type FeaturedState } from './theme/featured';
@@ -1589,14 +1589,49 @@ class Editor {
   }
 
   /**
-   * Gives a design theme more or less depth on every screen at once, as one undo step: drop
-   * shadows under art, frame shadows, the selected logo's lift, the background's slow zoom, and
-   * the panel bevel (the artwork follows through syncDesignArt).
+   * Gives a design theme more or less depth on every screen at once, as one undo step. Each screen
+   * made from a design is drawn again at the new depth (shadows under art, text and panels,
+   * frames, reflections, lifts, layers moving), keeping everything you chose on it.
    */
-  setDepth(id: Depth) {
+  async setDepth(id: Depth) {
     if (this.sharedOnly('Depth settings')) return;
+    const p = this.project;
     const res = this.themeRes ?? this.res;
-    if (!res || this.depth === null) return void this.notify('Depth works on themes made from a design (New theme, or a design in Presets).', 'error');
+    if (!p || !res || this.depth === null) return void this.notify('Depth works on themes made from a design (New theme, or a design in Presets).', 'error');
+    if (this.menuGuard()) return;
+    const lv = depthLevel(id);
+    const views = ['system', ...GAME_VIEWS].filter((v) => appliedDesign(p, v));
+    if (!views.length) return this.setDepthPartly(id);
+    const colours = this.designColours();
+    const byDesign = new Map<Design, string[]>();
+    for (const v of views) {
+      const d = appliedDesign(p, v)!;
+      byDesign.set(d, [...(byDesign.get(d) ?? []), v]);
+    }
+    const has = (dir: string) => p.assets.some((a) => a.rel.toLowerCase().startsWith(`${dir}/`));
+    const changes: Change[] = [];
+    let wrote = true;
+    for (const [d, vs] of byDesign) {
+      const artRel = `_inc/ccs/${d.id}`;
+      wrote = (await this.writeArt(artRel, designAssets(colours ? recoloured(d, colours) : d, id))) && wrote;
+      const font = await this.ensureFont(d.font);
+      const titleFont = d.titleFont ? await this.ensureFont(d.titleFont) : null;
+      if (this.project !== p) return;
+      const ctx = { vars: true, art: `./${artRel}`, font: font ? `./${font}` : null, titleFont: titleFont ? `./${titleFont}` : null, logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null, consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null, depth: id, motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined };
+      const now = this.res;
+      if (!now) return;
+      const gameLayouts = Object.fromEntries(vs.map((v) => [v, appliedGameLayout(p, v)]));
+      changes.push(...designChanges(p, now, d, ctx, vs, hidesOwn(p, now, vs), appliedSystemLayout(p) ?? undefined, { gameLayouts, carry: 'layout' }));
+    }
+    const v = this.designVarChange(DEPTH_VAR, id);
+    this.commit(`depth “${lv.label}”`, v ? [v, ...changes] : changes);
+    this.notify(`Depth “${lv.label}”: ${lv.help}${wrote ? '' : ' (Preview only: files can’t be written here.)'} Ctrl+Z to undo.`);
+  }
+
+  /** Depth on a theme whose screens aren't recognised as a design's: only the parts it can find. */
+  private setDepthPartly(id: Depth) {
+    const res = this.themeRes ?? this.res;
+    if (!res) return;
     const lv = depthLevel(id);
     const from = this.depth ?? 'subtle';
     const keep = { view: this.view, file: this.screenFile, consoleOnly: this.consoleOnly, selected: this.selected, selection: this.selection };
@@ -1641,13 +1676,19 @@ class Editor {
 
   /** Writes one of the design's own variables (depth, motion feel) next to its colours. */
   private setDesignVar(name: string, value: string) {
+    const c = this.designVarChange(name, value);
+    if (c) this.commit(name, [c]);
+  }
+
+  /** The change that sets one of the design's own variables, or null when there's nothing to do. */
+  private designVarChange(name: string, value: string): Change | null {
     const res = this.themeRes ?? this.res;
-    if (!res) return;
+    if (!res) return null;
     const def = sharedIn(res.varHistory.get(name)) ?? res.vars.get(name);
     const accent = sharedIn(res.varHistory.get('designAccent')) ?? res.vars.get('designAccent');
-    if (def) {
-      if (def.value.trim() !== value) this.commit(name, [setTextChange(def.file, def.node, value)]);
-    } else if (accent?.node.parent) this.commit(name, [{ file: accent.file, patch: patchInsertChild(accent.file.doc, accent.node.parent as XElement, `<${name}>${value}</${name}>`, { first: true }) }]);
+    if (def) return def.value.trim() !== value ? setTextChange(def.file, def.node, value) : null;
+    if (accent?.node.parent) return { file: accent.file, patch: patchInsertChild(accent.file.doc, accent.node.parent as XElement, `<${name}>${value}</${name}>`, { first: true }) };
+    return null;
   }
 
   /** The design theme's motion feel, or null when it hasn't been set. */

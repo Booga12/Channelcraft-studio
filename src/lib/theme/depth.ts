@@ -19,14 +19,22 @@ export interface DepthLevel {
   logoScale: number;
   /** Panels get a light top edge and a darker bottom edge. */
   bevel: number;
-  /** Background art zooms slowly behind everything. */
+  /** Background art zooms slowly behind everything, and decorations drift the other way. */
   parallax: boolean;
+  /** Drop shadow under text (RetroBat's glow, moved): which text, its size, offset in pixels and strength. */
+  textShadow: { on: 'titles' | 'all'; size: number; offset: number; alpha: string } | null;
+  /** A shadow panel under each panel so it floats: offset in screen fractions and strength. */
+  panelShadow: { dx: number; dy: number; alpha: string } | null;
+  /** Mirror reflections under logos standing on a shelf or floor, and under one-row tiles. */
+  reflect: number;
+  /** How much more the selected grid tile grows. */
+  lift: number;
 }
 
 export const DEPTHS: DepthLevel[] = [
-  { id: 'off', label: 'Off', help: 'Flat: no shadows, the selected logo grows a little.', shadow: null, frameShadow: 6, logoScale: 1.15, bevel: 0, parallax: false },
-  { id: 'subtle', label: 'Subtle', help: 'Soft shadows under art, a gentle bevel on panels, and logos that lift when selected.', shadow: 5, frameShadow: 14, logoScale: 1.25, bevel: 0.6, parallax: false },
-  { id: 'strong', label: 'Strong', help: 'Deep shadows, chunky panels, big lifts, and background art that drifts behind everything.', shadow: 9, frameShadow: 24, logoScale: 1.4, bevel: 1, parallax: true },
+  { id: 'off', label: 'Off', help: 'Flat: no shadows, the selected logo grows a little.', shadow: null, frameShadow: 6, logoScale: 1.15, bevel: 0, parallax: false, textShadow: null, panelShadow: null, reflect: 0, lift: 1 },
+  { id: 'subtle', label: 'Subtle', help: 'Soft shadows under art, titles and panels, a gentle bevel, and logos that lift when selected.', shadow: 5, frameShadow: 14, logoScale: 1.25, bevel: 0.6, parallax: false, textShadow: { on: 'titles', size: 2, offset: 2, alpha: '66' }, panelShadow: { dx: 0.003, dy: 0.005, alpha: '33' }, reflect: 0, lift: 1 },
+  { id: 'strong', label: 'Strong', help: 'Deep shadows under art, text and floating panels, mirror reflections, big lifts, and layers that drift at different distances.', shadow: 9, frameShadow: 24, logoScale: 1.4, bevel: 1, parallax: true, textShadow: { on: 'all', size: 3, offset: 3, alpha: '88' }, panelShadow: { dx: 0.005, dy: 0.009, alpha: '55' }, reflect: 0.22, lift: 1.06 },
 ];
 
 export const DEPTH_VAR = 'designDepth';
@@ -45,6 +53,10 @@ export const FRAMED = ['md_image', 'md_video'];
 /** Background art that zooms slowly on Strong. */
 export const PARALLAX: Record<'system' | 'game', string> = { system: 'ccs_systemart', game: 'ccs_fanart' };
 export const PARALLAX_ANIM = 'slow-zoom';
+/** Decorations drift the other way on Strong. */
+export const DRIFT_ANIM = 'drift';
+/** Titles that get a shadow already on Subtle. */
+export const TITLES = ['ccs_title', 'ccs_systemname', 'logoText', 'ccs_vs'];
 
 /** How every animation in a theme moves: size (amount) and speed against each preset's own. */
 export const MOTION_FEELS = {

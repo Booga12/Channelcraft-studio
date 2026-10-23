@@ -211,6 +211,26 @@
     return el.name;
   }
 
+  /**
+   * RetroBat's text glow as a CSS text-shadow: glowSize spreads it, glowOffset (in pixels) moves it,
+   * which is how themes give text a drop shadow.
+   */
+  const glowCss = $derived.by(() => {
+    const glow = val('glowColor');
+    const size = num('glowSize', 0);
+    if (!glow || size <= 0) return '';
+    const off = (val('glowOffset') ?? '').trim().split(/\s+/).map(Number).filter(Number.isFinite);
+    const [ox, oy] = off.length ? [off[0], off[1] ?? off[0]] : [0, 0];
+    return ox || oy ? `${ox}px ${oy}px ${size * 1.5}px ${cssColor(glow)}` : `0 0 ${size * 2}px ${cssColor(glow)}`;
+  });
+
+  /** RetroBat's mirror reflection under a picture: `reflexion` is its strength at the top and at the bottom. */
+  function reflectCss(v: string | undefined): string | undefined {
+    const [a, b] = (v ?? '').trim().split(/\s+/).map(Number);
+    if (!Number.isFinite(a) || (!a && !b)) return undefined;
+    return `below 0 linear-gradient(to bottom, rgba(0,0,0,${Number.isFinite(b) ? b : 0}), rgba(0,0,0,${a}))`;
+  }
+
   const textStyle = $derived.by(() => {
     const parts = [
       `font-family:${font}`,
@@ -224,8 +244,7 @@
     if (upper) parts.push('text-transform:uppercase');
     const bg = val('backgroundColor');
     if (bg) parts.push(`background:${cssColor(bg)}`);
-    const glow = val('glowColor');
-    if (glow && num('glowSize', 0) > 0) parts.push(`text-shadow:0 0 ${num('glowSize', 0) * 2}px ${cssColor(glow)}`);
+    if (glowCss) parts.push(`text-shadow:${glowCss}`);
     return parts.join(';');
   });
 
@@ -441,6 +460,7 @@
           style:border-radius={framing.radius || undefined}
           style:box-shadow={framing.shadow || undefined}
           style:transform={`scale(${val('flipX') === 'true' ? -1 : 1}, ${val('flipY') === 'true' ? -1 : 1})`}
+          style:-webkit-box-reflect={reflectCss(val('reflexion'))}
           onload={onImgLoad}
         />
       {/if}
@@ -470,7 +490,7 @@
       {/if}
     </div>
   {:else if el.type === 'textlist'}
-    <div class="list" style="font-family:{font};font-size:{fontPx}px;text-align:{align};{upper ? 'text-transform:uppercase' : ''}">
+    <div class="list" style="font-family:{font};font-size:{fontPx}px;text-align:{align};{upper ? 'text-transform:uppercase' : ''}{glowCss ? `;text-shadow:${glowCss}` : ''}">
       {#each rows as r, i}
         <div
           class="li"
@@ -490,7 +510,7 @@
       {#each carouselItems as it}
         <div class="logo" style="left:{it.x}px;top:{it.y}px;width:{it.w}px;height:{it.h}px;transform:{it.transform};opacity:{it.opacity};z-index:{it.z}">
           {#if it.logo}
-            <img src={fileUrl(it.logo)} alt="" draggable="false" />
+            <img src={fileUrl(it.logo)} alt="" draggable="false" style:-webkit-box-reflect={reflectCss(carousel.logo?.props.get('reflexion')?.value)} />
           {:else}
             <span
               style="font-family:{ltFont};font-size:{parseFloat(lt?.props.get('fontSize')?.value ?? '0.07') * H * 0.6}px;color:{cssColor(lt?.props.get('color')?.value, '#fff')};{lt?.props.get('forceUppercase')?.value === 'true' ? 'text-transform:uppercase' : ''}"
@@ -588,7 +608,7 @@
           {/if}
           {#if logo}
             <!-- A logo that can't be loaded shows the console's name, as RetroBat does without a logo. -->
-            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} onerror={(e) => ((e.currentTarget as HTMLImageElement).dataset.failed = '1')} />
+            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} style:-webkit-box-reflect={reflectCss((on ? grid.sel : grid.tile)?.props.get('reflexion')?.value ?? grid.tile?.props.get('reflexion')?.value)} onerror={(e) => ((e.currentTarget as HTMLImageElement).dataset.failed = '1')} />
             <span class="fallback">{systemGrid ? (sys?.fullName ?? '') : (g?.name ?? '')}</span>
           {:else}
             <span>{systemGrid ? (sys?.fullName ?? '') : (env.gameNames ?? MOCK_GAMES)[i % (env.gameNames ?? MOCK_GAMES).length]}</span>
