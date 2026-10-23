@@ -13,7 +13,7 @@ import { applyToText, copyOfShared, draftFile, EMPTY_GAME_FILE, GAMES_README, ga
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
 import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, presetOf, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
-import { DEPTH_VAR, depthLevel, FRAMED, MOTION_FEELS, MOTION_VAR, PARALLAX, PARALLAX_ANIM, SHADOWED, type Depth } from './theme/depth';
+import { DEPTH_VAR, depthLevel, FRAMED, MOTION_FEELS, MOTION_VAR, PARALLAX, PARALLAX_ANIM, SCREEN_FX_VAR, screenFxOf, SHADOWED, type Depth, type ScreenFx } from './theme/depth';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
 import { shaderOf, shadowXml } from './theme/shadow';
@@ -1625,8 +1625,39 @@ class Editor {
     if (!p || !res || this.depth === null) return void this.notify('Depth works on themes made from a design (New theme, or a design in Presets).', 'error');
     if (this.menuGuard()) return;
     const lv = depthLevel(id);
+    if (!['system', ...GAME_VIEWS].some((v) => appliedDesign(p, v))) return this.setDepthPartly(id);
+    const v = this.designVarChange(DEPTH_VAR, id);
+    const wrote = await this.redesignAll(`depth “${lv.label}”`, { depth: id }, v ? [v] : []);
+    if (wrote !== null) this.notify(`Depth “${lv.label}”: ${lv.help}${wrote ? '' : ' (Preview only: files can’t be written here.)'} Ctrl+Z to undo.`);
+  }
+
+  /** The design theme's screen effect (a RetroBat shader over everything). */
+  get screenFx(): ScreenFx {
+    return screenFxOf((this.themeRes ?? this.res)?.vars.get(SCREEN_FX_VAR)?.value).id;
+  }
+
+  /** Puts a screen effect (CRT, scanlines...) over every screen of a design theme, as one undo step. */
+  async setScreenFx(id: ScreenFx) {
+    if (this.sharedOnly('Screen effects')) return;
+    const p = this.project;
+    if (!p || this.depth === null || !['system', ...GAME_VIEWS].some((v) => appliedDesign(p, v))) return void this.notify('Screen effects work on themes made from a design (New theme, or a design in Presets).', 'error');
+    if (this.menuGuard()) return;
+    const fx = screenFxOf(id);
+    const v = this.designVarChange(SCREEN_FX_VAR, id);
+    const wrote = await this.redesignAll(`screen effect “${fx.label}”`, { screenFx: id }, v ? [v] : []);
+    if (wrote !== null) this.notify(`Screen effect “${fx.label}”: ${fx.help}${wrote ? '' : ' (Preview only: files can’t be written here.)'} Ctrl+Z to undo.`);
+  }
+
+  /**
+   * Draws every screen made from a design again, with a new depth or screen effect, keeping
+   * everything you chose on them; one undo step together with `extra` changes. Returns whether the
+   * artwork could be written, or null if the theme closed meanwhile.
+   */
+  private async redesignAll(label: string, o: { depth?: Depth; screenFx?: string }, extra: Change[]): Promise<boolean | null> {
+    const p = this.project;
+    if (!p) return null;
+    const id = o.depth ?? this.depth ?? 'subtle';
     const views = ['system', ...GAME_VIEWS].filter((v) => appliedDesign(p, v));
-    if (!views.length) return this.setDepthPartly(id);
     const colours = this.designColours();
     const byDesign = new Map<Design, string[]>();
     for (const v of views) {
@@ -1641,16 +1672,15 @@ class Editor {
       wrote = (await this.writeArt(artRel, designAssets(colours ? recoloured(d, colours) : d, id))) && wrote;
       const font = await this.ensureFont(d.font);
       const titleFont = d.titleFont ? await this.ensureFont(d.titleFont) : null;
-      if (this.project !== p) return;
-      const ctx = { vars: true, art: `./${artRel}`, font: font ? `./${font}` : null, titleFont: titleFont ? `./${titleFont}` : null, logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null, consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null, depth: id, motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined };
+      if (this.project !== p) return null;
+      const ctx = { vars: true, art: `./${artRel}`, font: font ? `./${font}` : null, titleFont: titleFont ? `./${titleFont}` : null, logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null, consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null, depth: id, motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined, screenFx: o.screenFx ?? this.screenFx };
       const now = this.res;
-      if (!now) return;
+      if (!now) return null;
       const gameLayouts = Object.fromEntries(vs.map((v) => [v, appliedGameLayout(p, v)]));
       changes.push(...designChanges(p, now, d, ctx, vs, hidesOwn(p, now, vs), appliedSystemLayout(p) ?? undefined, { gameLayouts, carry: 'layout' }));
     }
-    const v = this.designVarChange(DEPTH_VAR, id);
-    this.commit(`depth “${lv.label}”`, v ? [v, ...changes] : changes);
-    this.notify(`Depth “${lv.label}”: ${lv.help}${wrote ? '' : ' (Preview only: files can’t be written here.)'} Ctrl+Z to undo.`);
+    this.commit(label, [...extra, ...changes]);
+    return wrote;
   }
 
   /** Depth on a theme whose screens aren't recognised as a design's: only the parts it can find. */
@@ -1870,6 +1900,7 @@ class Editor {
       consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null,
       depth,
       motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined,
+      screenFx: this.screenFx,
     };
     this.rev++;
     const res = this.res;

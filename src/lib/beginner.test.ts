@@ -67,6 +67,21 @@ describe('reset this screen to the design', () => {
   });
 });
 
+describe('screen effects', () => {
+  it('put one of RetroBat’s shaders over every screen, kept through layout changes, and None takes it off', async () => {
+    const p = await fresh();
+    await ed.setScreenFx('crt');
+    expect(ed.screenFx).toBe('crt');
+    for (const v of ['system', 'detailed', 'video']) expect(ed.themeRes!.views.get(v)!.elements.get('ccs_screenfx')?.props.get('path')?.value, v).toBe(':/shaders/crt.glsl');
+    ed.view = 'detailed';
+    await ed.applyLayout((await import('./theme/presets')).LAYOUTS.find((l) => l.id === 'hero')!, ['detailed']);
+    expect(ed.themeRes!.views.get('detailed')!.elements.has('ccs_screenfx')).toBe(true);
+    await ed.setScreenFx('none');
+    expect(ed.themeRes!.views.get('system')!.elements.has('ccs_screenfx')).toBe(false);
+    void p;
+  });
+});
+
 describe('surprise me', () => {
   it('applies a design with layouts, as one undo step', async () => {
     const p = await fresh();

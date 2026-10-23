@@ -9,7 +9,7 @@ import { ANIMATIONS, screenOf, storyboardXml } from './animations';
 import { systemLayout, type SystemLayout } from './systemLayouts';
 import { frameXml, type Frame } from './frame';
 import { shadowXml } from './shadow';
-import { depthLevel, DRIFT_ANIM, PARALLAX, PARALLAX_ANIM, SHADOWED, TITLES, type Depth } from './depth';
+import { depthLevel, DRIFT_ANIM, PARALLAX, PARALLAX_ANIM, screenFxOf, SHADOWED, TITLES, type Depth } from './depth';
 import { backgroundSvg, decoSvg, hex, svg as svgDoc, type Background, type Deco } from './designArt';
 import { defaultGameLayout, gameLayout, type GameArchetype } from './gameLayouts';
 
@@ -182,6 +182,8 @@ export interface DesignContext {
   depth?: Depth;
   /** How every animation moves (the theme's motion feel); as designed when not given. */
   motion?: { amount: number; speed: number };
+  /** A RetroBat screen shader over every screen (see SCREEN_FX), or none. */
+  screenFx?: string;
 }
 
 const LABELS_AND_EXTRAS = ['md_lbl_rating', 'md_lbl_releasedate', 'md_lbl_developer', 'md_lbl_publisher', 'md_lbl_genre', 'md_lbl_players', 'md_lbl_lastplayed', 'md_lbl_playcount', 'md_publisher', 'md_playcount', 'md_lastplayed'];
@@ -247,6 +249,9 @@ function common(d: Design, c: DesignContext, view: string): DesignEl[] {
   out[2].type = 'clock';
   if (d.scanlines) out.push({ type: 'image', name: 'ccs_scanlines', props: { pos: '0 0', size: '1 1', path: `${c.art}/scanlines.svg`, tile: 'true', zIndex: '90' } });
   if (d.deco) out.push({ type: 'image', name: 'ccs_deco', props: { pos: '0 0', size: '1 1', path: `${c.art}/deco.png`, zIndex: '3' }, anim: 'hover' });
+  // A screen effect over everything, drawn by one of RetroBat's own shaders.
+  const fx = screenFxOf(c.screenFx);
+  if (fx.path) out.push({ type: 'screenshader', name: 'ccs_screenfx', props: { path: fx.path, pos: '0 0', size: '1 1', zIndex: '95' } });
   if (d.bezel) out.push({ type: 'image', name: 'ccs_bezel', props: { pos: '0 0', size: '1 1', path: `${c.art}/bezel.svg`, zIndex: '91' } });
   void view;
   return out;

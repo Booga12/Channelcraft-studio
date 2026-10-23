@@ -1,6 +1,6 @@
 <script lang="ts">
   // Layout presets for the current screen and colour palettes for the whole theme.
-  import { DEPTHS, MOTION_FEELS } from '$lib/theme/depth';
+  import { DEPTHS, MOTION_FEELS, SCREEN_FX } from '$lib/theme/depth';
   import TileStylePicker from './TileStylePicker.svelte';
   import { ed } from '$lib/editor.svelte';
   import { viewLabel } from '$lib/friendly';
@@ -262,6 +262,15 @@
             {/each}
           </div>
           <p class="text-xs text-muted-foreground">{DEPTHS.find((d) => d.id === ed.depth)?.help} RetroBat can't turn things in 3D, so depth comes from shadows, lift and layers moving at different speeds.</p>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <span class="text-xs font-medium">Screen effect</span>
+          <div class="grid grid-cols-3 gap-1">
+            {#each SCREEN_FX as f (f.id)}
+              <button class="rounded-md px-2 py-1 text-xs font-medium ring-1 ring-border transition-colors duration-150 hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:ring-primary" aria-pressed={ed.screenFx === f.id} onclick={() => ed.setScreenFx(f.id)} title={f.help}>{f.label}</button>
+            {/each}
+          </div>
+          <p class="text-xs text-muted-foreground">Drawn over every screen by RetroBat's own shaders. The preview shows a close match.</p>
         </div>
       {/if}
       <div class="flex flex-col gap-1.5">

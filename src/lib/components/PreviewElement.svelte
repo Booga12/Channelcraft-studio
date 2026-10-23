@@ -617,12 +617,33 @@
         </div>
       {/each}
     </div>
+  {:else if el.type === 'screenshader'}
+    <!-- RetroBat's screen shaders, matched as closely as CSS can. -->
+    {@const sh = (val('path') ?? '').toLowerCase()}
+    <div
+      class="fill fx"
+      class:crt={sh.includes('crt')}
+      class:scan={sh.includes('scanlines')}
+      style:backdrop-filter={sh.includes('grayscale') ? 'grayscale(1)' : sh.includes('negative') ? 'invert(1)' : sh.includes('blur') ? `blur(${num('blur', 8)}px)` : sh.includes('pixelate') ? 'blur(1.5px) contrast(1.2)' : undefined}
+    ></div>
   {:else}
     <div class="placeholder" style:min-width="{box.w ?? 80}px" style:min-height="{box.h ?? 40}px"><span>{el.type} {el.name}</span></div>
   {/if}
 </div>
 
 <style>
+  .fx {
+    pointer-events: none;
+  }
+  .fx.scan,
+  .fx.crt {
+    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 2px, transparent 2px 4px);
+  }
+  .fx.crt {
+    box-shadow: inset 0 0 160px 40px rgba(0, 0, 0, 0.75);
+    border-radius: 3% / 5%;
+    backdrop-filter: saturate(1.25) contrast(1.08);
+  }
   .el {
     position: absolute;
     display: block;
