@@ -30,6 +30,8 @@ export const DEPTHS: DepthLevel[] = [
 ];
 
 export const DEPTH_VAR = 'designDepth';
+/** The theme's motion feel (calm, normal, lively), kept with the design colours; RetroBat ignores it. */
+export const MOTION_VAR = 'designMotion';
 
 export const depthLevel = (id: string | undefined | null): DepthLevel => DEPTHS.find((d) => d.id === id?.trim()) ?? DEPTHS[1];
 

@@ -4,7 +4,8 @@
   import TileStylePicker from './TileStylePicker.svelte';
   import { ed } from '$lib/editor.svelte';
   import { viewLabel } from '$lib/friendly';
-  import { appliedDesign, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
+  import { appliedDesign, appliedGameLayout, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
+  import { designGameLayout } from '$lib/theme/designs';
   import Icon from './Icon.svelte';
   import DesignThumb from './DesignThumb.svelte';
   import { DESIGNS, DESIGN_GROUPS, type Design, type DesignGroup } from '$lib/theme/designs';
@@ -17,11 +18,18 @@
   let hideOwn = $state(true);
   let designGroup = $state<DesignGroup | 'all'>('all');
   let applying = $state(false);
+  /** Keep the system and game list layouts in use when another design is picked. */
+  let keepLayouts = $state(false);
+  /** A game list layout picked on a theme without a design: keep its look, or restyle it? */
+  let asking = $state<LayoutPreset | null>(null);
+  let restyleWith = $state('');
 
   async function applyDesign(d: Design) {
     applying = true;
     try {
-      await ed.applyDesign(d, { hideOwn });
+      const p = ed.project;
+      const keep = keepLayouts && p ? { systemLayout: appliedSystemLayout(p) ?? undefined, gameLayout: appliedGameLayout(p, 'detailed') ?? undefined } : {};
+      await ed.applyDesign(d, { hideOwn, ...keep });
     } finally {
       applying = false;
     }
@@ -33,10 +41,17 @@
     return ed.project ? appliedLayout(ed.project, ed.view) : null;
   });
   const isSystem = $derived(ed.view === 'system');
+  const isGameList = $derived(GAME_LISTS.includes(ed.view));
+  /** The design on this game list screen, which game list layouts are drawn in. */
+  const listDesign = $derived.by(() => {
+    ed.rev;
+    return ed.project && isGameList ? appliedDesign(ed.project, ed.view) : null;
+  });
   /** The layout card to tick: on the system screen also the layout a design brought with it. */
   const currentLayout = $derived.by(() => {
     ed.rev;
-    return ed.project && isSystem ? appliedSystemLayout(ed.project) : current;
+    if (!ed.project) return null;
+    return isSystem ? appliedSystemLayout(ed.project) : isGameList ? appliedGameLayout(ed.project, ed.view) : current;
   });
   const sysDesign = $derived.by(() => {
     ed.rev;
@@ -48,6 +63,7 @@
   let styleChoice = $state('auto');
   const matching = (l: LayoutPreset) => DESIGNS.find((d) => d.system === l.id) ?? null;
   function styleFor(l: LayoutPreset): Design | null {
+    if (isGameList) return listDesign;
     if (!isSystem || styleChoice === 'plain') return null;
     if (styleChoice === 'auto') return sysDesign ?? matching(l) ?? DESIGNS[0];
     if (styleChoice === 'match') return matching(l) ?? sysDesign ?? DESIGNS[0];
@@ -77,12 +93,19 @@
     info: '#8a8a8a',
   };
 
-  async function apply(l: LayoutPreset) {
-    const style = styleFor(l);
+  async function apply(l: LayoutPreset, choice?: 'plain' | Design) {
+    const style = choice === 'plain' ? null : (choice ?? styleFor(l));
+    // A game list layout on a theme without a design: ask first.
+    if (!style && isGameList && choice !== 'plain') {
+      asking = l;
+      restyleWith = (DESIGNS.find((d) => designGameLayout(d) === l.id) ?? DESIGNS[0]).id;
+      return;
+    }
+    asking = null;
     if (style) {
       applying = true;
       try {
-        await ed.applyLayout(l, ['system'], style, hideOwn);
+        await ed.applyLayout(l, isSystem ? ['system'] : targets, style, hideOwn);
       } finally {
         applying = false;
       }
@@ -110,6 +133,7 @@
     <h4>Designs</h4>
     <p class="dim note">A complete look for every screen: artwork, colours, font, animations, and all of RetroBat's game and system data placed for you.</p>
     <label class="chk"><input type="checkbox" bind:checked={hideOwn} /> Hide this theme's own decorations</label>
+    <label class="chk" title="The new design is laid out the way your screens are now, instead of with its own layouts."><input type="checkbox" bind:checked={keepLayouts} /> Keep my layouts</label>
     <DesignGroupChips bind:group={designGroup} />
     <div class="designs">
       {#each DESIGNS.filter((d) => designGroup === 'all' || d.group === designGroup) as d (d.id)}
@@ -147,8 +171,28 @@
         {#if styleChoice === 'plain'}
           <p class="faint note">Only RetroBat's carousel (or grid) and its game count move. The theme's decorations stay where they are.</p>
         {/if}
+      {:else if listDesign}
+        <p class="dim note">Where everything goes, drawn in {listDesign.label}: your colours, fonts, animations and anything you added stay.</p>
       {:else}
-        <p class="dim note">Moves the parts RetroBat draws itself (game list, picture, description, carousel). Decorations made for this theme stay where they are, so presets suit simple and new themes best.</p>
+        <p class="dim note">This theme isn't made from a design, so you can choose: just move RetroBat's own parts (list, picture, description), or restyle the screen with a design.</p>
+      {/if}
+      {#if asking}
+        {@const l = asking}
+        <div class="ask" role="group" aria-label="How to use {l.label}">
+          <strong>“{l.label}” on this theme</strong>
+          <button class="secondary small" onclick={() => apply(l, 'plain')}>Keep my theme's look <small>Only the list, picture and text move</small></button>
+          <div class="restyle">
+            <button class="small" onclick={() => apply(l, DESIGNS.find((d) => d.id === restyleWith) ?? DESIGNS[0])}>Restyle it with a design</button>
+            <select bind:value={restyleWith} aria-label="Design to restyle with">
+              {#each DESIGN_GROUPS as g (g.id)}
+                <optgroup label="{g.label} designs">
+                  {#each DESIGNS.filter((d) => d.group === g.id) as d (d.id)}<option value={d.id}>{d.label}</option>{/each}
+                </optgroup>
+              {/each}
+            </select>
+          </div>
+          <button class="link small" onclick={() => (asking = null)}>Cancel</button>
+        </div>
       {/if}
       {#if gridSystem}
         <p class="warn note">This theme shows consoles in a grid, not a carousel. A carousel preset adds a carousel that may overlap the grid.</p>
@@ -306,6 +350,25 @@
   }
   small.in {
     color: var(--brand);
+  }
+  .ask {
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+    border: 1px solid var(--brand);
+    border-radius: 6px;
+    background: var(--bg);
+  }
+  .ask button small {
+    display: block;
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+  .ask .restyle {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px;
   }
   .card:disabled {
     opacity: 0.6;

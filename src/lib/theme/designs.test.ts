@@ -5,7 +5,8 @@ import { resolveTheme } from './resolver';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
 import { applyChanges } from './edits';
-import { appliedSystemLayout, designChanges, designVarsChange } from './presets';
+import { appliedGameLayout, appliedSystemLayout, designChanges, designVarsChange } from './presets';
+import { GAME_LAYOUTS } from './gameLayouts';
 import { SYSTEM_LAYOUTS, systemLayout } from './systemLayouts';
 import { DESIGNS, DESIGN_GROUPS, designAssets, designElements, designVars, recoloured, type DesignContext } from './designs';
 import { BACKGROUNDS } from './designArt';
@@ -104,6 +105,35 @@ describe('designs on the starter theme (in memory)', () => {
     expect(p.entry!.src.split('ChannelCraft layout preset (system)').length).toBe(2);
     expect(print(parse(p.entry!.src))).toBe(p.entry!.src);
    }, 60_000);
+
+  it('every design works with every game layout, with all the game data on screen', async () => {
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    for (const d of DESIGNS) {
+      for (const g of GAME_LAYOUTS) {
+        applyChanges(p, designChanges(p, resolveTheme(p, env), d, ctx(d.id), ['detailed', 'video'], true, undefined, { gameLayout: g.id }));
+        expect(appliedGameLayout(p, 'detailed')).toBe(g.id);
+        for (const v of ['detailed', 'video']) {
+          const els = resolveTheme(p, env).views.get(v)!.elements;
+          for (const n of GAME_DATA) {
+            const name = v === 'video' && n === 'md_image' ? 'md_video' : n;
+            expect(els.has(name), `${d.id}/${g.id}/${v} has ${name}`).toBe(true);
+          }
+          for (const e of els.values()) {
+            if (!e.name.startsWith('ccs_') && !e.name.startsWith('md_') && e.name !== 'gamelist' && e.name !== 'logo') continue;
+            const pos = e.props.get('pos')?.value.split(' ').map(Number);
+            const size = (e.props.get('size') ?? e.props.get('maxSize'))?.value.split(' ').map(Number);
+            // The reflection hangs off the bottom on purpose, fading out.
+            if (!pos || !size || e.props.get('visible')?.value === 'false' || e.name === 'ccs_reflection') continue;
+            const [ox, oy] = (e.props.get('origin')?.value ?? '0 0').split(' ').map(Number);
+            const x0 = pos[0] - ox * size[0];
+            const y0 = pos[1] - oy * size[1];
+            expect(x0 >= -0.001 && y0 >= -0.001 && x0 + size[0] <= 1.001 && y0 + size[1] <= 1.001, `${d.id}/${g.id}/${v}/${e.name} fits on screen (${pos} ${size})`).toBe(true);
+          }
+        }
+      }
+    }
+    expect(p.entry!.src.split('ChannelCraft layout preset (detailed)').length).toBe(2);
+  }, 120_000);
 
   it('swaps one design for another instead of stacking them', async () => {
     const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);

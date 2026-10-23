@@ -11,6 +11,7 @@ import { frameXml, type Frame } from './frame';
 import { shadowXml } from './shadow';
 import { depthLevel, PARALLAX, PARALLAX_ANIM, SHADOWED, type Depth } from './depth';
 import { backgroundSvg, decoSvg, hex, svg as svgDoc, type Background, type Deco } from './designArt';
+import { defaultGameLayout, gameLayout, type GameArchetype } from './gameLayouts';
 
 export interface Palette6 {
   bg: string;
@@ -37,7 +38,8 @@ export interface Design {
   background: Background;
   /** Corner radius of panels in pixels; 0 for square, pixel corners for the pixel look. */
   radius: number;
-  game: 'list-right' | 'cinema' | 'cover' | 'centered';
+  /** How the design lays out game screens (any layout in GAME_LAYOUTS works too). */
+  game: GameArchetype;
   /** Id of the system screen layout the design comes with (any layout in SYSTEM_LAYOUTS works). */
   system: string;
   glow?: boolean;
@@ -157,6 +159,9 @@ export interface DesignEl {
   name: string;
   props: Record<string, string | string[]>;
   anim?: string;
+  /** Size and speed of the animation against the preset's own (1 = as designed). */
+  animAmount?: number;
+  animSpeed?: number;
   /** Nested blocks written as they are (a <shader>, for example). */
   blocks?: string[];
 }
@@ -173,6 +178,8 @@ export interface DesignContext {
   consoles: string | null;
   /** Depth to build with; the design's own when not given. */
   depth?: Depth;
+  /** How every animation moves (the theme's motion feel); as designed when not given. */
+  motion?: { amount: number; speed: number };
 }
 
 const LABELS_AND_EXTRAS = ['md_lbl_rating', 'md_lbl_releasedate', 'md_lbl_developer', 'md_lbl_publisher', 'md_lbl_genre', 'md_lbl_players', 'md_lbl_lastplayed', 'md_lbl_playcount', 'md_publisher', 'md_playcount', 'md_lastplayed'];
@@ -268,7 +275,7 @@ function gameList(d: Design, c: DesignContext, pos: string, size: string, align 
 }
 
 /** The game's media and details, wherever the archetype puts them. */
-function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
+function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameArchetype = d.game): DesignEl[] {
   const p = d.palette;
   const video = view === 'video';
   const els: DesignEl[] = [...common(d, c, view)];
@@ -311,7 +318,23 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
   const title = (pos: string, size: string, fs = '0.046', align = 'left') => ({ ...text(d, c, 'ccs_title', { pos, size, fontSize: fs, alignment: align, text: '{game:name}', zIndex: '45', ...tilt((d.tilt ?? 0) / 2) }, { title: true }), anim: d.anims?.title });
   const marquee = (pos: string, max: string, origin = '0 0') => art('md_marquee', pos, max, 46, { origin });
 
-  switch (d.game) {
+  switch (archetype) {
+    case 'list-only':
+      els.push(
+        fanart('1E'),
+        systemLogo('0.5 0.04', '0.5 0', '0.26 0.07'),
+        systemLogoText('0.5 0.04', '0.5 0', '0.26 0.07'),
+        panel(d, c, 'ccs_listpanel', '0.2 0.14', '0.6 0.64', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.22 0.16', '0.56 0.6', 'center'),
+        panel(d, c, 'ccs_infopanel', '0.06 0.8', '0.88 0.13', 10),
+        boxart('0.11 0.865', '0.07 0.11'),
+        screenshot('0.2 0.865', '0.1 0.11'),
+        title('0.26 0.81', '0.36 0.045', '0.03'),
+        ...details(0.26, 0.86, 0.36, 0.026),
+        desc('0.64 0.815', '0.22 0.1', '0.015'),
+        marquee('0.935 0.865', '0.06 0.06', '1 0.5'),
+      );
+      break;
     case 'cinema':
       els.push(
         fanart('FF'),
@@ -459,15 +482,59 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
 
 const depthOf = (d: Design, c: DesignContext): Depth => c.depth ?? d.depth ?? 'subtle';
 
-/** Elements of a design for one screen. */
-export function designElements(d: Design, c: DesignContext, view: string, systemLayoutId = d.system): DesignEl[] {
-  if (view === 'system') return withDepth(systemScreen(d, c, systemLayout(systemLayoutId) ?? systemLayout(d.system)!), depthOf(d, c), 'system');
+/**
+ * Elements of a design for one screen, laid out with a system layout (system screen) or a game
+ * layout (game list screens); the design's own when not given.
+ */
+export function designElements(d: Design, c: DesignContext, view: string, systemLayoutId = d.system, gameLayoutId?: string | null): DesignEl[] {
+  if (view === 'system') return withMotion(withDepth(systemScreen(d, c, systemLayout(systemLayoutId) ?? systemLayout(d.system)!), depthOf(d, c), 'system'), c);
   if (['basic', 'detailed', 'video'].includes(view)) {
-    const els = gameScreen(d, c, view);
+    const gl = gameLayout(gameLayoutId) ?? defaultGameLayout(d.game);
+    let els = gameScreen(d, c, view, gl.archetype);
+    if (gl.mirror) els = mirrored(els);
     for (const n of LABELS_AND_EXTRAS) els.push({ type: n === 'md_lastplayed' ? 'datetime' : 'text', name: n, props: { visible: 'false' } });
-    return withDepth(els, depthOf(d, c), 'game');
+    return withMotion(withDepth(els, depthOf(d, c), 'game'), c);
   }
   return [];
+}
+
+/** The game layout a design comes with. */
+export const designGameLayout = (d: Design): string => defaultGameLayout(d.game).id;
+
+/** The theme's motion feel on every animation that doesn't have its own size and speed. */
+function withMotion(els: DesignEl[], c: DesignContext): DesignEl[] {
+  const m = c.motion;
+  if (!m || (m.amount === 1 && m.speed === 1)) return els;
+  return els.map((e) => {
+    if (!e.anim || e.animAmount !== undefined || e.anim === PARALLAX_ANIM) return e;
+    const preset = ANIMATIONS.find((a) => a.id === e.anim);
+    return { ...e, animAmount: preset?.amount ? m.amount : 1, animSpeed: m.speed };
+  });
+}
+
+const NO_MIRROR = new Set(['ccs_clock', 'help']);
+const r3 = (n: number) => String(Math.round(n * 1000) / 1000);
+
+/** A screen flipped left to right: each element keeps its anchor, right-aligned text turns left. */
+function mirrored(els: DesignEl[]): DesignEl[] {
+  return els.map((e) => {
+    const pos = e.props.pos;
+    if (NO_MIRROR.has(e.name) || typeof pos !== 'string') return e;
+    const p = { ...e.props };
+    const [x, y] = pos.split(' ').map(Number);
+    const [ox, oy] = String(p.origin ?? '0 0').split(' ').map(Number);
+    const w = Number(String(p.size ?? p.maxSize ?? '0 0').split(' ')[0]) || 0;
+    if (w) {
+      const left = x - ox * w;
+      p.pos = `${r3(1 - left - w + ox * w)} ${y}`;
+    } else {
+      p.pos = `${r3(1 - x)} ${y}`;
+      if (p.origin) p.origin = `${r3(1 - ox)} ${oy}`;
+    }
+    if (p.alignment === 'right') p.alignment = 'left';
+    if (e.name === 'ccs_fade') p.flipX = 'true';
+    return { ...e, props: p };
+  });
 }
 
 /**
@@ -502,7 +569,7 @@ export function elementsMarkup(els: DesignEl[], extraNames: Set<string>, view: s
     const preset = e.anim ? ANIMATIONS.find((a: AnimPreset) => a.id === e.anim) : undefined;
     if (preset) {
       const pos = String(e.props.pos ?? '0 0').split(' ').map(Number) as [number, number];
-      for (const l of storyboardXml(preset, pos, 1, 1, screenOf(view)).split('\n')) lines.push(`    ${l}`);
+      for (const l of storyboardXml(preset, pos, e.animAmount ?? 1, e.animSpeed ?? 1, screenOf(view)).split('\n')) lines.push(`    ${l}`);
     }
     lines.push(`  </${e.type}>`);
   }

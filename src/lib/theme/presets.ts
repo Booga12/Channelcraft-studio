@@ -3,13 +3,16 @@
 // theme.xml, marked with a comment, so it overrides the theme without touching its other files
 // and can be swapped for another preset later.
 
-import { attr, patchInsertChild, patchReplaceSpan, type XElement, type XNode } from '../xml/cst';
-import { DESIGNS, designElements, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext, type DesignVar, type Palette6 } from './designs';
+import { attr, elements, patchInsertChild, patchReplaceSpan, type XElement, type XNode } from '../xml/cst';
+import { DESIGNS, designElements, designGameLayout, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext, type DesignEl, type DesignVar, type Palette6 } from './designs';
 import type { Change } from './edits';
-import { DEPTH_VAR, type Depth } from './depth';
+import { DEPTH_VAR, MOTION_VAR, type Depth } from './depth';
 import type { ThemeProject } from './project';
 import type { Resolution } from './resolver';
 import { SYSTEM_LAYOUTS, systemLayout, type SystemLayout } from './systemLayouts';
+import { GAME_LAYOUTS, gameLayout, type GameLayout } from './gameLayouts';
+import { screenOf, tuningOf } from './animations';
+import { TILE_STYLES, tileStyleOfPath, tileStyleProps } from './tiles';
 
 type Props = Record<string, string>;
 
@@ -115,103 +118,73 @@ function round(n: number) {
 /** White rounded tile, tinted by each grid tile's background colour. */
 export const TILE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect x="1" y="1" width="94" height="94" rx="22" fill="#ffffff"/></svg>\n';
 
+/** RetroBat's own game parts, which a layout moves on themes without a design. */
+const PLAIN_PARTS = ['logo', 'gamelist', 'md_image', 'md_marquee', 'md_rating', 'md_releasedate', 'md_description', 'md_genre', 'md_developer', 'md_players'];
+const PLACEMENT = ['pos', 'size', 'maxSize', 'origin', 'alignment', 'fontSize'];
+
+/** Hand-made placements for themes without a design (RetroBat's own parts only). */
+const PLAIN: Record<string, Record<string, Props>> = {
+  classic: CLASSIC,
+  mirrored: mirror(CLASSIC),
+  bigpicture: {
+    logo: { pos: '0.04 0.04', origin: '0 0', maxSize: '0.25 0.08' },
+    md_image: art('0.5 0.33', '0.7 0.44'),
+    md_video: art('0.5 0.33', '0.7 0.44'),
+    md_marquee: HIDE,
+    gamelist: { pos: '0.04 0.6', size: '0.44 0.34' },
+    md_rating: { pos: '0.52 0.6', size: '0 0.034', visible: 'true' },
+    md_releasedate: { pos: '0.68 0.6', fontSize: '0.026', visible: 'true' },
+    md_description: { pos: '0.52 0.66', size: '0.44 0.26', fontSize: '0.021', visible: 'true' },
+    ...TIDY,
+  },
+  videofocus: {
+    logo: { pos: '0.04 0.04', origin: '0 0', maxSize: '0.25 0.08' },
+    md_image: art('0.34 0.43', '0.6 0.56'),
+    md_video: art('0.34 0.43', '0.6 0.56'),
+    md_marquee: HIDE,
+    gamelist: { pos: '0.68 0.12', size: '0.29 0.8', fontSize: '0.028' },
+    md_rating: { pos: '0.04 0.74', size: '0 0.032', visible: 'true' },
+    md_releasedate: { pos: '0.2 0.74', fontSize: '0.024', visible: 'true' },
+    md_description: { pos: '0.04 0.8', size: '0.6 0.13', fontSize: '0.02', visible: 'true' },
+    ...TIDY,
+  },
+  listonly: {
+    logo: { pos: '0.5 0.05', origin: '0.5 0', maxSize: '0.3 0.09' },
+    gamelist: { pos: '0.2 0.16', size: '0.6 0.74', alignment: 'center' },
+    md_image: HIDE,
+    md_video: HIDE,
+    md_marquee: HIDE,
+    md_rating: HIDE,
+    md_releasedate: HIDE,
+    md_description: HIDE,
+    ...TIDY,
+  },
+};
+
 export const LAYOUTS: LayoutPreset[] = [
-  {
-    id: 'classic',
-    label: 'Classic',
-    description: 'Game list on the right, picture and description on the left.',
-    kind: 'game',
-    diagram: [
-      { x: 0.04, y: 0.04, w: 0.3, h: 0.08, role: 'logo' },
-      { x: 0.05, y: 0.17, w: 0.42, h: 0.42, role: 'art' },
-      { x: 0.04, y: 0.7, w: 0.44, h: 0.22, role: 'text' },
-      { x: 0.52, y: 0.13, w: 0.45, h: 0.78, role: 'list' },
-    ],
-    elements: CLASSIC,
-  },
-  {
-    id: 'mirrored',
-    label: 'Mirrored',
-    description: 'Game list on the left, picture and description on the right.',
-    kind: 'game',
-    diagram: [
-      { x: 0.66, y: 0.04, w: 0.3, h: 0.08, role: 'logo' },
-      { x: 0.53, y: 0.17, w: 0.42, h: 0.42, role: 'art' },
-      { x: 0.52, y: 0.7, w: 0.44, h: 0.22, role: 'text' },
-      { x: 0.03, y: 0.13, w: 0.45, h: 0.78, role: 'list' },
-    ],
-    elements: mirror(CLASSIC),
-  },
-  {
-    id: 'bigpicture',
-    label: 'Big picture',
-    description: 'A large picture on top, the list and description underneath.',
-    kind: 'game',
-    diagram: [
-      { x: 0.04, y: 0.04, w: 0.22, h: 0.07, role: 'logo' },
-      { x: 0.15, y: 0.11, w: 0.7, h: 0.44, role: 'art' },
-      { x: 0.04, y: 0.6, w: 0.44, h: 0.34, role: 'list' },
-      { x: 0.52, y: 0.66, w: 0.44, h: 0.26, role: 'text' },
-    ],
-    elements: {
-      logo: { pos: '0.04 0.04', origin: '0 0', maxSize: '0.25 0.08' },
-      md_image: art('0.5 0.33', '0.7 0.44'),
-      md_video: art('0.5 0.33', '0.7 0.44'),
-      md_marquee: HIDE,
-      gamelist: { pos: '0.04 0.6', size: '0.44 0.34' },
-      md_rating: { pos: '0.52 0.6', size: '0 0.034', visible: 'true' },
-      md_releasedate: { pos: '0.68 0.6', fontSize: '0.026', visible: 'true' },
-      md_description: { pos: '0.52 0.66', size: '0.44 0.26', fontSize: '0.021', visible: 'true' },
-      ...TIDY,
-    },
-  },
-  {
-    id: 'videofocus',
-    label: 'Video focus',
-    description: 'A big video or picture with a narrow list on the right.',
-    kind: 'game',
-    diagram: [
-      { x: 0.04, y: 0.04, w: 0.22, h: 0.07, role: 'logo' },
-      { x: 0.04, y: 0.14, w: 0.6, h: 0.56, role: 'art' },
-      { x: 0.04, y: 0.8, w: 0.6, h: 0.13, role: 'text' },
-      { x: 0.68, y: 0.12, w: 0.29, h: 0.8, role: 'list' },
-    ],
-    elements: {
-      logo: { pos: '0.04 0.04', origin: '0 0', maxSize: '0.25 0.08' },
-      md_image: art('0.34 0.43', '0.6 0.56'),
-      md_video: art('0.34 0.43', '0.6 0.56'),
-      md_marquee: HIDE,
-      gamelist: { pos: '0.68 0.12', size: '0.29 0.8', fontSize: '0.028' },
-      md_rating: { pos: '0.04 0.74', size: '0 0.032', visible: 'true' },
-      md_releasedate: { pos: '0.2 0.74', fontSize: '0.024', visible: 'true' },
-      md_description: { pos: '0.04 0.8', size: '0.6 0.13', fontSize: '0.02', visible: 'true' },
-      ...TIDY,
-    },
-  },
-  {
-    id: 'listonly',
-    label: 'Just the list',
-    description: 'A centred game list and nothing else. Clean and fast.',
-    kind: 'game',
-    diagram: [
-      { x: 0.35, y: 0.04, w: 0.3, h: 0.08, role: 'logo' },
-      { x: 0.2, y: 0.16, w: 0.6, h: 0.74, role: 'list' },
-    ],
-    elements: {
-      logo: { pos: '0.5 0.05', origin: '0.5 0', maxSize: '0.3 0.09' },
-      gamelist: { pos: '0.2 0.16', size: '0.6 0.74', alignment: 'center' },
-      md_image: HIDE,
-      md_video: HIDE,
-      md_marquee: HIDE,
-      md_rating: HIDE,
-      md_releasedate: HIDE,
-      md_description: HIDE,
-      ...TIDY,
-    },
-  },
+  ...GAME_LAYOUTS.map(gamePreset),
   ...SYSTEM_LAYOUTS.map(systemPreset),
 ];
 
+
+/** A game layout as a plain preset: hand-made, or RetroBat's own parts placed as the design version places them. */
+function gamePreset(l: GameLayout): LayoutPreset {
+  let placed = PLAIN[l.id];
+  if (!placed) {
+    const els = designElements(DESIGNS[0], { art: '.', font: null, titleFont: null, logos: null, consoles: null }, 'detailed', undefined, l.id);
+    placed = {};
+    for (const e of els) {
+      if (!PLAIN_PARTS.includes(e.name)) continue;
+      const props: Props = {};
+      for (const k of PLACEMENT) if (typeof e.props[k] === 'string') props[k] = e.props[k] as string;
+      // RetroBat's game list has no visible property; everything else is shown.
+      placed[e.name] = e.name === 'gamelist' ? props : { ...props, visible: 'true' };
+    }
+    if (placed.md_image) placed.md_video = { ...placed.md_image };
+    for (const [n, v] of Object.entries(TIDY)) if (!placed[n]) placed[n] = v;
+  }
+  return { id: l.id, label: l.label, description: l.description, kind: 'game', diagram: l.diagram, elements: placed };
+}
 
 /** A plain system layout preset: moves RetroBat's carousel (or grid) and info line, nothing else. */
 function systemPreset(l: SystemLayout): LayoutPreset {
@@ -343,6 +316,20 @@ export function appliedSystemLayout(project: ThemeProject): string | null {
   return id;
 }
 
+/** The game layout in use on a game list screen: chosen with a design, the design's own, or a plain one. */
+export function appliedGameLayout(project: ThemeProject, view: string): string | null {
+  const text = markerText(project, view);
+  if (!text) return null;
+  const chosen = text.match(/\[game:([\w-]+)\]/)?.[1];
+  if (chosen) return chosen;
+  const id = text.match(/\[([\w-]+)\]/)?.[1] ?? null;
+  if (id?.startsWith('design-')) {
+    const d = DESIGNS.find((x) => `design-${x.id}` === id);
+    return d ? designGameLayout(d) : null;
+  }
+  return gameLayout(id) ? id : null;
+}
+
 /** The design on a screen, if one was applied there. */
 export function appliedDesign(project: ThemeProject, view: string): Design | null {
   const id = appliedLayout(project, view);
@@ -395,28 +382,98 @@ export function blockChange(project: ThemeProject, res: Resolution, view: string
 
 const isShown = (e: { props: Map<string, { value: string }> }) => !['false', '0'].includes((e.props.get('visible')?.value ?? 'true').trim().toLowerCase());
 
+export interface DesignOptions {
+  /** Game layout for the game list screens; the design's own when not given. */
+  gameLayout?: string | null;
+  /**
+   * What to keep from the screen's current ChannelCraft block. Always: elements you added and
+   * parts you hid. 'layout' (same design, new placement) also keeps colours, fonts and
+   * animations you set on its parts, and the grid's tile style.
+   */
+  carry?: 'layout' | 'design';
+}
+
 /** Changes that apply a design to the given views; `hideOwn` hides the theme's own decorations. */
-export function designChanges(project: ThemeProject, res: Resolution, design: Design, ctx: DesignContext, views: string[], hideOwn: boolean, systemLayoutId = design.system): Change[] {
+export function designChanges(project: ThemeProject, res: Resolution, design: Design, ctx: DesignContext, views: string[], hideOwn: boolean, systemLayoutId = design.system, opts: DesignOptions = {}): Change[] {
   const out: Change[] = [];
   const layout = systemLayout(systemLayoutId) ?? systemLayout(design.system)!;
+  const game = gameLayout(opts.gameLayout) ?? gameLayout(designGameLayout(design))!;
   for (const view of views) {
-    const els = designElements(design, ctx, view, layout.id);
+    const els = designElements(design, ctx, view, layout.id, game.id);
     if (!els.length) continue;
+    const kept = opts.carry ? carryOver(project, res, view, els, opts.carry) : [];
     const names = new Set(els.map((e) => e.name));
     const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
-    const body = elementsMarkup(els, extras, view);
+    const body = [...elementsMarkup(els, extras, view), ...kept];
     if (hideOwn) {
       for (const e of res.views.get(view)?.elements.values() ?? []) {
         if (e.extra && !names.has(e.name) && !isDesignExtra(e.name)) body.push(`  <${e.type} name="${e.name}" extra="${e.extra}">`, '    <visible>false</visible>', `  </${e.type}>`);
         // The theme's own game parts the design doesn't place (e.g. md_image on the video screen,
         // where the design shows md_video) would stay where the theme put them, over the design.
-        else if (!e.extra && e.name.startsWith('md_') && !names.has(e.name) && isShown(e)) body.push(`  <${e.type} name="${e.name}">`, '    <visible>false</visible>', `  </${e.type}>`);
+        else if (!e.extra && (e.name.startsWith('md_') || e.name === 'folderpath') && !names.has(e.name) && isShown(e)) body.push(`  <${e.type} name="${e.name}">`, '    <visible>false</visible>', `  </${e.type}>`);
       }
     }
-    const title = view === 'system' ? `design ${design.label} [design-${design.id}], layout ${layout.label} [layout:${layout.id}]` : `design ${design.label} [design-${design.id}]`;
+    const title = view === 'system' ? `design ${design.label} [design-${design.id}], layout ${layout.label} [layout:${layout.id}]` : `design ${design.label} [design-${design.id}], game layout ${game.label} [game:${game.id}]`;
     out.push(blockChange(project, res, view, title, body));
   }
   return out;
+}
+
+/** RetroBat's own element names (a design places these; they're never "yours"). */
+const isNativeName = (n: string) => n in NATIVE_TYPES || n.startsWith('md_') || n === 'help' || n === 'logoText';
+
+/** Properties of a design part that are look, not placement: kept when only the layout changes. */
+const STYLE_KEYS = ['color', 'colorEnd', 'primaryColor', 'secondaryColor', 'selectedColor', 'selectorColor', 'glowColor', 'glowSize', 'textColor', 'iconColor', 'unfilledColor', 'fontPath', 'forceUppercase', 'opacity', 'saturation'];
+
+/**
+ * What to keep from a screen's current ChannelCraft block when it's rebuilt: adjusts `els` in place
+ * (looks and animations you set, parts you hid, the grid's tile style) and returns the markup of
+ * elements you added yourself.
+ */
+function carryOver(project: ThemeProject, res: Resolution, view: string, els: DesignEl[], mode: 'layout' | 'design'): string[] {
+  const block = designBlock(project, view);
+  const entry = project.entry;
+  if (!block || !entry) return [];
+  const inBlock = (n: XElement) => n.start >= block.view.start && n.end <= block.view.end;
+  const byName = new Map(els.map((e) => [e.name, e]));
+  const resolved = res.views.get(view)?.elements;
+  const added: string[] = [];
+  for (const node of elements(block.view)) {
+    const name = attr(node, 'name');
+    if (!name) continue;
+    const el = byName.get(name);
+    const props = new Map(elements(node).map((c) => [c.name, entry.src.slice(c.start, c.end).replace(/^<[^>]+>|<\/[^>]+>$/g, '')]));
+    if (el) {
+      if (props.get('visible')?.trim() === 'false' && el.props.visible !== 'false') el.props = { ...el.props, visible: 'false' };
+      if (mode !== 'layout') continue;
+      for (const k of STYLE_KEYS) {
+        const v = props.get(k);
+        if (v !== undefined && !v.includes('<')) el.props = { ...el.props, [k]: v };
+      }
+      const r = resolved?.get(name);
+      const t = r ? tuningOf(r, screenOf(view)) : null;
+      if (t) Object.assign(el, { anim: t.preset.id, animAmount: t.amount, animSpeed: t.speed });
+      // No animation on it now (taken off, or never had one): it stays still.
+      else if (!elements(node).some((c) => c.name === 'storyboard')) el.anim = undefined;
+      continue;
+    }
+    // Yours: not one of the design's parts, not RetroBat's own, and only defined in this block.
+    const r = resolved?.get(name);
+    const elsewhere = r?.defs.some((d) => d.file !== entry || !inBlock(d.node));
+    if (name.startsWith('ccs_') || isNativeName(name) || elsewhere) continue;
+    added.push(`  ${entry.src.slice(node.start, node.end)}`);
+  }
+  // The grid keeps the tile style picked for it.
+  if (mode === 'layout') {
+    const style = TILE_STYLES.find((t) => t.id === tileStyleOfPath(resolved?.get('default')?.props.get('backgroundImage')?.value));
+    if (style && byName.has('default')) {
+      for (const [n, p] of Object.entries(tileStyleProps(style))) {
+        const target = n === 'imagegrid' ? [...byName.values()].find((e) => e.type === 'imagegrid') : byName.get(n);
+        if (target) target.props = { ...target.props, ...p };
+      }
+    }
+  }
+  return added;
 }
 
 const VARS_MARK = 'ChannelCraft design colours';
@@ -426,12 +483,12 @@ const VARS_MARK = 'ChannelCraft design colours';
  * another design is applied). The design's parts refer to them, and RetroBat's Color set option
  * can redefine them. A file's variables are read before the rest of it, so placement is free.
  */
-export function designVarsChange(project: ThemeProject, design: Design, depth: Depth = design.depth ?? 'subtle'): Change {
+export function designVarsChange(project: ThemeProject, design: Design, depth: Depth = design.depth ?? 'subtle', motion?: string | null): Change {
   const entry = project.entry!;
   const root = entry.doc.root!;
   // designArtSet names the colour set whose artwork the menu options use (see menuOptions.ts);
   // designDepth is ChannelCraft's own (RetroBat ignores it), see depth.ts.
-  const body = [`  <designArtSet>d-${design.id}</designArtSet>`, `  <${DEPTH_VAR}>${depth}</${DEPTH_VAR}>`, ...Object.entries(designVars(design.palette)).map(([k, v]) => `  <${k}>${v}</${k}>`)];
+  const body = [`  <designArtSet>d-${design.id}</designArtSet>`, `  <${DEPTH_VAR}>${depth}</${DEPTH_VAR}>`, ...(motion ? [`  <${MOTION_VAR}>${motion}</${MOTION_VAR}>`] : []), ...Object.entries(designVars(design.palette)).map(([k, v]) => `  <${k}>${v}</${k}>`)];
   const markup = [`<!-- ${VARS_MARK} (${design.label}). The design's parts use these; change them in the Colours tab. -->`, '<variables>', ...body, '</variables>'].join('\n');
   const kids = root.children;
   for (let i = 0; i < kids.length; i++) {

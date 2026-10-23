@@ -13,7 +13,7 @@ import { applyToText, copyOfShared, draftFile, EMPTY_GAME_FILE, GAMES_README, ga
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
 import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, presetOf, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
-import { DEPTH_VAR, depthLevel, FRAMED, MOTION_FEELS, PARALLAX, PARALLAX_ANIM, SHADOWED, type Depth } from './theme/depth';
+import { DEPTH_VAR, depthLevel, FRAMED, MOTION_FEELS, MOTION_VAR, PARALLAX, PARALLAX_ANIM, SHADOWED, type Depth } from './theme/depth';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
 import { shaderOf, shadowXml } from './theme/shadow';
@@ -21,7 +21,7 @@ import { frameOf, frameXml, type Frame } from './theme/frame';
 
 /** A number with at most four decimals, as theme files write them. */
 const r4 = (v: number) => String(Math.round(v * 10000) / 10000);
-import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
+import { elementLabel, humanize, propLabel, typeLabel, viewLabel } from './friendly';
 import { consoleScreenPath, isDataBound, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
 import { reorder, zIndexFor } from './theme/layers';
@@ -1473,7 +1473,15 @@ class Editor {
     if (!p) return;
     // A system layout can come dressed in a design: its background, colours, fonts and the
     // console name, maker, game count and picture placed to suit the layout.
-    if (style && preset.kind === 'system') return this.applyDesign(style, { hideOwn, views: ['system'], systemLayout: preset.id });
+    if (style && preset.kind === 'system') {
+      const same = appliedDesign(p, 'system')?.id === style.id;
+      return this.applyDesign(style, { hideOwn, views: ['system'], systemLayout: preset.id, carry: same ? 'layout' : 'design' });
+    }
+    // A game list layout on a design theme: the same design, laid out the new way.
+    if (preset.kind === 'game' && (style ?? appliedDesign(p, views[0]))) {
+      const d = style ?? appliedDesign(p, views[0])!;
+      return this.applyDesign(d, { hideOwn, views, gameLayout: preset.id, carry: appliedDesign(p, views[0])?.id === d.id ? 'layout' : 'design' });
+    }
     if (preset.assets) await this.writeArt('_inc/ccs/common', preset.assets);
     const res = this.res;
     if (!res) return;
@@ -1593,10 +1601,7 @@ class Editor {
     const keep = { view: this.view, file: this.screenFile, consoleOnly: this.consoleOnly, selected: this.selected, selection: this.selection };
     this.consoleOnly = false;
     this.group(`depth “${lv.label}”`, () => {
-      const def = sharedIn(res.varHistory.get(DEPTH_VAR)) ?? res.vars.get(DEPTH_VAR);
-      const accent = sharedIn(res.varHistory.get('designAccent')) ?? res.vars.get('designAccent');
-      if (def) this.commit('depth', [setTextChange(def.file, def.node, id)]);
-      else if (accent?.node.parent) this.commit('depth', [{ file: accent.file, patch: patchInsertChild(accent.file.doc, accent.node.parent as XElement, `<${DEPTH_VAR}>${id}</${DEPTH_VAR}>`, { first: true }) }]);
+      this.setDesignVar(DEPTH_VAR, id);
       if (this.screenFile !== 'theme.xml') this.screenFile = 'theme.xml';
       for (const view of ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v))) {
         this.view = view;
@@ -1633,6 +1638,23 @@ class Editor {
     this.notify(`Depth “${lv.label}”: ${lv.help} Ctrl+Z to undo.`);
   }
 
+  /** Writes one of the design's own variables (depth, motion feel) next to its colours. */
+  private setDesignVar(name: string, value: string) {
+    const res = this.themeRes ?? this.res;
+    if (!res) return;
+    const def = sharedIn(res.varHistory.get(name)) ?? res.vars.get(name);
+    const accent = sharedIn(res.varHistory.get('designAccent')) ?? res.vars.get('designAccent');
+    if (def) {
+      if (def.value.trim() !== value) this.commit(name, [setTextChange(def.file, def.node, value)]);
+    } else if (accent?.node.parent) this.commit(name, [{ file: accent.file, patch: patchInsertChild(accent.file.doc, accent.node.parent as XElement, `<${name}>${value}</${name}>`, { first: true }) }]);
+  }
+
+  /** The design theme's motion feel, or null when it hasn't been set. */
+  get motionFeel(): keyof typeof MOTION_FEELS | null {
+    const v = (this.themeRes ?? this.res)?.vars.get(MOTION_VAR)?.value.trim();
+    return v && v in MOTION_FEELS ? (v as keyof typeof MOTION_FEELS) : null;
+  }
+
   /**
    * One feel for every animation in theme.xml's screens: calm (smaller, slower), normal (each
    * preset's own) or lively (bigger, quicker). One undo step.
@@ -1644,6 +1666,8 @@ class Editor {
     this.consoleOnly = false;
     let count = 0;
     this.group(`${f.label.toLowerCase()} motion`, () => {
+      // Kept with the design, so layouts and designs applied later move the same way.
+      if (this.depth !== null) this.setDesignVar(MOTION_VAR, feel);
       if (this.screenFile !== 'theme.xml') this.screenFile = 'theme.xml';
       for (const view of this.viewNames) {
         this.view = view;
@@ -1740,7 +1764,13 @@ class Editor {
    * Applies a design: writes its artwork into the theme, fetches its fonts, and replaces the
    * layout of each screen with the design's (one undo step for the layout).
    */
-  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string } = {}) {
+  /**
+   * Applies a design to the theme's screens. `carry: 'layout'` re-lays out the design that's already
+   * there: the theme's colours, fonts, animations, tile style and your own elements all stay.
+   * Otherwise your own elements and hidden parts stay, and the design brings its colours (unless it
+   * only goes on some screens of a theme that already has design colours).
+   */
+  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string; gameLayout?: string; carry?: 'layout' | 'design' } = {}) {
     if (this.sharedOnly('Designs')) return;
     const p = this.project;
     if (!p) return;
@@ -1750,9 +1780,14 @@ class Editor {
     const artRel = `_inc/ccs/${design.id}`;
     // A depth chosen for this theme stays when another design is applied.
     const depth = this.depth ?? design.depth ?? 'subtle';
-    const wrote = await this.writeArt(artRel, designAssets(design, depth));
+    const allViews = ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v));
+    const views = opts.views ?? allViews;
+    const colours = this.designColours();
+    // The theme's own colours stay when only the layout changes, or the design only goes on some screens.
+    const keepColours = !!colours && (opts.carry === 'layout' || views.length < allViews.length);
+    const wrote = await this.writeArt(artRel, designAssets(keepColours ? recoloured(design, colours!) : design, depth));
     // Drawn in the design's own colours, which the commit below sets: note them afresh.
-    this.#artDrawn.delete(p.dir);
+    if (!keepColours) this.#artDrawn.delete(p.dir);
     task.step('fonts');
     const font = await this.ensureFont(design.font);
     const titleFont = design.titleFont ? await this.ensureFont(design.titleFont) : null;
@@ -1767,17 +1802,22 @@ class Editor {
       logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null,
       consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null,
       depth,
+      motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined,
     };
     this.rev++;
     const res = this.res;
     if (!res) return;
-    const views = opts.views ?? ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v));
-    const label = opts.systemLayout ? `“${LAYOUTS.find((l) => l.id === opts.systemLayout)?.label ?? opts.systemLayout}” in the ${design.label} style` : `design “${design.label}”`;
+    const layoutId = opts.systemLayout ?? opts.gameLayout;
+    const label = layoutId ? `“${LAYOUTS.find((l) => l.id === layoutId)?.label ?? layoutId}” in the ${design.label} style` : `design “${design.label}”`;
+    const changes = designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout, { gameLayout: opts.gameLayout, carry: opts.carry ?? 'design' });
     // The design's colours become shared colours (variables) its parts refer to.
-    this.commit(label, [designVarsChange(p, design, depth), ...designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout)]);
+    this.commit(label, keepColours ? changes : [designVarsChange(p, design, depth, this.motionFeel), ...changes]);
     this.selected = null;
     const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
-    if (opts.systemLayout) return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to the System screen.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
+    if (layoutId) {
+      const where = opts.systemLayout ? 'the System screen' : views.map((v) => viewLabel(v)).join(', ');
+      return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to ${where}.${keepColours ? ' Your colours stay.' : ''}${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
+    }
     this.notify(wrote ? `Design “${design.label}” applied.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `Design “${design.label}” applied in the preview only (files can’t be written here).`);
   }
 
