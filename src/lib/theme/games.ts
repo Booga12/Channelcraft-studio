@@ -121,3 +121,20 @@ export function gameBinding(g: GameInfo, key: string): string | number | boolean
   }
   return g.media[k] ?? g.media[key] ?? '';
 }
+
+/** Media a grid or carousel of games shows for `source` (RetroBat's imageSource), with fallbacks. */
+const ART_ORDER: Record<string, string[]> = {
+  boxart: ['boxart', 'thumbnail', 'image'],
+  thumbnail: ['thumbnail', 'boxart', 'image'],
+  image: ['image', 'thumbnail', 'boxart'],
+  marquee: ['marquee', 'wheel', 'boxart', 'thumbnail'],
+  wheel: ['wheel', 'marquee', 'boxart'],
+  fanart: ['fanart', 'image'],
+  titleshot: ['titleshot', 'image'],
+  cartridge: ['cartridge', 'boxart'],
+  mix: ['mix', 'image', 'thumbnail'],
+};
+export function gameArt(g: GameInfo, source = 'thumbnail'): string | null {
+  for (const k of ART_ORDER[source.trim()] ?? ART_ORDER.thumbnail) if (g.media[k]) return g.media[k];
+  return null;
+}

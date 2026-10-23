@@ -1,4 +1,7 @@
 <script lang="ts">
+  import AppDialog from './AppDialog.svelte';
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
   // Pick, per console, the one game whose video and cover the system screen shows together.
   import { ed } from '$lib/editor.svelte';
   import { coverOf, type Choice } from '$lib/theme/featured';
@@ -40,12 +43,13 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
-
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && close()}>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label="Matching game video and cover">
+<AppDialog title="Matching game video and cover" onclose={close} busy={working} class="sm:max-w-[680px] max-h-[min(680px,90vh)]" bodyClass="flex flex-col overflow-hidden p-0">
+  {#snippet footer()}
+    <span class="mr-auto self-center text-xs text-muted-foreground">Then press Save. Ctrl+Z undoes it.</span>
+    <Button variant="outline" onclick={close} disabled={working}>Cancel</Button>
+    <Button onclick={apply} disabled={loading || working || !systems.length}>{#if working}<Spinner data-icon="inline-start" />Copying videos and covers…{:else}Apply{/if}</Button>
+  {/snippet}
     <header>
-      <h2>Matching game video and cover</h2>
       <p class="dim">
         On its own, RetroBat picks a random video and a random cover separately, so they often show two different games. Here each console shows <strong>one</strong> of your games: its video and its cover, together. The two files are copied into the theme, so it still works if your games drive is unplugged (the theme gets bigger).
       </p>
@@ -89,40 +93,11 @@
       {/if}
       {#each problems as p}<p class="err"><Icon name="close" size={12} /> {p}</p>{/each}
     </div>
-    <footer>
-      <span class="faint">Then press Save. Ctrl+Z undoes it.</span>
-      <button class="secondary" onclick={close} disabled={working}>Cancel</button>
-      <button onclick={apply} disabled={loading || working || !systems.length}>{working ? 'Copying videos and covers…' : 'Apply'}</button>
-    </footer>
-  </div>
-</div>
+</AppDialog>
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: grid;
-    place-items: center;
-    z-index: 400;
-  }
-  .dialog {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    width: min(680px, 94vw);
-    max-height: min(680px, 90vh);
-    background: var(--panel);
-    border: 1px solid #3a3a3a;
-    border-radius: 12px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
-    overflow: hidden;
-  }
   header {
     padding: 18px 20px 8px;
-  }
-  h2 {
-    margin: 0 0 6px;
-    font-size: 16px;
   }
   header p {
     margin: 0 0 8px;
@@ -136,6 +111,8 @@
     font-size: 12px;
   }
   .list {
+    flex: 1;
+    min-height: 0;
     overflow: auto;
     padding: 8px 12px;
     display: grid;
@@ -148,7 +125,7 @@
     gap: 10px;
     align-items: center;
     padding: 8px 10px;
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--bg);
   }
@@ -165,19 +142,8 @@
     min-width: 0;
   }
   .err {
-    color: var(--danger, #e5534b);
+    color: var(--danger);
     font-size: 12px;
     margin: 4px 2px;
-  }
-  footer {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-end;
-    padding: 10px 16px 14px;
-  }
-  footer .faint {
-    margin-right: auto;
-    font-size: 11.5px;
   }
 </style>

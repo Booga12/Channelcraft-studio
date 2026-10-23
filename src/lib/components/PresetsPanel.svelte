@@ -1,38 +1,67 @@
 <script lang="ts">
   // Layout presets for the current screen and colour palettes for the whole theme.
+  import { DEPTHS, MOTION_FEELS, SCREEN_FX } from '$lib/theme/depth';
+  import TileStylePicker from './TileStylePicker.svelte';
   import { ed } from '$lib/editor.svelte';
-  import ConsoleScope from './ConsoleScope.svelte';
   import { viewLabel } from '$lib/friendly';
-  import { appliedDesign, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
+  import { appliedDesign, appliedGameLayout, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
+  import { designGameLayout } from '$lib/theme/designs';
+  import { flipped, gameLayout } from '$lib/theme/gameLayouts';
   import Icon from './Icon.svelte';
   import DesignThumb from './DesignThumb.svelte';
-  import { DESIGNS, designAssets, type Design } from '$lib/theme/designs';
+  import { DESIGNS, DESIGN_GROUPS, type Design, type DesignGroup } from '$lib/theme/designs';
+  import DesignGroupChips from './DesignGroupChips.svelte';
+  import { backgroundSvg } from '$lib/theme/designArt';
 
   const GAME_LISTS = ['basic', 'detailed', 'video'];
 
   let allLists = $state(true);
   let hideOwn = $state(true);
+  let designGroup = $state<DesignGroup | 'all'>('all');
   let applying = $state(false);
+  /** Keep the system and game list layouts in use when another design is picked. */
+  let keepLayouts = $state(false);
+  /** A game list layout picked on a theme without a design: keep its look, or restyle it? */
+  let asking = $state<LayoutPreset | null>(null);
+  let restyleWith = $state('');
 
   async function applyDesign(d: Design) {
     applying = true;
     try {
-      await ed.applyDesign(d, { hideOwn });
+      const p = ed.project;
+      const keep = keepLayouts && p ? { systemLayout: appliedSystemLayout(p) ?? undefined, gameLayout: appliedGameLayout(p, 'detailed') ?? undefined } : {};
+      await ed.applyDesign(d, { hideOwn, ...keep });
     } finally {
       applying = false;
     }
   }
 
-  const layouts = $derived(layoutsFor(ed.view));
+  /** Flipped game list layouts are picked with the Flip option rather than shown as cards of their own. */
+  let flip = $state(false);
+  const layouts = $derived(layoutsFor(ed.view).filter((l) => l.kind !== 'game' || !gameLayout(l.id)?.flipOf));
+  const asApplied = (l: LayoutPreset): LayoutPreset => {
+    const id = flip && l.kind === 'game' ? flipped(l.id) : null;
+    return (id && layoutsFor(ed.view).find((x) => x.id === id)) || l;
+  };
   const current = $derived.by(() => {
     ed.rev;
     return ed.project ? appliedLayout(ed.project, ed.view) : null;
   });
   const isSystem = $derived(ed.view === 'system');
+  const isGameList = $derived(GAME_LISTS.includes(ed.view));
+  /** The design on this game list screen, which game list layouts are drawn in. */
+  const listDesign = $derived.by(() => {
+    ed.rev;
+    return ed.project && isGameList ? appliedDesign(ed.project, ed.view) : null;
+  });
   /** The layout card to tick: on the system screen also the layout a design brought with it. */
   const currentLayout = $derived.by(() => {
     ed.rev;
-    return ed.project && isSystem ? appliedSystemLayout(ed.project) : current;
+    if (!ed.project) return null;
+    if (isSystem) return appliedSystemLayout(ed.project);
+    // A flipped layout ticks the card it flips.
+    const g = isGameList ? appliedGameLayout(ed.project, ed.view) : null;
+    return g ? (gameLayout(g)?.flipOf ?? g) : current;
   });
   const sysDesign = $derived.by(() => {
     ed.rev;
@@ -44,6 +73,7 @@
   let styleChoice = $state('auto');
   const matching = (l: LayoutPreset) => DESIGNS.find((d) => d.system === l.id) ?? null;
   function styleFor(l: LayoutPreset): Design | null {
+    if (isGameList) return listDesign;
     if (!isSystem || styleChoice === 'plain') return null;
     if (styleChoice === 'auto') return sysDesign ?? matching(l) ?? DESIGNS[0];
     if (styleChoice === 'match') return matching(l) ?? sysDesign ?? DESIGNS[0];
@@ -52,7 +82,7 @@
   const bgCache = new Map<string, string>();
   function bgOf(d: Design) {
     let u = bgCache.get(d.id);
-    if (!u) bgCache.set(d.id, (u = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(designAssets(d)['background.png'])}")`));
+    if (!u) bgCache.set(d.id, (u = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(backgroundSvg(d))}")`));
     return u;
   }
   const hexA = (h: string, a: number) => `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
@@ -73,12 +103,20 @@
     info: '#8a8a8a',
   };
 
-  async function apply(l: LayoutPreset) {
-    const style = styleFor(l);
+  async function apply(card: LayoutPreset, choice?: 'plain' | Design) {
+    const l = asApplied(card);
+    const style = choice === 'plain' ? null : (choice ?? styleFor(l));
+    // A game list layout on a theme without a design: ask first.
+    if (!style && isGameList && choice !== 'plain') {
+      asking = card;
+      restyleWith = (DESIGNS.find((d) => designGameLayout(d) === l.id) ?? DESIGNS[0]).id;
+      return;
+    }
+    asking = null;
     if (style) {
       applying = true;
       try {
-        await ed.applyLayout(l, ['system'], style, hideOwn);
+        await ed.applyLayout(l, isSystem ? ['system'] : targets, style, hideOwn);
       } finally {
         applying = false;
       }
@@ -91,7 +129,7 @@
   function palette(id: string) {
     const p = PALETTES.find((x) => x.id === id)!;
     const n = ed.applyPalette(p);
-    ed.notify(n ? `Palette “${p.label}” applied${ed.consoleOnly ? ` to ${ed.consoleName} only` : ''}. Press Ctrl+Z to undo.` : 'This theme names its colours differently; change them in the Colours tab.');
+    ed.notify(n ? `Palette “${p.label}” applied${ed.consoleOnly ? ` to ${ed.consoleName} only` : ''}. Press Ctrl+Z to undo.` : 'This theme names its colours differently; change them in Colours.');
   }
 
   const covered = $derived.by(() => {
@@ -106,8 +144,14 @@
     <h4>Designs</h4>
     <p class="dim note">A complete look for every screen: artwork, colours, font, animations, and all of RetroBat's game and system data placed for you.</p>
     <label class="chk"><input type="checkbox" bind:checked={hideOwn} /> Hide this theme's own decorations</label>
+    <label class="chk" title="The new design is laid out the way your screens are now, instead of with its own layouts."><input type="checkbox" bind:checked={keepLayouts} /> Keep my layouts</label>
+    <button class="secondary small surprise" disabled={applying} onclick={async () => { applying = true; try { await ed.surprise({ hideOwn, group: designGroup }); } finally { applying = false; } }} title="A random design with layouts that go together. Press again for another; Ctrl+Z goes back.">Surprise me</button>
+    {#if ed.readability && !ed.readability.ok}
+      <p class="warn note">Text is hard to read on this background (contrast {ed.readability.ratio}:1). <button class="small" onclick={() => ed.fixReadability()}>Make it readable</button></p>
+    {/if}
+    <DesignGroupChips bind:group={designGroup} />
     <div class="designs">
-      {#each DESIGNS as d (d.id)}
+      {#each DESIGNS.filter((d) => designGroup === 'all' || d.group === designGroup) as d (d.id)}
         <button class="dcard" class:on={current === `design-${d.id}`} onclick={() => applyDesign(d)} title={d.description} disabled={applying}>
           <DesignThumb design={d} />
           <span class="name">
@@ -132,24 +176,48 @@
             <option value="auto">{sysDesign ? `Current design (${sysDesign.label})` : 'Matching design for each layout'}</option>
             {#if sysDesign}<option value="match">Matching design for each layout</option>{/if}
             <option value="plain">No design: keep the theme's own look</option>
-            <optgroup label="Designs">
-              {#each DESIGNS as d (d.id)}<option value={d.id}>{d.label}</option>{/each}
-            </optgroup>
+            {#each DESIGN_GROUPS as g (g.id)}
+              <optgroup label="{g.label} designs">
+                {#each DESIGNS.filter((d) => d.group === g.id) as d (d.id)}<option value={d.id}>{d.label}</option>{/each}
+              </optgroup>
+            {/each}
           </select>
         </label>
         {#if styleChoice === 'plain'}
           <p class="faint note">Only RetroBat's carousel (or grid) and its game count move. The theme's decorations stay where they are.</p>
         {/if}
+      {:else if listDesign}
+        <p class="dim note">Where everything goes, drawn in {listDesign.label}: your colours, fonts, animations and anything you added stay.</p>
+        <button class="ghost small" onclick={() => ed.resetScreen(ed.view)} title="Undo everything you changed on this screen, keeping the design, colours and layout. Other screens aren't touched.">Reset this screen to the design</button>
       {:else}
-        <p class="dim note">Moves the parts RetroBat draws itself (game list, picture, description, carousel). Decorations made for this theme stay where they are, so presets suit simple and new themes best.</p>
+        <p class="dim note">This theme isn't made from a design, so you can choose: just move RetroBat's own parts (list, picture, description), or restyle the screen with a design.</p>
+      {/if}
+      {#if asking}
+        {@const l = asking}
+        <div class="ask" role="group" aria-label="How to use {l.label}">
+          <strong>“{l.label}” on this theme</strong>
+          <button class="secondary small" onclick={() => apply(l, 'plain')}>Keep my theme's look <small>Only the list, picture and text move</small></button>
+          <div class="restyle">
+            <button class="small" onclick={() => apply(l, DESIGNS.find((d) => d.id === restyleWith) ?? DESIGNS[0])}>Restyle it with a design</button>
+            <select bind:value={restyleWith} aria-label="Design to restyle with">
+              {#each DESIGN_GROUPS as g (g.id)}
+                <optgroup label="{g.label} designs">
+                  {#each DESIGNS.filter((d) => d.group === g.id) as d (d.id)}<option value={d.id}>{d.label}</option>{/each}
+                </optgroup>
+              {/each}
+            </select>
+          </div>
+          <button class="link small" onclick={() => (asking = null)}>Cancel</button>
+        </div>
       {/if}
       {#if gridSystem}
         <p class="warn note">This theme shows consoles in a grid, not a carousel. A carousel preset adds a carousel that may overlap the grid.</p>
       {/if}
       {#if GAME_LISTS.includes(ed.view)}
         <label class="chk"><input type="checkbox" bind:checked={allLists} /> Apply to all game list screens</label>
+        <label class="chk" title="Puts the list on the other side: every layout works both ways round."><input type="checkbox" bind:checked={flip} /> Flip left and right</label>
       {/if}
-      <div class="grid">
+      <div class="tiles">
         {#each layouts as l (l.id)}
           {@const st = styleFor(l)}
           <button class="card" class:on={currentLayout === l.id} onclick={() => apply(l)} title={l.description} disabled={applying}>
@@ -177,11 +245,58 @@
   </section>
 
   <section>
+    <h4>Depth and motion</h4>
+    <div class="ui-new flex flex-col gap-3">
+      {#if ed.depth !== null}
+        <div class="flex flex-col gap-1.5">
+          <span class="text-xs font-medium">3D depth</span>
+          <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted p-0.5" role="radiogroup" aria-label="3D depth">
+            {#each DEPTHS as d (d.id)}
+              <button
+                role="radio"
+                aria-checked={ed.depth === d.id}
+                class="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-all duration-150 hover:text-foreground aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-elev-1"
+                onclick={() => ed.setDepth(d.id)}
+                title={d.help}>{d.label}</button
+              >
+            {/each}
+          </div>
+          <p class="text-xs text-muted-foreground">{DEPTHS.find((d) => d.id === ed.depth)?.help} RetroBat can't turn things in 3D, so depth comes from shadows, lift and layers moving at different speeds.</p>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <span class="text-xs font-medium">Screen effect</span>
+          <div class="grid grid-cols-3 gap-1">
+            {#each SCREEN_FX as f (f.id)}
+              <button class="rounded-md px-2 py-1 text-xs font-medium ring-1 ring-border transition-colors duration-150 hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:ring-primary" aria-pressed={ed.screenFx === f.id} onclick={() => ed.setScreenFx(f.id)} title={f.help}>{f.label}</button>
+            {/each}
+          </div>
+          <p class="text-xs text-muted-foreground">Drawn over every screen by RetroBat's own shaders. The preview shows a close match.</p>
+        </div>
+      {/if}
+      <div class="flex flex-col gap-1.5">
+        <span class="text-xs font-medium">How everything moves</span>
+        <div class="grid grid-cols-3 gap-1">
+          {#each Object.entries(MOTION_FEELS) as [id, f] (id)}
+            <button class="rounded-md px-2 py-1 text-xs font-medium ring-1 ring-border transition-colors duration-150 hover:bg-muted" onclick={() => ed.setMotionFeel(id as keyof typeof MOTION_FEELS)} title={f.help}>{f.label}</button>
+          {/each}
+        </div>
+        <p class="text-xs text-muted-foreground">Sets the size and speed of every animation in the theme at once.</p>
+      </div>
+    </div>
+  </section>
+
+  {#if ed.tileStyle !== null}
+    <section>
+      <h4>Tile style</h4>
+      <TileStylePicker />
+    </section>
+  {/if}
+
+  <section>
     <h4>Colour palettes</h4>
     {#if covered === 0}
-      <p class="faint note">This theme names its colours its own way, so palettes can't map onto it. Change its colours in the Colours tab instead. Themes made with “New theme” work with palettes.</p>
+      <p class="faint note">This theme names its colours its own way, so palettes can't map onto it. Change its colours in Colours instead. Themes made with “New theme” work with palettes.</p>
     {:else}
-      <div class="scope"><ConsoleScope /></div>
       <div class="pals">
         {#each PALETTES as p (p.id)}
           <button class="pal" onclick={() => palette(p.id)} title="Apply the {p.label} palette">
@@ -199,9 +314,6 @@
 </div>
 
 <style>
-  .scope {
-    margin: 0 -12px 8px;
-  }
   .presets {
     padding: 8px 10px 16px;
   }
@@ -229,7 +341,7 @@
     margin-bottom: 8px;
     color: var(--text-dim);
   }
-  .grid {
+  .tiles {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -241,15 +353,15 @@
     white-space: normal;
     padding: 6px;
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 6px;
   }
   .card:hover {
-    border-color: var(--accent);
+    border-color: var(--brand);
   }
   .card.on {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 1px var(--brand);
   }
   .style {
     display: grid;
@@ -263,7 +375,29 @@
     min-width: 0;
   }
   small.in {
-    color: var(--accent);
+    color: var(--brand);
+  }
+  .surprise {
+    margin: 2px 0 8px;
+  }
+  .ask {
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+    border: 1px solid var(--brand);
+    border-radius: 6px;
+    background: var(--bg);
+  }
+  .ask button small {
+    display: block;
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+  .ask .restyle {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px;
   }
   .card:disabled {
     opacity: 0.6;
@@ -281,7 +415,7 @@
     font-weight: 600;
   }
   .card.on .name {
-    color: var(--accent);
+    color: var(--brand);
   }
   small {
     color: var(--text-faint);
@@ -298,19 +432,19 @@
     gap: 4px;
     padding: 5px;
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 6px;
     text-align: left;
   }
   .dcard:hover:not(:disabled) {
-    border-color: var(--accent);
+    border-color: var(--brand);
   }
   .dcard.on {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 1px var(--brand);
   }
   .dcard.on .name {
-    color: var(--accent);
+    color: var(--brand);
   }
   .pals {
     display: grid;
@@ -322,13 +456,13 @@
     align-items: center;
     gap: 8px;
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 6px;
     padding: 6px 8px;
     text-align: left;
   }
   .pal:hover {
-    border-color: var(--accent);
+    border-color: var(--brand);
   }
   .sw {
     display: flex;

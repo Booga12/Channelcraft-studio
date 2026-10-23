@@ -6,6 +6,8 @@
   import StartScreen from '$lib/components/StartScreen.svelte';
   import EditorView from '$lib/components/EditorView.svelte';
   import Toast from '$lib/components/Toast.svelte';
+  import TaskOverlay from '$lib/components/TaskOverlay.svelte';
+  import UpdateBanner from '$lib/components/UpdateBanner.svelte';
   import Guide from '$lib/components/Guide.svelte';
   import SettingsDialog from '$lib/components/SettingsDialog.svelte';
   import ShortcutsDialog from '$lib/components/ShortcutsDialog.svelte';
@@ -93,7 +95,9 @@
 {#if ed.showRestore && ed.project}
   <RestoreDialog />
 {/if}
-{#if ed.showSearch && ed.project}
+{#if ed.project}
   <SearchPalette />
 {/if}
 <Toast />
+<TaskOverlay />
+<UpdateBanner />

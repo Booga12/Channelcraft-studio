@@ -82,6 +82,36 @@
     else ed.notify('That font could not be downloaded. Check the internet connection.', 'error');
   }
 
+  // The whole Google Fonts library, searched by name (loaded the first time the tab is opened).
+  let google = $state<{ family: string; category: string }[]>([]);
+  let googleState = $state<'idle' | 'loading' | 'ready' | 'failed'>('idle');
+  async function loadGoogle() {
+    if (googleState !== 'idle') return;
+    googleState = 'loading';
+    try {
+      google = await api.googleFonts();
+      googleState = 'ready';
+    } catch {
+      googleState = 'failed';
+    }
+  }
+  const googleMatches = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const own = new Set(FONT_CATALOG.map((f) => f.label.toLowerCase()));
+    return google.filter((f) => f.family.toLowerCase().includes(q) && !own.has(f.family.toLowerCase())).slice(0, 40);
+  });
+  async function pickGoogle(family: string) {
+    busy = true;
+    try {
+      pick(await ed.ensureGoogleFont(family));
+    } catch (e) {
+      ed.notify(String(e), 'error');
+    } finally {
+      busy = false;
+    }
+  }
+
   async function pickPc(path: string) {
     busy = true;
     try {
@@ -115,7 +145,7 @@
       {#if kind === 'font'}
         <div class="ftabs" role="tablist">
           <button class:on={fontTab === 'theme'} onclick={() => (fontTab = 'theme')}>In this theme</button>
-          <button class:on={fontTab === 'free'} onclick={() => (fontTab = 'free')}>Free fonts</button>
+          <button class:on={fontTab === 'free'} onclick={() => ((fontTab = 'free'), loadGoogle())}>Free fonts</button>
           <button class:on={fontTab === 'pc'} onclick={() => ((fontTab = 'pc'), loadPcFonts())}>On this PC</button>
         </div>
       {/if}
@@ -127,6 +157,19 @@
               <small class="faint">{f.style}</small>
             </button>
           {/each}
+          {#if filter.trim().length >= 2}
+            <p class="faint gtitle">All of Google Fonts{googleState === 'loading' ? ' (loading…)' : googleState === 'failed' ? ' (could not be reached: offline?)' : ''}</p>
+            {#each googleMatches as f (f.family)}
+              <button class="item ghost font" onclick={() => pickGoogle(f.family)} disabled={busy}>
+                <span>{f.family}</span>
+                <small class="faint">{f.category.toLowerCase()}</small>
+              </button>
+            {:else}
+              {#if googleState === 'ready'}<p class="faint">No other Google Fonts match “{filter.trim()}”.</p>{/if}
+            {/each}
+          {:else if googleState === 'ready'}
+            <p class="faint gtitle">Type a name to search all {google.length.toLocaleString()} Google Fonts.</p>
+          {/if}
           <p class="faint lic">Free fonts (Open Font License) from Google Fonts, downloaded into the theme when picked, with their licence file next to them so the theme can be shared.</p>
         </div>
       {:else if kind === 'font' && fontTab === 'pc'}
@@ -180,7 +223,7 @@
     width: 34px;
     height: 24px;
     object-fit: contain;
-    background: repeating-conic-gradient(#2a2e36 0 25%, #353a44 0 50%) 0 0 / 8px 8px;
+    background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 8px 8px;
     border-radius: 4px;
     flex: none;
   }
@@ -219,7 +262,7 @@
     width: 100%;
     height: 54px;
     object-fit: contain;
-    background: repeating-conic-gradient(#20242b 0 25%, #2a2f38 0 50%) 0 0 / 10px 10px;
+    background: repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 10px 10px;
     border-radius: 4px;
   }
   .ftabs {

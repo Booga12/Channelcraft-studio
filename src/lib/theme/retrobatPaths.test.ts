@@ -12,7 +12,8 @@ import type { Environment } from './context';
 import type { GameInfo } from './games';
 
 const THEMES = 'M:\\Retrobat\\emulationstation\\.emulationstation\\themes';
-const MADE_HERE = ['test claude'];
+const MADE_HERE = ['test claude', 'claude theme test v1', 'claude theme test v2'];
+const FOUND = MADE_HERE.filter((t) => existsSync(`${THEMES}\\${t}\\theme.xml`));
 const ES_HOME = 'M:\\Retrobat\\emulationstation\\.emulationstation';
 
 const game = (path: string): GameInfo => ({ path, name: path, description: '', rating: 0, releasedate: '', developer: '', publisher: '', genre: '', players: '', playcount: '', lastplayed: '', gametime: '', favorite: false, media: {} });

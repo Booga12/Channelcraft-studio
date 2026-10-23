@@ -15,6 +15,7 @@ const { ed } = await import('./editor.svelte');
 const { ThemeProject } = await import('./theme/project');
 const { nodeFs } = await import('./theme/nodefs');
 const { frameOf, FRAME_DEFAULT } = await import('./theme/frame');
+const { shaderOf } = await import('./theme/shadow');
 
 async function open(design = 'cinema') {
   const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
@@ -61,10 +62,13 @@ describe('frames', () => {
     expect(p.entry!.src).toBe(before);
   });
 
-  it('a picture with the soft shadow shader gets no frame on top', async () => {
+  it('a frame takes the place of the soft shadow (one shader per picture)', async () => {
     await open('cinema');
     ed.setShadow('ccs_boxart', 4);
     ed.setFrame('ccs_boxart', FRAME_DEFAULT);
-    expect(frameOf(ed.currentView!.elements.get('ccs_boxart')!)).toBeNull();
+    const box = ed.currentView!.elements.get('ccs_boxart')!;
+    expect(frameOf(box)).toBeTruthy();
+    expect(box.complex.filter((c) => c.name === 'shader')).toHaveLength(1);
+    expect(shaderOf(box)?.shadow).toBe(false);
   });
 });

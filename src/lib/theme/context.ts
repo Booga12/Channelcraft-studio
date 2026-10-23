@@ -27,6 +27,8 @@ export interface Environment {
   game?: GameInfo;
   /** Names for the game list rows. */
   gameNames?: string[];
+  /** The console's games with their media, for grids and carousels of games. */
+  games?: GameInfo[];
 }
 
 export const ARCH = ['windows', 'win32', 'x86_64', 'x64', 'win64'];

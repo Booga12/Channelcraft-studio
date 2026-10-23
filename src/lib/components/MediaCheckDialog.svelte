@@ -1,4 +1,7 @@
 <script lang="ts">
+  import AppDialog from './AppDialog.svelte';
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
   // Checks every console's scraped games for missing or broken media. Read only.
   import { save as saveDialog } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
@@ -83,12 +86,12 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
-
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && close()}>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label="Check game media">
+<AppDialog title="Check game media" onclose={close} class="sm:max-w-[900px] h-[min(700px,90vh)]" bodyClass="flex flex-col overflow-hidden p-0">
+  {#snippet footer()}
+    <Button variant="outline" onclick={exportCsv} disabled={!shown.length}>Save report (CSV)…</Button>
+    <Button variant="outline" onclick={close}>Close</Button>
+  {/snippet}
     <header>
-      <h2>Check game media</h2>
       <p class="dim">
         Looks through the scraped games of your {systems.length} consoles for missing videos and covers, files that can't be found, games listed twice and missing descriptions. It only reads: nothing in your games or gamelists is changed. Use RetroBat's scraper to fill the gaps.
       </p>
@@ -118,7 +121,7 @@
           </select>
         </div>
         {#if truncated}<p class="warn">Showing the first {MAX_ISSUES.toLocaleString()} findings only.</p>{/if}
-        <div class="table">
+        <div class="rows">
           {#each shown.slice(0, 400) as i}
             <div class="tr">
               <span class="sys">{i.system}</span>
@@ -137,41 +140,13 @@
       {#if error}<p class="warn">{error}</p>{/if}
       <p class="faint note">A file being there doesn't prove a video plays in RetroBat (that depends on its format), so check playback in RetroBat itself.</p>
     </div>
-    <footer>
-      <button class="secondary" onclick={exportCsv} disabled={!shown.length}>Save report (CSV)…</button>
-      <button class="secondary" onclick={close}>Close</button>
-    </footer>
-  </div>
-</div>
+</AppDialog>
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: grid;
-    place-items: center;
-    z-index: 400;
-  }
-  .dialog {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    width: min(900px, 95vw);
-    height: min(700px, 90vh);
-    background: var(--panel);
-    border: 1px solid #3a3a3a;
-    border-radius: 12px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
-    overflow: hidden;
-  }
   header {
     padding: 18px 20px 10px;
     display: grid;
     gap: 8px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 16px;
   }
   header p {
     margin: 0;
@@ -188,14 +163,16 @@
     width: 220px;
     height: 8px;
     border-radius: 4px;
-    background: #333;
+    background: var(--hover);
     overflow: hidden;
   }
   .progress div {
     height: 100%;
-    background: var(--accent);
+    background: var(--brand);
   }
   .body {
+    flex: 1;
+    min-height: 0;
     overflow: auto;
     padding: 4px 16px 8px;
     display: grid;
@@ -210,16 +187,16 @@
   }
   .chip {
     background: var(--bg);
-    border: 1px solid #3a3a3a;
+    border: 1px solid var(--line);
     border-radius: 999px;
     padding: 3px 10px;
     font-size: 12px;
   }
   .chip.on {
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--brand);
+    color: var(--brand);
   }
-  .table {
+  .rows {
     display: grid;
     font-size: 12px;
   }
@@ -228,7 +205,7 @@
     grid-template-columns: 150px minmax(0, 1.2fr) 150px minmax(0, 1.5fr);
     gap: 10px;
     padding: 4px 6px;
-    border-bottom: 1px solid #2c2c2c;
+    border-bottom: 1px solid var(--line);
   }
   .tr span {
     overflow: hidden;
@@ -245,16 +222,10 @@
     margin: 0;
   }
   .good {
-    color: var(--ok, #3fb56b);
+    color: var(--ok);
   }
   .note {
     font-size: 11px;
     margin: 6px 0 0;
-  }
-  footer {
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    padding: 10px 16px 14px;
   }
 </style>

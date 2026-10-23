@@ -40,6 +40,18 @@ export const FONT_CATALOG: CatalogFont[] = [
   f('lilita', 'Lilita One', 'lilitaone/LilitaOne-Regular.ttf', 'Chunky cartoon'),
   f('fredoka', 'Fredoka', 'fredoka/Fredoka%5Bwdth%2Cwght%5D.ttf', 'Bubbly and playful'),
   f('spacegrotesk', 'Space Grotesk', 'spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf', 'Quirky grotesk'),
+  f('manrope', 'Manrope', 'manrope/Manrope%5Bwght%5D.ttf', 'Crisp and businesslike'),
+  f('dmserif', 'DM Serif Display', 'dmserifdisplay/DMSerifDisplay-Regular.ttf', 'Friendly display serif'),
+  f('lora', 'Lora', 'lora/Lora%5Bwght%5D.ttf', 'Warm book serif'),
+  f('cinzel', 'Cinzel', 'cinzel/Cinzel%5Bwght%5D.ttf', 'Classical capitals, luxurious'),
+  f('quicksand', 'Quicksand', 'quicksand/Quicksand%5Bwght%5D.ttf', 'Rounded and gentle'),
+  f('mochiy', 'Mochiy Pop One', 'mochiypopone/MochiyPopOne-Regular.ttf', 'Cute and chunky'),
+  f('pacifico', 'Pacifico', 'pacifico/Pacifico-Regular.ttf', 'Flowing script (titles)'),
+  f('bangers', 'Bangers', 'bangers/Bangers-Regular.ttf', 'Comic-book shouting'),
+  f('bungee', 'Bungee', 'bungee/Bungee-Regular.ttf', 'Chunky arcade signage'),
+  f('michroma', 'Michroma', 'michroma/Michroma-Regular.ttf', 'Wide space-age'),
+  f('sharetech', 'Share Tech Mono', 'sharetechmono/ShareTechMono-Regular.ttf', 'Terminal monospace'),
+  f('creepster', 'Creepster', 'creepster/Creepster-Regular.ttf', 'Spooky drips (titles)'),
 ];
 
 export function catalogFont(id: string): CatalogFont | undefined {

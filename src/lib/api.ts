@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { SvelteMap } from 'svelte/reactivity';
 
 export interface RootInfo {
   root: string;
@@ -69,6 +70,27 @@ export interface ImportPlan {
   hasSplash: boolean;
 }
 
+/** RetroBat's intro video settings ([SplashScreen] in retrobat.ini). */
+export interface IntroSettings {
+  enableIntro: boolean;
+  fileName: string;
+  /** "default" (RetroBat's video folder) or a folder of your own. */
+  filePath: string;
+  randomVideo: boolean;
+  videoDelay: number;
+  waitForVideoEnd: boolean;
+  killVideoWhenEsReady: boolean;
+  gamepadVideoKill: boolean;
+}
+
+export interface IntroInfo {
+  settings: IntroSettings;
+  /** retrobat.ini exists (RetroBat makes it the first time it runs). */
+  found: boolean;
+  folder: string;
+  videos: { name: string; path: string; size: number }[];
+}
+
 export const api = {
   detectRetrobat: () => invoke<string | null>('detect_retrobat'),
   setRetrobatRoot: (path: string) => invoke<RootInfo>('set_retrobat_root', { path }),
@@ -111,11 +133,15 @@ export const api = {
   listFonts: () => invoke<{ name: string; path: string; source: string }[]>('list_fonts'),
   addFontToTheme: (themeDir: string, src: string) => invoke<string>('add_font_to_theme', { themeDir, src }),
   downloadFont: (themeDir: string, url: string, fileName: string) => invoke<string>('download_font', { themeDir, url, fileName }),
+  /** Every Google Fonts family, by name and category. */
+  googleFonts: () => invoke<{ family: string; category: string }[]>('google_fonts'),
+  /** Where a Google Fonts family's regular font file is (Open Font License families only). */
+  googleFontFile: (family: string) => invoke<{ url: string; file_name: string }>('google_font_file', { family }),
   backupsDir: () => invoke<string>('backups_dir'),
   noticesPath: () => invoke<string>('notices_path'),
   copyTheme: (src: string, name: string) => invoke<string>('copy_theme', { src, name }),
   /** Zips a backup, then moves the folder to the Recycle Bin. Returns the backup path. */
-  deleteTheme: (dir: string) => invoke<string>('delete_theme', { dir }),
+  deleteTheme: (dir: string) => invoke<void>('delete_theme', { dir }),
   createThemeFromStarter: (name: string) => invoke<string>('create_theme_from_starter', { name }),
   /** Looks inside a theme .zip or folder (nothing is written): what would come in and what wouldn't. */
   inspectThemeImport: (source: string) => invoke<ImportPlan>('inspect_theme_import', { source }),
@@ -133,6 +159,9 @@ export const api = {
   readThemesettings: (theme: string) => invoke<string>('read_themesettings', { theme }),
   setActiveTheme: (theme: string) => invoke<void>('set_active_theme', { theme }),
   launchRetrobat: () => invoke<void>('launch_retrobat'),
+  readIntro: () => invoke<IntroInfo>('read_intro'),
+  /** Writes the intro settings into retrobat.ini (backed up the first time). */
+  writeIntro: (settings: IntroSettings) => invoke<IntroInfo>('write_intro', { settings }),
 };
 
 export const tauriFs: ThemeFs = {
@@ -143,7 +172,9 @@ export const tauriFs: ThemeFs = {
 
 const urlCache = new Map<string, string>();
 /** Files created in this session (design artwork), shown before or without being on disk. */
-const virtualFiles = new Map<string, string>();
+// Reactive, so the preview picks up artwork the editor has just drawn (a SvelteMap works outside
+// components too).
+const virtualFiles = new SvelteMap<string, string>();
 
 export function registerVirtualFile(path: string, content: string, mime = 'image/svg+xml') {
   virtualFiles.set(path.toLowerCase().replace(/\//g, '\\'), `data:${mime};charset=utf-8,${encodeURIComponent(content)}`);
@@ -151,6 +182,7 @@ export function registerVirtualFile(path: string, content: string, mime = 'image
 
 /** URL the webview can load a local file from. */
 export function fileUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
   const v = virtualFiles.get(path.toLowerCase().replace(/\//g, '\\'));
   if (v) return v;
   let u = urlCache.get(path);

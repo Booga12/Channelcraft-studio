@@ -1,4 +1,7 @@
 <script lang="ts">
+  import AppDialog from './AppDialog.svelte';
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
   // Brings in a theme someone shared (a .zip or a folder). It is looked at first and only written,
   // as a new theme folder, when the user presses Import.
   import { open } from '@tauri-apps/plugin-dialog';
@@ -55,14 +58,17 @@
   const size = (b: number) => (b > 1 << 30 ? `${(b / (1 << 30)).toFixed(1)} GB` : b > 1 << 20 ? `${(b / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && !busy && onclose()} />
-
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && !busy && onclose()}>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label="Import a theme">
-    <h2>Import a theme</h2>
-    <p class="dim">
-      Add a theme someone shared, from a .zip or a folder. ChannelCraft looks inside first and shows what will come in. It is added as a new theme: your other themes aren't touched and RetroBat keeps the theme it uses.
-    </p>
+<AppDialog
+  title="Import a theme"
+  description="Add a theme someone shared, from a .zip or a folder. ChannelCraft looks inside first and shows what will come in. It is added as a new theme: your other themes aren't touched and RetroBat keeps the theme it uses."
+  {onclose}
+  {busy}
+  class="sm:max-w-[560px]"
+>
+  {#snippet footer()}
+    <Button variant="outline" onclick={onclose} disabled={busy}>Cancel</Button>
+    <Button onclick={run} disabled={!plan || busy || taken || badName}>{#if busy && plan}<Spinner data-icon="inline-start" />Importing…{:else}Import{/if}</Button>
+  {/snippet}
     <div class="pick">
       <button class="secondary" onclick={() => pick(false)} disabled={busy}>Choose a .zip…</button>
       <button class="secondary" onclick={() => pick(true)} disabled={busy}>Choose a folder…</button>
@@ -95,39 +101,9 @@
       {#if taken}<p class="warn">A theme with this name already exists. Pick another name.</p>{:else if badName}<p class="warn">Folder names can't be empty, start with a dot, end with a dot or space, or contain \ / : * ? " &lt; &gt; |</p>{/if}
     {/if}
     {#if error}<p class="warn">{error}</p>{/if}
-
-    <footer>
-      <button class="secondary" onclick={onclose} disabled={busy}>Cancel</button>
-      <button class="primary" onclick={run} disabled={!plan || busy || taken || badName}>{busy && plan ? 'Importing…' : 'Import'}</button>
-    </footer>
-  </div>
-</div>
+</AppDialog>
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: grid;
-    place-items: center;
-    z-index: 400;
-  }
-  .dialog {
-    width: min(620px, 94vw);
-    max-height: 90vh;
-    overflow: auto;
-    background: var(--panel);
-    border: 1px solid #3a3a3a;
-    border-radius: 12px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
-    padding: 18px 20px 14px;
-    display: grid;
-    gap: 10px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 16px;
-  }
   p {
     margin: 0;
     font-size: 12px;
@@ -149,7 +125,7 @@
     display: grid;
     gap: 6px;
     padding: 10px 12px;
-    border: 1px solid #333;
+    border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--bg);
   }
@@ -173,11 +149,5 @@
   }
   .warn {
     color: var(--warn);
-  }
-  footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 4px;
   }
 </style>

@@ -1,10 +1,12 @@
 <script lang="ts">
   import { ed } from '$lib/editor.svelte';
+  import { prefs } from '$lib/prefs.svelte';
   import { fileUrl } from '$lib/api';
   import { renderText, type ExprEnv } from '$lib/theme/expr';
   import { resolveAsset, resolveAssetWithFallbacks, type ResolvedElement } from '$lib/theme/resolver';
   import { cssColor, parsePair } from '$lib/theme/schema';
   import { MOCK_GAME, MOCK_GAMES, type SystemInfo } from '$lib/theme/systems';
+  import { gameArt } from '$lib/theme/games';
   import type { Resolution } from '$lib/theme/resolver';
   import type { Environment } from '$lib/theme/context';
   import { animationCss, screenOf } from '$lib/theme/animations';
@@ -40,6 +42,7 @@
     locked = false,
     animate = false,
     play,
+    slide = { by: 0, axis: 'x', mode: 'slide' },
     z,
   }: {
     el: ResolvedElement;
@@ -57,6 +60,11 @@
     animate?: boolean;
     /** Which game or console is shown and which way the list last moved, so motion replays. */
     play?: { token: string; dir: number };
+    /**
+     * The console screen between two consoles: `by` slots still to scroll (0 when settled).
+     * The carousel scrolls by it; everything else slides a screen per slot, or fades.
+     */
+    slide?: { by: number; axis: 'x' | 'y'; mode: string };
     /** Stacking position when the screen has a fixed drawing order (loading screens). */
     z?: number;
   } = $props();
@@ -204,6 +212,26 @@
     return el.name;
   }
 
+  /**
+   * RetroBat's text glow as a CSS text-shadow: glowSize spreads it, glowOffset (in pixels) moves it,
+   * which is how themes give text a drop shadow.
+   */
+  const glowCss = $derived.by(() => {
+    const glow = val('glowColor');
+    const size = num('glowSize', 0);
+    if (!glow || size <= 0) return '';
+    const off = (val('glowOffset') ?? '').trim().split(/\s+/).map(Number).filter(Number.isFinite);
+    const [ox, oy] = off.length ? [off[0], off[1] ?? off[0]] : [0, 0];
+    return ox || oy ? `${ox}px ${oy}px ${size * 1.5}px ${cssColor(glow)}` : `0 0 ${size * 2}px ${cssColor(glow)}`;
+  });
+
+  /** RetroBat's mirror reflection under a picture: `reflexion` is its strength at the top and at the bottom. */
+  function reflectCss(v: string | undefined): string | undefined {
+    const [a, b] = (v ?? '').trim().split(/\s+/).map(Number);
+    if (!Number.isFinite(a) || (!a && !b)) return undefined;
+    return `below 0 linear-gradient(to bottom, rgba(0,0,0,${Number.isFinite(b) ? b : 0}), rgba(0,0,0,${a}))`;
+  }
+
   const textStyle = $derived.by(() => {
     const parts = [
       `font-family:${font}`,
@@ -217,18 +245,20 @@
     if (upper) parts.push('text-transform:uppercase');
     const bg = val('backgroundColor');
     if (bg) parts.push(`background:${cssColor(bg)}`);
-    const glow = val('glowColor');
-    if (glow && num('glowSize', 0) > 0) parts.push(`text-shadow:0 0 ${num('glowSize', 0) * 2}px ${cssColor(glow)}`);
+    if (glowCss) parts.push(`text-shadow:${glowCss}`);
     return parts.join(';');
+  });
+
+  const shadowFilter = $derived.by(() => {
+    const shader = SHADOW_TYPES.has(el.type) ? shaderOf(el) : null;
+    return shader?.shadow ? shadowCss(shader.offset, H) : '';
   });
 
   const wrapStyle = $derived.by(() => {
     const base = `translate(${-box.ox * 100}%, ${-box.oy * 100}%) rotate(${box.rotation}deg)`;
     const s = [`left:${box.x}px`, `top:${box.y}px`, `z-index:${z ?? Math.round(zOf(el) * 10) + 1000}`, `transform:${base}`, `transform-origin:${box.rox * 100}% ${box.roy * 100}%`];
-    const anim = animate ? animationCss(el, W, H, base, { screen: screenOf(view), token: play?.token, dir: play?.dir }) : null;
-    if (anim) s.push(`animation:${anim}`);
-    const shader = SHADOW_TYPES.has(el.type) ? shaderOf(el) : null;
-    if (shader?.shadow) s.push(`filter:${shadowCss(shader.offset, H)}`);
+    const anim = animate ? animationCss(el, W, H, base, { screen: screenOf(view), token: play?.token, dir: play?.dir, boost: prefs.v.boostMotion ? 3 : 1 }) : null;
+    if (anim) s.push(`animation:${anim}`, `--ccs-w:${W}px`, `--ccs-h:${H}px`);
     if (outer.w !== null) s.push(`width:${outer.w}px`);
     if (outer.h !== null) s.push(`height:${outer.h}px`);
     const op = num('opacity', 1);
@@ -269,10 +299,12 @@
   });
 
   // ---- carousel ----
+
   // Laid out the way EmulationStation's SystemView does it: logos spaced across the carousel
   // (horizontal / vertical), or all on one spot and turned around a far-away point (wheels).
   const carouselItems = $derived.by(() => {
-    if (el.type !== 'carousel') return [];
+    if (el.type !== 'carousel' && el.type !== 'gamecarousel') return [];
+    const ofGames = el.type === 'gamecarousel';
     const type = (val('type') ?? 'horizontal').trim();
     const n = Math.max(1, Math.round(num('maxLogoCount', 3)));
     const cw = box.w ?? W;
@@ -301,13 +333,27 @@
       yOff = logoAlign === 'top' ? lh / 10 : logoAlign === 'bottom' ? ch - lh * 1.1 : (ch - lh) / 2;
     }
     const list = carousel.systems;
-    const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
+    const realGames = env.games ?? [];
+    const gameNames = env.gameNames ?? MOCK_GAMES;
+    const count = ofGames ? realGames.length || gameNames.length : list.length;
+    const cur = ofGames ? Math.max(0, realGames.findIndex((g) => g.path === env.game?.path)) : Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
+    const source = val('imageSource') ?? 'marquee';
+    const entry = (i: number) => {
+      const j = ((i % Math.max(1, count)) + count) % Math.max(1, count);
+      if (!ofGames) return { name: (list[j] ?? env.settings.system).fullName, logo: list.length ? logoFor(list[j]) : logoFor(env.settings.system) };
+      return realGames.length ? { name: realGames[j].name, logo: gameArt(realGames[j], source) } : { name: gameNames[j], logo: null };
+    };
     // RetroBat also draws a couple of logos past each end (they're clipped by the carousel box).
+    // While scrolling, logos sit `shift` slots away from their resting place.
+    const shift = slide.by;
     const reach = n === 1 ? 0 : Math.floor(n / 2) + 2;
-    const items: { sys: SystemInfo; logo: string | null; selected: boolean; x: number; y: number; w: number; h: number; transform: string; opacity: number; z: number }[] = [];
-    for (let k = -reach; k <= reach; k++) {
-      const sys = list.length ? list[(((cur + k) % list.length) + list.length) % list.length] : env.settings.system;
-      const d = Math.abs(k);
+    const extra = Math.ceil(Math.abs(shift));
+    const items: { name: string; logo: string | null; selected: boolean; x: number; y: number; w: number; h: number; transform: string; opacity: number; z: number }[] = [];
+    for (let k = -reach - extra; k <= reach + extra; k++) {
+      const it = entry(cur + k);
+      const p = k + shift;
+      if (n === 1 && Math.abs(p) >= 1) continue;
+      const d = Math.abs(p);
       const scale = Math.min(L, Math.max(1, 1 + (L - 1) * (1 - d))) / L;
       const opacity = Math.min(1, Math.max(minOp, (0x80 + 0x7f * (1 - d)) / 255));
       // The logo is sized to logoSize × logoScale and centred on its slot, then scaled down.
@@ -315,8 +361,9 @@
       const h = lh * L;
       const dx = (ro[0] - 0.5) * w;
       const dy = (ro[1] - 0.5) * h;
-      const transform = wheel ? `scale(${scale}) translate(${dx}px, ${dy}px) rotate(${rot * k}deg) translate(${-dx}px, ${-dy}px)` : `scale(${scale})`;
-      items.push({ sys, logo: logoFor(sys), selected: k === 0, x: k * sx + xOff + lw / 2 - w / 2, y: k * sy + yOff + lh / 2 - h / 2, w, h, transform, opacity, z: 100 - d });
+      const transform = wheel ? `scale(${scale}) translate(${dx}px, ${dy}px) rotate(${rot * p}deg) translate(${-dx}px, ${-dy}px)` : `scale(${scale})`;
+      const fade = n === 1 ? 1 - d : 1;
+      items.push({ name: it.name, logo: it.logo, selected: k === 0, x: p * sx + xOff + lw / 2 - w / 2, y: p * sy + yOff + lh / 2 - h / 2, w, h, transform, opacity: opacity * fade, z: 100 - Math.round(d * 10) });
     }
     return items;
   });
@@ -388,7 +435,16 @@
   const helpIcon = $derived(cssColor(val('iconColor'), '#bbb'));
 </script>
 
-<div class="el {el.type}" class:selected class:ghost class:locked data-name={el.name} style={wrapStyle}>
+<div
+  class="el {el.type}"
+  class:selected
+  class:ghost
+  class:locked
+  data-name={el.name}
+  style={wrapStyle}
+  style:translate={slide.by && slide.mode === 'slide' && el.type !== 'carousel' ? (slide.axis === 'x' ? `${slide.by * W}px 0` : `0 ${slide.by * H}px`) : undefined}
+  style:filter={slide.by && slide.mode === 'fade' && el.type !== 'carousel' ? `${shadowFilter} brightness(${Math.max(0, 1 - Math.abs(slide.by) * 2)})` : shadowFilter || undefined}
+>
   {#if el.type === 'image'}
     {#if imgPath}
       {@const url = displayUrl(imgPath)}
@@ -405,7 +461,12 @@
           style:border-radius={framing.radius || undefined}
           style:box-shadow={framing.shadow || undefined}
           style:transform={`scale(${val('flipX') === 'true' ? -1 : 1}, ${val('flipY') === 'true' ? -1 : 1})`}
+          style:-webkit-box-reflect={reflectCss(val('reflexion'))}
           onload={onImgLoad}
+          onerror={(e) => {
+            // An online picture that doesn't exist (libretro-thumbnails has no art for this game): show nothing, as RetroBat would.
+            if (/^https?:/.test(url)) (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';
+          }}
         />
       {/if}
       {#if !isWhite(tint) || (tintEnd && !isWhite(tintEnd))}
@@ -434,7 +495,7 @@
       {/if}
     </div>
   {:else if el.type === 'textlist'}
-    <div class="list" style="font-family:{font};font-size:{fontPx}px;text-align:{align};{upper ? 'text-transform:uppercase' : ''}">
+    <div class="list" style="font-family:{font};font-size:{fontPx}px;text-align:{align};{upper ? 'text-transform:uppercase' : ''}{glowCss ? `;text-shadow:${glowCss}` : ''}">
       {#each rows as r, i}
         <div
           class="li"
@@ -447,18 +508,18 @@
         </div>
       {/each}
     </div>
-  {:else if el.type === 'carousel'}
+  {:else if el.type === 'carousel' || el.type === 'gamecarousel'}
     {@const lt = carousel.logoText}
     {@const ltFont = familyFor(lt && ed.project ? resolveAsset(lt.props.get('fontPath'), res, ed.project, env) : null)}
     <div class="carousel" style:background={carouselBg}>
       {#each carouselItems as it}
         <div class="logo" style="left:{it.x}px;top:{it.y}px;width:{it.w}px;height:{it.h}px;transform:{it.transform};opacity:{it.opacity};z-index:{it.z}">
           {#if it.logo}
-            <img src={fileUrl(it.logo)} alt="" draggable="false" />
+            <img src={fileUrl(it.logo)} alt="" draggable="false" style:-webkit-box-reflect={reflectCss(carousel.logo?.props.get('reflexion')?.value)} />
           {:else}
             <span
               style="font-family:{ltFont};font-size:{parseFloat(lt?.props.get('fontSize')?.value ?? '0.07') * H * 0.6}px;color:{cssColor(lt?.props.get('color')?.value, '#fff')};{lt?.props.get('forceUppercase')?.value === 'true' ? 'text-transform:uppercase' : ''}"
-              >{it.sys.fullName}</span
+              >{it.name}</span
             >
           {/if}
         </div>
@@ -526,7 +587,7 @@
     {@const list = carousel.systems}
     {@const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name))}
     <div
-      class="grid"
+      class="tiles"
       style:grid-template-columns="repeat({grid.cols}, minmax(0, 1fr))"
       style:grid-template-rows="repeat({grid.rows}, minmax(0, 1fr))"
       style:column-gap="{grid.gapX}px"
@@ -535,7 +596,8 @@
       {#each Array(grid.cols * grid.rows) as _, i}
         {@const on = i === grid.selIndex}
         {@const sys = list[(cur + i - grid.selIndex + list.length * 10) % Math.max(1, list.length)]}
-        {@const logo = systemGrid && sys ? logoFor(sys) : null}
+        {@const g = !systemGrid && env.games?.length ? env.games[(Math.max(0, env.games.findIndex((x) => x.path === env.game?.path)) + i - grid.selIndex + env.games.length * 10) % env.games.length] : null}
+        {@const logo = systemGrid && sys ? logoFor(sys) : g ? gameArt(g, val('imageSource') ?? 'thumbnail') : null}
         {@const art = on ? grid.selArt : grid.art}
         <div
           class="tile"
@@ -551,27 +613,48 @@
           {/if}
           {#if logo}
             <!-- A logo that can't be loaded shows the console's name, as RetroBat does without a logo. -->
-            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} onerror={(e) => ((e.currentTarget as HTMLImageElement).dataset.failed = '1')} />
-            <span class="fallback">{sys?.fullName ?? ''}</span>
+            <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} style:-webkit-box-reflect={reflectCss((on ? grid.sel : grid.tile)?.props.get('reflexion')?.value ?? grid.tile?.props.get('reflexion')?.value)} onerror={(e) => ((e.currentTarget as HTMLImageElement).dataset.failed = '1')} />
+            <span class="fallback">{systemGrid ? (sys?.fullName ?? '') : (g?.name ?? '')}</span>
           {:else}
             <span>{systemGrid ? (sys?.fullName ?? '') : (env.gameNames ?? MOCK_GAMES)[i % (env.gameNames ?? MOCK_GAMES).length]}</span>
           {/if}
         </div>
       {/each}
     </div>
+  {:else if el.type === 'screenshader'}
+    <!-- RetroBat's screen shaders, matched as closely as CSS can. -->
+    {@const sh = (val('path') ?? '').toLowerCase()}
+    <div
+      class="fill fx"
+      class:crt={sh.includes('crt')}
+      class:scan={sh.includes('scanlines')}
+      style:backdrop-filter={sh.includes('grayscale') ? 'grayscale(1)' : sh.includes('negative') ? 'invert(1)' : sh.includes('blur') ? `blur(${num('blur', 8)}px)` : sh.includes('pixelate') ? 'blur(1.5px) contrast(1.2)' : undefined}
+    ></div>
   {:else}
     <div class="placeholder" style:min-width="{box.w ?? 80}px" style:min-height="{box.h ?? 40}px"><span>{el.type} {el.name}</span></div>
   {/if}
 </div>
 
 <style>
+  .fx {
+    pointer-events: none;
+  }
+  .fx.scan,
+  .fx.crt {
+    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 2px, transparent 2px 4px);
+  }
+  .fx.crt {
+    box-shadow: inset 0 0 160px 40px rgba(0, 0, 0, 0.75);
+    border-radius: 3% / 5%;
+    backdrop-filter: saturate(1.25) contrast(1.08);
+  }
   .el {
     position: absolute;
     display: block;
     cursor: pointer;
   }
   .el.selected {
-    outline: calc(2px / var(--s, 1)) solid var(--accent);
+    outline: calc(2px / var(--s, 1)) solid var(--brand);
     outline-offset: calc(1px / var(--s, 1));
     cursor: move;
   }
@@ -581,7 +664,7 @@
     width: calc(8px / var(--s, 1));
     height: calc(8px / var(--s, 1));
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--brand);
     left: var(--ox, 0);
     top: var(--oy, 0);
     transform: translate(-50%, -50%);
@@ -745,7 +828,7 @@
     font-size: 0.8em;
     font-weight: 700;
   }
-  .grid {
+  .tiles {
     display: grid;
     width: 100%;
     height: 100%;

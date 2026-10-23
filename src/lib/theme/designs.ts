@@ -8,6 +8,10 @@ import type { AnimPreset } from './animations';
 import { ANIMATIONS, screenOf, storyboardXml } from './animations';
 import { systemLayout, type SystemLayout } from './systemLayouts';
 import { frameXml, type Frame } from './frame';
+import { shadowXml } from './shadow';
+import { depthLevel, DRIFT_ANIM, PARALLAX, PARALLAX_ANIM, screenFxOf, SHADOWED, TITLES, type Depth } from './depth';
+import { backgroundSvg, decoSvg, hex, svg as svgDoc, type Background, type Deco } from './designArt';
+import { defaultGameLayout, gameLayout, type GameArchetype } from './gameLayouts';
 
 export interface Palette6 {
   bg: string;
@@ -19,12 +23,14 @@ export interface Palette6 {
   accentText: string;
 }
 
-type Background = 'gradient' | 'grid' | 'scanlines' | 'waves' | 'stripes' | 'sunset' | 'dots' | 'plain' | 'glass' | 'pixels' | 'rays' | 'aurora';
+/** Style groups designs are filed under (the filter in New theme and Presets). */
+export type DesignGroup = 'professional' | 'gaming' | 'cute' | 'tech' | 'anime' | 'retro' | 'mood';
 
 export interface Design {
   id: string;
   label: string;
   description: string;
+  group: DesignGroup;
   tags: string[];
   palette: Palette6;
   font: string;
@@ -32,7 +38,8 @@ export interface Design {
   background: Background;
   /** Corner radius of panels in pixels; 0 for square, pixel corners for the pixel look. */
   radius: number;
-  game: 'list-right' | 'cinema' | 'cover' | 'centered';
+  /** How the design lays out game screens (any layout in GAME_LAYOUTS works too). */
+  game: GameArchetype;
   /** Id of the system screen layout the design comes with (any layout in SYSTEM_LAYOUTS works). */
   system: string;
   glow?: boolean;
@@ -40,395 +47,57 @@ export interface Design {
   uppercase?: boolean;
   /** Animation preset id per role. */
   anims?: Partial<Record<'title' | 'art' | 'logo' | 'list' | 'console', string>>;
+  /** How much depth the design has (see depth.ts); Subtle when not given. */
+  depth?: Depth;
+  /** A second accent for two-colour artwork. */
+  accent2?: string;
+  /** Decorations floating round the edges of every screen. */
+  deco?: Deco;
+  decoColors?: string[];
+  /** Box art (and, half as much, the title) set at a jaunty angle, in degrees. */
+  tilt?: number;
+  /** Pixel corners on panels and tiles. */
+  pixel?: boolean;
+  /** A dark curved-screen bezel over everything. */
+  bezel?: boolean;
 }
 
-const P = (bg: string, bg2: string, surface: string, text: string, dim: string, accent: string, accentText: string): Palette6 => ({ bg, bg2, surface, text, dim, accent, accentText });
+/**
+ * The design drawn in other colours (a palette, or the theme's own design colours). Its own
+ * second accent and decoration colours only stay while the accent is still the design's.
+ */
+export function recoloured(d: Design, palette: Palette6): Design {
+  if (palette.accent.slice(0, 6).toUpperCase() === d.palette.accent.slice(0, 6).toUpperCase()) return { ...d, palette };
+  return { ...d, palette, accent2: undefined, decoColors: undefined };
+}
 
-export const DESIGNS: Design[] = [
-  {
-    id: 'cinema',
-    label: 'Cinema',
-    description: 'Streaming-style: full-screen fan art, big game logo, details over a dark fade.',
-    tags: ['streaming', 'dark'],
-    palette: P('0B0B0F', '16161D', 'FFFFFF14', 'F5F5F7', 'A8A8B3', 'E8433A', 'FFFFFF'),
-    font: 'inter',
-    titleFont: 'bebas',
-    background: 'plain',
-    radius: 10,
-    game: 'cinema',
-    system: 'carousel-bottom',
-    anims: { title: 'fade-in', art: 'fade-in', console: 'rise' },
-  },
-  {
-    id: 'neon',
-    label: 'Arcade Neon',
-    description: 'Glowing pink and cyan on a retro grid, with a wheel of logos like an arcade cabinet.',
-    tags: ['arcade', 'neon', 'dark'],
-    palette: P('07030F', '1A0633', 'FF2BD61F', 'F8EEFF', 'B79CE8', 'FF2BD6', 'FFFFFF'),
-    font: 'rajdhani',
-    titleFont: 'orbitron',
-    background: 'grid',
-    radius: 4,
-    game: 'list-right',
-    system: 'wheel-right',
-    glow: true,
-    uppercase: true,
-    anims: { logo: 'pulse', title: 'slide-left', console: 'float' },
-  },
-  {
-    id: 'crt',
-    label: 'Retro CRT',
-    description: 'Amber phosphor text on a curved-screen look with scanlines.',
-    tags: ['retro', 'crt'],
-    palette: P('0C0A06', '1A140A', 'FFB00014', 'FFC24D', 'B88A34', 'FFB000', '0C0A06'),
-    font: 'vt323',
-    background: 'scanlines',
-    radius: 26,
-    game: 'list-right',
-    system: 'carousel-middle',
-    scanlines: true,
-    uppercase: true,
-    anims: { title: 'fade-in', logo: 'breathe' },
-  },
-  {
-    id: 'pixel',
-    label: '8-bit Pixel',
-    description: 'Chunky pixel frames and a bright console palette.',
-    tags: ['retro', 'pixel', 'colourful'],
-    palette: P('1D2B53', '29366F', 'FFFFFF1A', 'FFF1E8', 'C2C3C7', 'FFEC27', '1D2B53'),
-    font: 'pressstart',
-    background: 'pixels',
-    radius: 0,
-    game: 'centered',
-    system: 'grid-wall',
-    uppercase: true,
-    anims: { art: 'pop', logo: 'swing' },
-  },
-  {
-    id: 'soft-home',
-    label: 'Soft Home',
-    description: 'Bright and friendly: rounded cards on soft stripes, a big clock. Inspired by classic console home screens.',
-    tags: ['light', 'console menu', 'friendly'],
-    palette: P('F4F7FB', 'E3EAF3', 'FFFFFFE6', '2B3440', '6B7685', '35A7E8', 'FFFFFF'),
-    font: 'nunito',
-    background: 'stripes',
-    radius: 28,
-    game: 'list-right',
-    system: 'channel-grid',
-    anims: { art: 'float', console: 'float' },
-  },
-  {
-    id: 'cross-bar',
-    label: 'Cross Bar',
-    description: 'Flowing waves behind a row of icons, inspired by classic console media bars.',
-    tags: ['console menu', 'dark', 'blue'],
-    palette: P('0A1A3A', '1F4C8F', 'FFFFFF12', 'F2F6FF', 'A9BCDD', 'FFFFFF', '0A1A3A'),
-    font: 'exo2',
-    background: 'waves',
-    radius: 6,
-    game: 'centered',
-    system: 'tile-row',
-    anims: { title: 'fade-in' },
-  },
-  {
-    id: 'shelf',
-    label: 'Cover Shelf',
-    description: 'A big box cover with a mirror reflection, details beside it.',
-    tags: ['covers', 'dark'],
-    palette: P('121417', '23272E', 'FFFFFF10', 'EDEFF2', '9AA1AC', '4FD1C5', '121417'),
-    font: 'poppins',
-    background: 'gradient',
-    radius: 14,
-    game: 'cover',
-    system: 'list-left',
-    anims: { art: 'rise' },
-  },
-  {
-    id: 'synthwave',
-    label: 'Synthwave Sunset',
-    description: 'A striped sunset over a purple horizon. Loud and fun.',
-    tags: ['retro', 'colourful', 'neon'],
-    palette: P('1A0B2E', '4A1569', 'FFFFFF14', 'FFF4E8', 'F5B3D0', 'FF7A3D', 'FFFFFF'),
-    font: 'audiowide',
-    background: 'sunset',
-    radius: 8,
-    game: 'cinema',
-    system: 'carousel-middle',
-    glow: true,
-    anims: { console: 'float', title: 'rise' },
-  },
-  {
-    id: 'minimal',
-    label: 'Minimal Light',
-    description: 'White space, black type, thin lines. Calm and clean.',
-    tags: ['light', 'minimal'],
-    palette: P('FAFAFA', 'F0F0F0', '0000000A', '111111', '6E6E6E', '111111', 'FFFFFF'),
-    font: 'inter',
-    background: 'plain',
-    radius: 2,
-    game: 'list-right',
-    system: 'cover-flow',
-  },
-  {
-    id: 'magazine',
-    label: 'Magazine',
-    description: 'Editorial: elegant serif titles, art across the top, text in columns.',
-    tags: ['light', 'elegant'],
-    palette: P('F3EEE6', 'E7DFD2', 'FFFFFFB3', '1E1A16', '6B5F52', 'B23A2E', 'FFFFFF'),
-    font: 'montserrat',
-    titleFont: 'playfair',
-    background: 'plain',
-    radius: 0,
-    game: 'cinema',
-    system: 'carousel-bottom',
-    anims: { title: 'fade-in' },
-  },
-  {
-    id: 'handheld',
-    label: 'Pocket LCD',
-    description: 'Four shades of green and a dot-matrix screen, like an old handheld.',
-    tags: ['retro', 'pixel', 'green'],
-    palette: P('9BBC0F', '8BAC0F', '306230', '0F380F', '306230', '0F380F', '9BBC0F'),
-    font: 'silkscreen',
-    background: 'dots',
-    radius: 6,
-    game: 'centered',
-    system: 'wheel-left',
-    uppercase: true,
-  },
-  {
-    id: 'glass',
-    label: 'Midnight Glass',
-    description: 'Frosted glass panels on a deep blue glow. Modern and polished.',
-    tags: ['dark', 'modern'],
-    palette: P('070B1A', '1B2A6B', 'FFFFFF1F', 'F4F7FF', 'A9B4D6', '7C9CFF', 'FFFFFF'),
-    font: 'montserrat',
-    background: 'glass',
-    radius: 22,
-    game: 'cover',
-    system: 'big-tiles',
-    anims: { art: 'float', title: 'fade-in', console: 'float' },
-  },
-  {
-    id: 'dashboard',
-    label: 'Dashboard',
-    description: 'A modern console dashboard: a row of tiles on top, big artwork and the console name below.',
-    tags: ['modern', 'console menu', 'dark'],
-    palette: P('0D1117', '1B2433', 'FFFFFF1A', 'F5F7FA', 'A3ADBD', '3B82F6', 'FFFFFF'),
-    font: 'spacegrotesk',
-    background: 'gradient',
-    radius: 14,
-    game: 'cinema',
-    system: 'tile-row',
-    anims: { title: 'fade-in', console: 'rise' },
-  },
-  {
-    id: 'channel-wall',
-    label: 'Channel Wall',
-    description: 'A bright, bubbly grid of console tiles with a playful font. Great for kids and family setups.',
-    tags: ['light', 'console menu', 'friendly', 'grid'],
-    palette: P('EAF6FF', 'D3ECFF', 'FFFFFFF2', '1F2A44', '5A6B85', 'FF7A59', 'FFFFFF'),
-    font: 'fredoka',
-    titleFont: 'lilita',
-    background: 'dots',
-    radius: 30,
-    game: 'centered',
-    system: 'grid-shelf',
-    anims: { art: 'pop', console: 'float' },
-  },
-  {
-    id: 'arcade-marquee',
-    label: 'Arcade Marquee',
-    description: 'Gold on deep red like a lit-up cabinet marquee, logos fanned out in an arch.',
-    tags: ['arcade', 'dark', 'colourful'],
-    palette: P('140507', '3A0B12', 'FFC83D1C', 'FFF4DC', 'D9B98A', 'FFC83D', '140507'),
-    font: 'russo',
-    titleFont: 'righteous',
-    background: 'rays',
-    radius: 12,
-    game: 'list-right',
-    system: 'arc-bottom',
-    glow: true,
-    uppercase: true,
-    anims: { title: 'slide-left', console: 'float', logo: 'pulse' },
-  },
-  {
-    id: 'spotlight',
-    label: 'Spotlight Stage',
-    description: 'A single huge logo under a stage light, everything else fading into the dark.',
-    tags: ['dark', 'modern', 'streaming'],
-    palette: P('050507', '1C1C26', 'FFFFFF12', 'FFFFFF', '9C9CAE', 'F5C451', '050507'),
-    font: 'montserrat',
-    titleFont: 'bebas',
-    background: 'rays',
-    radius: 18,
-    game: 'cinema',
-    system: 'spotlight',
-    anims: { title: 'fade-in', console: 'rise', art: 'fade-in' },
-  },
-  {
-    id: 'deep-sea',
-    label: 'Deep Sea',
-    description: 'Teal light rippling through dark water, logos stacked on the right.',
-    tags: ['dark', 'blue', 'modern'],
-    palette: P('03141C', '0B4157', 'FFFFFF14', 'E8FBFF', '8FC4D1', '2FE0C5', '03141C'),
-    font: 'exo2',
-    titleFont: 'audiowide',
-    background: 'aurora',
-    radius: 20,
-    game: 'cover',
-    system: 'list-right',
-    anims: { art: 'float', console: 'float', title: 'fade-in' },
-  },
-  {
-    id: 'graphite',
-    label: 'Graphite',
-    description: 'Brushed dark grey with orange highlights, logos along the top and a big console below.',
-    tags: ['dark', 'modern', 'minimal'],
-    palette: P('16171A', '2A2C31', 'FFFFFF12', 'F1F2F4', '9DA1A9', 'FF7A1A', 'FFFFFF'),
-    font: 'rajdhani',
-    titleFont: 'russo',
-    background: 'gradient',
-    radius: 6,
-    game: 'list-right',
-    system: 'carousel-top',
-    uppercase: true,
-    anims: { title: 'slide-left', console: 'rise' },
-  },
-  {
-    id: 'candy',
-    label: 'Candy Pop',
-    description: 'Pastel pink and mint with bouncy rounded type, logos hanging in a smile-shaped curve.',
-    tags: ['light', 'colourful', 'friendly'],
-    palette: P('FFF0F6', 'FFD9EA', 'FFFFFFE6', '3A2140', '8A6A92', 'FF4FA0', 'FFFFFF'),
-    font: 'fredoka',
-    titleFont: 'lilita',
-    background: 'dots',
-    radius: 30,
-    game: 'centered',
-    system: 'arc-top',
-    anims: { art: 'pop', console: 'float', title: 'rise' },
-  },
-];
+export { DESIGNS, DESIGN_GROUPS } from './designCatalog';
 
 // ---- artwork ------------------------------------------------------------------------------
 
-const hex = (c: string) => `#${c.slice(0, 6)}`;
-
 /** SVG files for a design, by file name. */
-export function designAssets(d: Design): Record<string, string> {
+export function designAssets(d: Design, depth: Depth = d.depth ?? 'subtle'): Record<string, string> {
   const p = d.palette;
   const W = 1920;
   const H = 1080;
-  const svg = (w: number, h: number, body: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>\n`;
-  let bg: string;
-  switch (d.background) {
-    case 'grid': {
-      const lines: string[] = [];
-      for (let i = -20; i <= 20; i++) lines.push(`<line x1="${W / 2 + i * 40}" y1="${H * 0.58}" x2="${W / 2 + i * 260}" y2="${H}" />`);
-      for (let k = 0; k < 12; k++) {
-        const y = H * 0.58 + Math.pow(k / 11, 2) * H * 0.42;
-        lines.push(`<line x1="0" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}" />`);
-      }
-      bg = svg(
-        W,
-        H,
-        `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hex(p.bg)}"/><stop offset="0.58" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#s)"/><g stroke="${hex(p.accent)}" stroke-opacity="0.45" stroke-width="2">${lines.join('')}</g><rect y="${H * 0.575}" width="${W}" height="4" fill="#22e6ff" opacity="0.8"/>`,
-      );
-      break;
-    }
-    case 'scanlines':
-      bg = svg(W, H, `<defs><radialGradient id="g" cx="0.5" cy="0.45" r="0.75"><stop offset="0" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}"/></radialGradient></defs><rect width="${W}" height="${H}" fill="url(#g)"/>`);
-      break;
-    case 'waves': {
-      const wave = (y: number, a: number, o: number) => {
-        let dpath = `M0 ${y}`;
-        for (let x = 0; x <= W; x += 40) dpath += ` L${x} ${(y + Math.sin(x / 260 + o) * a).toFixed(1)}`;
-        return `<path d="${dpath}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="3"/>`;
-      };
-      bg = svg(
-        W,
-        H,
-        `<defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#b)"/>${wave(H * 0.55, 60, 0)}${wave(H * 0.58, 45, 1.3)}${wave(H * 0.61, 70, 2.1)}${wave(H * 0.64, 35, 3.4)}`,
-      );
-      break;
-    }
-    case 'stripes':
-      bg = svg(
-        W,
-        H,
-        `<defs><pattern id="st" width="24" height="24" patternUnits="userSpaceOnUse"><rect width="24" height="12" fill="${hex(p.bg)}"/><rect y="12" width="24" height="12" fill="${hex(p.bg2)}"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#st)"/>`,
-      );
-      break;
-    case 'sunset': {
-      const bands: string[] = [];
-      for (let i = 0; i < 7; i++) bands.push(`<rect x="660" y="${560 + i * 34}" width="600" height="${10 + i * 2}" fill="${hex(p.bg)}"/>`);
-      bg = svg(
-        W,
-        H,
-        `<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hex(p.bg)}"/><stop offset="0.7" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="#ff5f7e"/></linearGradient><linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd23d"/><stop offset="1" stop-color="#ff3d8b"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#sky)"/><circle cx="960" cy="640" r="300" fill="url(#sun)"/>${bands.join('')}<rect y="780" width="${W}" height="300" fill="${hex(p.bg)}" opacity="0.92"/>`,
-      );
-      break;
-    }
-    case 'dots':
-      bg = svg(
-        W,
-        H,
-        `<defs><pattern id="d" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="${hex(p.bg)}"/><rect x="1" y="1" width="10" height="10" fill="${hex(p.bg2)}"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#d)"/>`,
-      );
-      break;
-    case 'glass':
-      bg = svg(
-        W,
-        H,
-        `<defs><radialGradient id="a" cx="0.2" cy="0.2" r="0.6"><stop offset="0" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}" stop-opacity="0"/></radialGradient><radialGradient id="c" cx="0.85" cy="0.85" r="0.55"><stop offset="0" stop-color="#7a2bd6" stop-opacity="0.7"/><stop offset="1" stop-color="${hex(p.bg)}" stop-opacity="0"/></radialGradient></defs><rect width="${W}" height="${H}" fill="${hex(p.bg)}"/><rect width="${W}" height="${H}" fill="url(#a)"/><rect width="${W}" height="${H}" fill="url(#c)"/>`,
-      );
-      break;
-    case 'pixels': {
-      const blocks: string[] = [];
-      let seed = 7;
-      const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-      for (let i = 0; i < 60; i++) blocks.push(`<rect x="${Math.floor(rnd() * 48) * 40}" y="${Math.floor(rnd() * 27) * 40}" width="40" height="40" fill="${hex(p.bg2)}"/>`);
-      bg = svg(W, H, `<rect width="${W}" height="${H}" fill="${hex(p.bg)}"/>${blocks.join('')}`);
-      break;
-    }
-    case 'rays': {
-      // Stage light: soft beams fanning down from the top centre.
-      const beams: string[] = [];
-      for (let i = -6; i <= 6; i++) beams.push(`<path d="M${W / 2 - 30} -20 L${W / 2 + 30} -20 L${W / 2 + i * 260 + 120} ${H} L${W / 2 + i * 260 - 120} ${H} Z" fill="${hex(p.accent)}" fill-opacity="${(0.07 - Math.abs(i) * 0.008).toFixed(3)}"/>`);
-      bg = svg(
-        W,
-        H,
-        `<defs><radialGradient id="r" cx="0.5" cy="0" r="1"><stop offset="0" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}"/></radialGradient><radialGradient id="f" cx="0.5" cy="0.55" r="0.4"><stop offset="0" stop-color="${hex(p.accent)}" stop-opacity="0.18"/><stop offset="1" stop-color="${hex(p.accent)}" stop-opacity="0"/></radialGradient></defs><rect width="${W}" height="${H}" fill="url(#r)"/>${beams.join('')}<rect width="${W}" height="${H}" fill="url(#f)"/>`,
-      );
-      break;
-    }
-    case 'aurora': {
-      const band = (y: number, a: number, o: number, op: number) => {
-        let d0 = `M0 ${y}`;
-        for (let x = 0; x <= W; x += 60) d0 += ` L${x} ${(y + Math.sin(x / 300 + o) * a).toFixed(1)}`;
-        return `<path d="${d0} L${W} ${H} L0 ${H} Z" fill="${hex(p.accent)}" fill-opacity="${op}"/>`;
-      };
-      bg = svg(
-        W,
-        H,
-        `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#g)"/>${band(H * 0.35, 40, 0, 0.05)}${band(H * 0.5, 55, 1.7, 0.05)}${band(H * 0.68, 35, 3.1, 0.06)}`,
-      );
-      break;
-    }
-    case 'gradient':
-      bg = svg(W, H, `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hex(p.bg2)}"/><stop offset="1" stop-color="${hex(p.bg)}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#g)"/>`);
-      break;
-    default:
-      bg = svg(W, H, `<rect width="${W}" height="${H}" fill="${hex(p.bg)}"/>`);
-  }
+  const svg = svgDoc;
+  const bg = backgroundSvg(d);
 
   // Panels are white so the theme can tint them with <color>; pixel corners for the pixel look.
   const r = d.radius;
   const panel =
-    d.id === 'pixel'
+    d.pixel
       ? svg(96, 96, `<path d="M8 0H88V8H96V88H88V96H8V88H0V8H8Z" fill="#ffffff"/><path d="M8 4H88V8H92V88H88V92H8V88H4V8H8Z" fill="none" stroke="#000" stroke-opacity="0.35" stroke-width="4"/>`)
-      : svg(Math.max(96, r * 3), Math.max(96, r * 3), `<rect x="1" y="1" width="${Math.max(96, r * 3) - 2}" height="${Math.max(96, r * 3) - 2}" rx="${r}" fill="#ffffff"/>`);
+      : (() => {
+          // With depth, a light top edge and a darker bottom edge make the panel look raised
+          // (the panel is tinted, so these stay lighter and darker than its colour).
+          const n = Math.max(96, r * 3);
+          const b = depthLevel(depth).bevel;
+          const bevel = b
+            ? `<defs><linearGradient id="v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="${(0.28 * b).toFixed(2)}"/></linearGradient></defs><rect x="1" y="1" width="${n - 2}" height="${n - 2}" rx="${r}" fill="url(#v)"/><rect x="2" y="2" width="${n - 4}" height="${n - 4}" rx="${Math.max(0, r - 1)}" fill="none" stroke="#000" stroke-opacity="${(0.22 * b).toFixed(2)}" stroke-width="2"/><path d="M${r + 2} 2.5H${n - r - 2}" stroke="#fff" stroke-opacity="${(0.55 * b).toFixed(2)}" stroke-width="2" stroke-linecap="round"/>`
+            : '';
+          return svg(n, n, `<rect x="1" y="1" width="${n - 2}" height="${n - 2}" rx="${r}" fill="#ffffff"/>${bevel}`);
+        })();
 
   // Console tiles: a tile with a soft inner edge, and the selected tile with a ring and a glow
   // (white, tinted by the theme). Both leave the same margin round the tile for the glow.
@@ -437,7 +106,7 @@ export function designAssets(d: Design): Record<string, string> {
     const x = T.margin - inset;
     const w = T.size - 2 * x;
     const rr = Math.max(0, T.radius + inset);
-    if (d.id !== 'pixel') return `<rect x="${x}" y="${x}" width="${w}" height="${w}" rx="${rr}" ${attrs}/>`;
+    if (!d.pixel) return `<rect x="${x}" y="${x}" width="${w}" height="${w}" rx="${rr}" ${attrs}/>`;
     const k = Math.max(4, Math.round(rr / 2));
     return `<path d="M${x + k} ${x}H${x + w - k}V${x + k}H${x + w}V${x + w - k}H${x + w - k}V${x + w}H${x + k}V${x + w - k}H${x}V${x + k}H${x + k}Z" ${attrs}/>`;
   };
@@ -456,15 +125,21 @@ export function designAssets(d: Design): Record<string, string> {
 
   // RetroBat's SVG renderer can't draw patterns and blends gradients differently, so full-screen
   // art is written as PNG (given here as SVG source; the editor rasterizes it when writing).
-  const out: Record<string, string> = { 'background.png': bg, 'panel.svg': panel, 'fade.png': fade, 'tile.svg': tile, 'tile-selected.svg': tileSelected };
+  // An arrow for layouts with arrows beside the logo (white, tinted by the theme; the left one is flipped).
+  const arrow = svg(64, 96, `<path d="M14 10L50 48L14 86" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>`);
+  // A diagonal band behind split layouts (white, tinted by the theme).
+  const slash = svg(W, H, `<path d="M860 0H1160L900 ${H}H600Z" fill="#ffffff"/>`);
+  const out: Record<string, string> = { 'background.png': bg, 'panel.svg': panel, 'fade.png': fade, 'tile.svg': tile, 'tile-selected.svg': tileSelected, 'arrow.svg': arrow, 'slash.svg': slash };
+  const deco = decoSvg(d);
+  if (deco) out['deco.png'] = deco;
   if (d.scanlines) out['scanlines.svg'] = svg(4, 4, `<rect width="4" height="2" fill="#000" fill-opacity="0.35"/>`);
-  if (d.radius >= 20) out['bezel.svg'] = svg(W, H, `<rect x="18" y="18" width="${W - 36}" height="${H - 36}" rx="80" fill="none" stroke="#000" stroke-width="40" stroke-opacity="0.55"/>`);
+  if (d.bezel) out['bezel.svg'] = svg(W, H, `<rect x="18" y="18" width="${W - 36}" height="${H - 36}" rx="80" fill="none" stroke="#000" stroke-width="40" stroke-opacity="0.55"/>`);
   return out;
 }
 
 /** Size, glow margin and corner radius of a design's tile pictures, in pixels. */
 export function tileGeometry(d: Design): { size: number; margin: number; radius: number; corner: number } {
-  const radius = d.id === 'pixel' ? 8 : Math.max(6, Math.min(d.radius, 28));
+  const radius = d.pixel ? 8 : Math.max(6, Math.min(d.radius, 28));
   const margin = 10;
   return { size: 128, margin, radius, corner: margin + radius + 6 };
 }
@@ -473,9 +148,10 @@ export function tileGeometry(d: Design): { size: number; margin: number; radius:
  * The frame round a design's screenshots and videos (RetroBat's border shader): rounded unless
  * the design is square or pixel-cornered, a thin light border, and a soft drop shadow.
  */
-export function designFrame(d: Design, accent = `${d.palette.accent.slice(0, 6)}FF`): Frame {
-  const square = d.id === 'pixel' || d.radius === 0;
-  return { corners: square ? 0 : Math.min(0.06, Math.max(0.02, d.radius / 500)), border: d.id === 'pixel' ? 4 : 2, borderColor: d.id === 'pixel' ? accent : 'FFFFFF55', shadow: 12, shadowColor: '00000088' };
+export function designFrame(d: Design, accent = `${d.palette.accent.slice(0, 6)}FF`, depth: Depth = d.depth ?? 'subtle'): Frame {
+  const square = d.pixel || d.radius === 0;
+  const lv = depthLevel(depth);
+  return { corners: square ? 0 : Math.min(0.06, Math.max(0.02, d.radius / 500)), border: d.pixel ? 4 : 2, borderColor: d.pixel ? accent : 'FFFFFF55', shadow: lv.frameShadow, shadowColor: lv.id === 'strong' ? '000000AA' : '00000088' };
 }
 
 // ---- layouts -------------------------------------------------------------------------------
@@ -485,6 +161,9 @@ export interface DesignEl {
   name: string;
   props: Record<string, string | string[]>;
   anim?: string;
+  /** Size and speed of the animation against the preset's own (1 = as designed). */
+  animAmount?: number;
+  animSpeed?: number;
   /** Nested blocks written as they are (a <shader>, for example). */
   blocks?: string[];
 }
@@ -499,6 +178,12 @@ export interface DesignContext {
   /** Folders of console art copied into the theme, if any. */
   logos: string | null;
   consoles: string | null;
+  /** Depth to build with; the design's own when not given. */
+  depth?: Depth;
+  /** How every animation moves (the theme's motion feel); as designed when not given. */
+  motion?: { amount: number; speed: number };
+  /** A RetroBat screen shader over every screen (see SCREEN_FX), or none. */
+  screenFx?: string;
 }
 
 const LABELS_AND_EXTRAS = ['md_lbl_rating', 'md_lbl_releasedate', 'md_lbl_developer', 'md_lbl_publisher', 'md_lbl_genre', 'md_lbl_players', 'md_lbl_lastplayed', 'md_lbl_playcount', 'md_publisher', 'md_playcount', 'md_lastplayed'];
@@ -563,7 +248,11 @@ function common(d: Design, c: DesignContext, view: string): DesignEl[] {
   // RetroBat's clock has no format: 12 or 24 hours comes from its own ClockMode12 setting.
   out[2].type = 'clock';
   if (d.scanlines) out.push({ type: 'image', name: 'ccs_scanlines', props: { pos: '0 0', size: '1 1', path: `${c.art}/scanlines.svg`, tile: 'true', zIndex: '90' } });
-  if (d.radius >= 20 && d.id === 'crt') out.push({ type: 'image', name: 'ccs_bezel', props: { pos: '0 0', size: '1 1', path: `${c.art}/bezel.svg`, zIndex: '91' } });
+  if (d.deco) out.push({ type: 'image', name: 'ccs_deco', props: { pos: '0 0', size: '1 1', path: `${c.art}/deco.png`, zIndex: '3' }, anim: 'hover' });
+  // A screen effect over everything, drawn by one of RetroBat's own shaders.
+  const fx = screenFxOf(c.screenFx);
+  if (fx.path) out.push({ type: 'screenshader', name: 'ccs_screenfx', props: { path: fx.path, pos: '0 0', size: '1 1', zIndex: '95' } });
+  if (d.bezel) out.push({ type: 'image', name: 'ccs_bezel', props: { pos: '0 0', size: '1 1', path: `${c.art}/bezel.svg`, zIndex: '91' } });
   void view;
   return out;
 }
@@ -593,7 +282,7 @@ function gameList(d: Design, c: DesignContext, pos: string, size: string, align 
 }
 
 /** The game's media and details, wherever the archetype puts them. */
-function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
+function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameArchetype = d.game): DesignEl[] {
   const p = d.palette;
   const video = view === 'video';
   const els: DesignEl[] = [...common(d, c, view)];
@@ -604,11 +293,13 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
     anim,
   });
   // Covers get rounded corners; screenshots and videos a frame with a border and soft shadow.
-  const round: Record<string, string> = d.id === 'pixel' || d.radius === 0 ? {} : { roundCorners: '0.025' };
-  const boxart = (pos: string, max: string, z = 32, extra: Record<string, string> = {}) => art('ccs_boxart', pos, max, z, { path: 'firstfile({game:boxart}, {game:thumbnail}, {game:image})', ...round, ...extra }, d.anims?.art);
-  const framed = (e: DesignEl): DesignEl => ({ ...e, blocks: [frameXml(designFrame(d, K(d, c, 'designAccent')))] });
+  const round: Record<string, string> = d.pixel || d.radius === 0 ? {} : { roundCorners: '0.025' };
+  const tilt = (deg: number): Record<string, string> => (deg ? { rotation: String(Math.round(deg * 10) / 10), rotationOrigin: '0.5 0.5' } : {});
+  const boxart = (pos: string, max: string, z = 32, extra: Record<string, string> = {}) => art('ccs_boxart', pos, max, z, { path: 'firstfile({game:boxart}, {game:thumbnail}, {game:image})', ...round, ...tilt(d.tilt ?? 0), ...extra }, d.anims?.art);
+  const framed = (e: DesignEl): DesignEl => ({ ...e, blocks: [frameXml(designFrame(d, K(d, c, 'designAccent'), depthOf(d, c)))] });
   const screenshot = (pos: string, max: string, extra: Record<string, string> = {}) => framed(video ? art('md_video', pos, max, 31, { delay: '0.8', showSnapshotNoVideo: 'true', ...extra }) : art('md_image', pos, max, 31, extra));
-  const fanart = (opacityHex: string) => ({ type: 'image', name: 'ccs_fanart', props: { pos: '0 0', size: '1 1', path: 'firstfile({game:fanart}, {game:image})', color: `FFFFFF${opacityHex}`, zIndex: '1' } }) as DesignEl;
+  // Full-screen and centred, so a slow zoom (depth) never shows its edges.
+  const fanart = (opacityHex: string) => ({ type: 'image', name: 'ccs_fanart', props: { pos: '0.5 0.5', origin: '0.5 0.5', size: '1 1', path: 'firstfile({game:fanart}, {game:image})', color: `FFFFFF${opacityHex}`, zIndex: '1' } }) as DesignEl;
   const systemLogo = (pos: string, origin: string, max: string): DesignEl => ({
     type: 'image',
     name: 'logo',
@@ -631,10 +322,264 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
     text(d, c, 'ccs_favorite', { pos: `${(x + w * 0.5).toFixed(3)} ${(y + step * 2).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', text: '★ Favourite', color: K(d, c, 'designAccent'), visible: '{game:favorite}', zIndex: '40' }),
   ];
   const desc = (pos: string, size: string, fs = '0.02') => text(d, c, 'md_description', { pos, size, fontSize: fs, lineSpacing: '1.45', verticalAlignment: 'top', zIndex: '40' }, { dim: true, native: true });
-  const title = (pos: string, size: string, fs = '0.046', align = 'left') => ({ ...text(d, c, 'ccs_title', { pos, size, fontSize: fs, alignment: align, text: '{game:name}', zIndex: '45' }, { title: true }), anim: d.anims?.title });
+  const title = (pos: string, size: string, fs = '0.046', align = 'left') => ({ ...text(d, c, 'ccs_title', { pos, size, fontSize: fs, alignment: align, text: '{game:name}', zIndex: '45', ...tilt((d.tilt ?? 0) / 2) }, { title: true }), anim: d.anims?.title });
   const marquee = (pos: string, max: string, origin = '0 0') => art('md_marquee', pos, max, 46, { origin });
+  // Set at an angle by the layout (stickers, cards, slanted panels).
+  const rot = (e: DesignEl, deg: number): DesignEl => ({ ...e, props: { ...e.props, rotation: String(deg), rotationOrigin: '0.5 0.5' } });
 
-  switch (d.game) {
+  // RetroBat's other game list styles, which people pick in its settings: a wall of covers and a
+  // sliding row of covers. Every design styles them too.
+  if (view === 'grid') {
+    const { corner, margin } = tileGeometry(d);
+    const pad = String(margin + 8);
+    els.push(
+      fanart('1A'),
+      systemLogo('0.04 0.04', '0 0', '0.2 0.06'),
+      systemLogoText('0.04 0.04', '0 0', '0.2 0.06'),
+      { type: 'imagegrid', name: 'gamegrid', props: { pos: '0.04 0.13', size: '0.92 0.6', autoLayout: '6 2', margin: '0.01 0.02', padding: '0.01 0.01 0.01 0.01', imageSource: 'boxart', autoLayoutSelectedZoom: '1.1', animateSelection: 'true', scrollDirection: 'vertical', centerSelection: 'false', scrollbarColor: '00000000', zIndex: '30' } },
+      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/tile.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designTile'), imageColor: 'FFFFFFDD', padding: `${pad} ${pad} ${pad} ${pad}`, selectionMode: 'full', imageSizeMode: 'maxSize' } },
+      { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/tile-selected.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designAccent'), imageColor: 'FFFFFFFF', padding: `${pad} ${pad} ${pad} ${pad}` } },
+      panel(d, c, 'ccs_infopanel', '0.04 0.76', '0.92 0.17', 10),
+      title('0.06 0.775', '0.42 0.05', '0.032'),
+      ...details(0.06, 0.83, 0.42, 0.03),
+      desc('0.5 0.785', '0.28 0.13', '0.015'),
+      screenshot('0.86 0.845', '0.12 0.13'),
+    );
+    return els;
+  }
+  if (view === 'gamecarousel') {
+    els.push(
+      fanart('FF'),
+      { type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.png`, zIndex: '2' } },
+      systemLogo('0.04 0.04', '0 0', '0.2 0.06'),
+      systemLogoText('0.04 0.04', '0 0', '0.2 0.06'),
+      marquee('0.05 0.12', '0.3 0.12', '0 0'),
+      title('0.05 0.25', '0.5 0.06', '0.046'),
+      ...details(0.05, 0.32, 0.4, 0.034),
+      desc('0.05 0.43', '0.4 0.1', '0.017'),
+      screenshot('0.8 0.27', '0.3 0.3'),
+      { type: 'gamecarousel', name: 'gamecarousel', props: { type: 'horizontal', pos: '0 0.58', size: '1 0.34', logoSize: '0.12 0.24', maxLogoCount: '7', logoScale: '1.35', minLogoOpacity: '0.5', imageSource: 'boxart', color: '00000000', zIndex: '40' } },
+    );
+    return els;
+  }
+
+  switch (archetype) {
+    case 'showcase':
+      els.push(
+        fanart('20'),
+        systemLogo('0.04 0.05', '0 0', '0.22 0.07'),
+        systemLogoText('0.04 0.05', '0 0', '0.22 0.07'),
+        marquee('0.42 0.1', '0.24 0.08', '0.5 0'),
+        boxart('0.42 0.44', '0.28 0.46'),
+        (() => {
+          const r = boxart('0.42 0.67', '0.28 0.46', 31, { origin: '0.5 0', flipY: 'true', color: 'FFFFFF2E' });
+          delete r.props.rotation;
+          delete r.props.rotationOrigin;
+          return { ...r, name: 'ccs_reflection', anim: undefined };
+        })(),
+        screenshot('0.14 0.42', '0.18 0.2'),
+        desc('0.04 0.56', '0.2 0.16', '0.016'),
+        title('0.08 0.74', '0.68 0.06', '0.042', 'center'),
+        ...details(0.2, 0.82, 0.44, 0.032),
+        panel(d, c, 'ccs_listpanel', '0.74 0.1', '0.23 0.82', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.75 0.12', '0.21 0.78'),
+      );
+      break;
+    case 'hero':
+      els.push(
+        fanart('FF'),
+        panel(d, c, 'ccs_heroband', '0 0.5', '1 0.5', 5, K(d, c, 'designListPanel')),
+        systemLogo('0.04 0.04', '0 0', '0.16 0.06'),
+        systemLogoText('0.04 0.04', '0 0', '0.16 0.06'),
+        marquee('0.05 0.28', '0.34 0.16', '0 0'),
+        title('0.05 0.44', '0.5 0.06', '0.05'),
+        gameList(d, c, '0.05 0.54', '0.42 0.38'),
+        ...details(0.53, 0.53, 0.42, 0.034),
+        boxart('0.6 0.73', '0.1 0.2'),
+        screenshot('0.81 0.73', '0.2 0.2'),
+        desc('0.53 0.85', '0.43 0.09', '0.015'),
+      );
+      break;
+    case 'sidebar':
+      els.push(
+        fanart('FF'),
+        panel(d, c, 'ccs_listpanel', '0 0', '0.3 1', 20, K(d, c, 'designListPanel')),
+        systemLogo('0.03 0.04', '0 0', '0.24 0.07'),
+        systemLogoText('0.03 0.04', '0 0', '0.24 0.07'),
+        gameList(d, c, '0.02 0.13', '0.26 0.8'),
+        marquee('0.34 0.06', '0.24 0.1', '0 0'),
+        screenshot('0.85 0.3', '0.2 0.2'),
+        panel(d, c, 'ccs_infopanel', '0.34 0.62', '0.62 0.32', 10),
+        boxart('0.415 0.78', '0.1 0.26'),
+        title('0.49 0.64', '0.46 0.06', '0.04'),
+        ...details(0.49, 0.71, 0.46, 0.032),
+        desc('0.49 0.81', '0.46 0.11', '0.016'),
+      );
+      break;
+    case 'tvguide':
+      els.push(
+        fanart('22'),
+        systemLogo('0.04 0.02', '0 0', '0.18 0.05'),
+        systemLogoText('0.04 0.02', '0 0', '0.18 0.05'),
+        screenshot('0.3 0.3', '0.5 0.44'),
+        title('0.58 0.1', '0.3 0.06', '0.044'),
+        marquee('0.58 0.18', '0.2 0.08', '0 0'),
+        boxart('0.91 0.25', '0.08 0.14'),
+        ...details(0.58, 0.29, 0.28, 0.034),
+        desc('0.58 0.4', '0.38 0.14', '0.017'),
+        panel(d, c, 'ccs_listpanel', '0.04 0.58', '0.92 0.34', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.06 0.6', '0.88 0.3'),
+      );
+      break;
+    case 'trading-card':
+      els.push(
+        fanart('1A'),
+        systemLogo('0.04 0.035', '0 0', '0.22 0.06'),
+        systemLogoText('0.04 0.035', '0 0', '0.22 0.06'),
+        rot(panel(d, c, 'ccs_cardpanel', '0.07 0.12', '0.32 0.78', 8, K(d, c, 'designAccent')), -4),
+        rot(boxart('0.23 0.45', '0.26 0.5'), -4),
+        rot(title('0.08 0.79', '0.3 0.05', '0.032', 'center'), -4),
+        panel(d, c, 'ccs_infopanel', '0.42 0.12', '0.24 0.78', 10),
+        marquee('0.54 0.15', '0.2 0.08', '0.5 0'),
+        screenshot('0.54 0.36', '0.2 0.16'),
+        ...details(0.44, 0.5, 0.2, 0.034),
+        desc('0.44 0.62', '0.2 0.26', '0.016'),
+        panel(d, c, 'ccs_listpanel', '0.69 0.12', '0.28 0.8', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.705 0.14', '0.25 0.76'),
+      );
+      break;
+    case 'manga-spread':
+      els.push(
+        fanart('1A'),
+        systemLogo('0.04 0.03', '0 0', '0.2 0.06'),
+        systemLogoText('0.04 0.03', '0 0', '0.2 0.06'),
+        rot(panel(d, c, 'ccs_coverpanel', '0.04 0.12', '0.3 0.56', 8), -3),
+        rot(boxart('0.19 0.4', '0.24 0.48'), -3),
+        marquee('0.19 0.76', '0.24 0.1', '0.5 0'),
+        rot(panel(d, c, 'ccs_shotpanel', '0.37 0.1', '0.3 0.34', 8), 2),
+        rot(screenshot('0.52 0.27', '0.26 0.28'), 2),
+        rot(panel(d, c, 'ccs_infopanel', '0.37 0.48', '0.3 0.44', 8), -1.5),
+        title('0.39 0.5', '0.26 0.06', '0.036'),
+        ...details(0.39, 0.58, 0.26, 0.032),
+        desc('0.39 0.69', '0.26 0.2', '0.016'),
+        rot(panel(d, c, 'ccs_listpanel', '0.7 0.1', '0.27 0.82', 20, K(d, c, 'designListPanel')), 1.5),
+        gameList(d, c, '0.715 0.13', '0.24 0.76'),
+      );
+      break;
+    case 'versus':
+      els.push(
+        fanart('22'),
+        { type: 'image', name: 'ccs_slash', props: { pos: '0 0', size: '1 1', path: `${c.art}/slash.svg`, color: K(d, c, 'designAccent'), opacity: '0.16', zIndex: '4' } },
+        systemLogo('0.04 0.04', '0 0', '0.22 0.07'),
+        systemLogoText('0.04 0.04', '0 0', '0.22 0.07'),
+        boxart('0.2 0.48', '0.3 0.6'),
+        { ...text(d, c, 'ccs_vs', { pos: '0.33 0.74', size: '0.1 0.1', fontSize: '0.08', alignment: 'center', text: 'VS', color: K(d, c, 'designAccent'), zIndex: '44' }, { title: true }), anim: 'pulse' },
+        title('0.42 0.14', '0.31 0.06', '0.042'),
+        marquee('0.42 0.22', '0.2 0.07', '0 0'),
+        ...details(0.42, 0.32, 0.31, 0.034),
+        screenshot('0.575 0.56', '0.3 0.2'),
+        desc('0.42 0.7', '0.31 0.2', '0.016'),
+        panel(d, c, 'ccs_listpanel', '0.76 0.12', '0.21 0.8', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.77 0.14', '0.19 0.76'),
+      );
+      break;
+    case 'marquee-top':
+      els.push(
+        fanart('1E'),
+        systemLogo('0.04 0.04', '0 0', '0.16 0.06'),
+        systemLogoText('0.04 0.04', '0 0', '0.16 0.06'),
+        { ...marquee('0.5 0.03', '0.5 0.18', '0.5 0'), anim: d.anims?.logo ?? 'breathe' },
+        panel(d, c, 'ccs_listpanel', '0.3 0.25', '0.4 0.64', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.32 0.27', '0.36 0.6', 'center'),
+        boxart('0.15 0.42', '0.22 0.36'),
+        title('0.04 0.62', '0.24 0.05', '0.03'),
+        ...details(0.04, 0.69, 0.24, 0.032),
+        screenshot('0.85 0.4', '0.24 0.3'),
+        desc('0.73 0.6', '0.24 0.3', '0.016'),
+      );
+      break;
+    case 'terminal':
+      els.push(
+        fanart('10'),
+        systemLogo('0.04 0.04', '0 0', '0.2 0.06'),
+        systemLogoText('0.04 0.04', '0 0', '0.2 0.06'),
+        panel(d, c, 'ccs_listpanel', '0.03 0.12', '0.55 0.8', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.05 0.14', '0.51 0.76'),
+        panel(d, c, 'ccs_infopanel', '0.61 0.12', '0.36 0.8', 10),
+        title('0.63 0.14', '0.32 0.05', '0.03'),
+        ...details(0.63, 0.21, 0.32, 0.03),
+        boxart('0.7 0.44', '0.12 0.2'),
+        screenshot('0.87 0.44', '0.16 0.2'),
+        marquee('0.63 0.56', '0.32 0.06', '0 0'),
+        desc('0.63 0.64', '0.32 0.26', '0.016'),
+      );
+      break;
+    case 'handheld':
+      els.push(
+        fanart('16'),
+        systemLogo('0.5 0.015', '0.5 0', '0.2 0.05'),
+        systemLogoText('0.5 0.015', '0.5 0', '0.2 0.05'),
+        panel(d, c, 'ccs_device', '0.22 0.08', '0.56 0.86', 6),
+        panel(d, c, 'ccs_screen', '0.27 0.13', '0.46 0.5', 8, K(d, c, 'designBackground')),
+        gameList(d, c, '0.29 0.15', '0.42 0.46', 'center'),
+        title('0.27 0.66', '0.46 0.05', '0.028', 'center'),
+        panel(d, c, 'ccs_dpad_h', '0.29 0.8', '0.08 0.025', 9, K(d, c, 'designDimText')),
+        panel(d, c, 'ccs_dpad_v', '0.3175 0.7625', '0.025 0.1', 9, K(d, c, 'designDimText')),
+        panel(d, c, 'ccs_btn_a', '0.65 0.79', '0.035 0.06', 9, K(d, c, 'designAccent')),
+        panel(d, c, 'ccs_btn_b', '0.6 0.82', '0.035 0.06', 9, K(d, c, 'designAccent')),
+        boxart('0.11 0.36', '0.18 0.4'),
+        marquee('0.11 0.62', '0.18 0.08', '0.5 0'),
+        screenshot('0.89 0.3', '0.18 0.24'),
+        ...details(0.8, 0.48, 0.18, 0.03),
+        desc('0.8 0.6', '0.18 0.3', '0.014'),
+      );
+      break;
+    case 'scrapbook':
+      els.push(
+        fanart('18'),
+        systemLogo('0.04 0.04', '0 0', '0.2 0.06'),
+        systemLogoText('0.04 0.04', '0 0', '0.2 0.06'),
+        rot(boxart('0.2 0.36', '0.22 0.42'), -6),
+        rot(screenshot('0.46 0.3', '0.24 0.24'), 4),
+        rot(marquee('0.36 0.5', '0.2 0.08', '0 0'), -3),
+        rot(title('0.06 0.66', '0.5 0.07', '0.05'), -2),
+        ...details(0.06, 0.76, 0.5, 0.034),
+        desc('0.06 0.865', '0.5 0.07', '0.015'),
+        rot(panel(d, c, 'ccs_listpanel', '0.62 0.1', '0.35 0.82', 20, K(d, c, 'designListPanel')), 2),
+        gameList(d, c, '0.64 0.13', '0.31 0.76'),
+      );
+      break;
+    case 'magazine-cover':
+      els.push(
+        fanart('16'),
+        title('0.04 0.06', '0.6 0.1', '0.08'),
+        systemLogo('0.66 0.07', '0 0', '0.14 0.06'),
+        systemLogoText('0.66 0.07', '0 0', '0.14 0.06'),
+        marquee('0.04 0.17', '0.2 0.06', '0 0'),
+        boxart('0.22 0.55', '0.32 0.6'),
+        ...details(0.41, 0.22, 0.24, 0.034),
+        desc('0.41 0.36', '0.24 0.32', '0.016'),
+        screenshot('0.53 0.8', '0.24 0.18'),
+        panel(d, c, 'ccs_listpanel', '0.69 0.14', '0.28 0.78', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.705 0.16', '0.25 0.74'),
+      );
+      break;
+    case 'list-only':
+      els.push(
+        fanart('1E'),
+        systemLogo('0.5 0.04', '0.5 0', '0.26 0.07'),
+        systemLogoText('0.5 0.04', '0.5 0', '0.26 0.07'),
+        panel(d, c, 'ccs_listpanel', '0.2 0.14', '0.6 0.64', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.22 0.16', '0.56 0.6', 'center'),
+        panel(d, c, 'ccs_infopanel', '0.06 0.8', '0.88 0.13', 10),
+        boxart('0.11 0.865', '0.07 0.11'),
+        screenshot('0.2 0.865', '0.1 0.11'),
+        title('0.26 0.81', '0.36 0.045', '0.03'),
+        ...details(0.26, 0.86, 0.36, 0.026),
+        desc('0.64 0.815', '0.22 0.1', '0.015'),
+        marquee('0.935 0.865', '0.06 0.06', '1 0.5'),
+      );
+      break;
     case 'cinema':
       els.push(
         fanart('FF'),
@@ -657,7 +602,13 @@ function gameScreen(d: Design, c: DesignContext, view: string): DesignEl[] {
         systemLogo('0.04 0.05', '0 0', '0.22 0.07'),
         systemLogoText('0.04 0.05', '0 0', '0.22 0.07'),
         boxart('0.22 0.47', '0.3 0.56'),
-        { ...boxart('0.22 0.75', '0.3 0.56', 31, { origin: '0.5 0', flipY: 'true', color: 'FFFFFF33' }), name: 'ccs_reflection', anim: undefined },
+        (() => {
+          // The reflection hangs straight down from the cover, never tilted.
+          const r = boxart('0.22 0.75', '0.3 0.56', 31, { origin: '0.5 0', flipY: 'true', color: 'FFFFFF33' });
+          delete r.props.rotation;
+          delete r.props.rotationOrigin;
+          return { ...r, name: 'ccs_reflection', anim: undefined };
+        })(),
         panel(d, c, 'ccs_infopanel', '0.41 0.12', '0.24 0.8', 10),
         marquee('0.53 0.15', '0.2 0.08', '0.5 0'),
         title('0.425 0.26', '0.21 0.08', '0.03'),
@@ -726,7 +677,7 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
   const spot = ([pos, size, align, fs]: [string, string, string, string?], name: string, value: string, kind: 'title' | 'dim' | 'accent', defFs: string): DesignEl => {
     // Pixel fonts are very wide: long names like "Super Nintendo Entertainment System" need a smaller size.
     const font = kind === 'title' ? (d.titleFont ?? d.font) : d.font;
-    const scale = ['pressstart', 'silkscreen'].includes(font) ? 0.62 : ['orbitron', 'audiowide', 'monoton', 'russo', 'lilita'].includes(font) ? 0.85 : 1;
+    const scale = ['pressstart', 'silkscreen'].includes(font) ? 0.62 : ['orbitron', 'audiowide', 'monoton', 'russo', 'lilita', 'bungee', 'michroma', 'cinzel', 'creepster'].includes(font) ? 0.85 : 1;
     const size0 = Number(fs ?? defFs) * scale;
     const el = text(d, c, name, { pos, size, alignment: align, fontSize: String(Math.round(size0 * 1000) / 1000), text: value, zIndex: '45' }, kind === 'title' ? { title: true } : { dim: kind === 'dim' });
     if (kind === 'accent') el.props.color = K(d, c, 'designAccent');
@@ -737,6 +688,10 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
   els.push({ type: 'image', name: 'ccs_systemart', props: { pos: '0.5 0.5', origin: '0.5 0.5', minSize: '1 1', path: ['{random:fanart}', '{random:image}'], color: `FFFFFF${l.art ?? '2E'}`, zIndex: '1' } });
   if (l.fade) els.push({ type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.png`, zIndex: '2' } });
   if (l.band) els.push(panel(d, c, 'ccs_band', l.band[0], l.band[1], 10));
+  if (l.arrows) {
+    const arrow = (name: string, pos: string, flip: boolean): DesignEl => ({ type: 'image', name, props: { pos, origin: '0.5 0.5', maxSize: '0.045 0.09', path: `${c.art}/arrow.svg`, color: K(d, c, 'designAccent'), ...(flip ? { flipX: 'true' } : {}), zIndex: '42' }, anim: 'pulse' });
+    els.push(arrow('ccs_arrow_left', l.arrows[0], true), arrow('ccs_arrow_right', l.arrows[1], false));
+  }
 
   if (l.grid) {
     // Tiles in the design's colours, logos washed out until selected.
@@ -770,15 +725,126 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
   return els;
 }
 
-/** Elements of a design for one screen. */
-export function designElements(d: Design, c: DesignContext, view: string, systemLayoutId = d.system): DesignEl[] {
-  if (view === 'system') return systemScreen(d, c, systemLayout(systemLayoutId) ?? systemLayout(d.system)!);
-  if (['basic', 'detailed', 'video'].includes(view)) {
-    const els = gameScreen(d, c, view);
+const depthOf = (d: Design, c: DesignContext): Depth => c.depth ?? d.depth ?? 'subtle';
+
+/**
+ * Elements of a design for one screen, laid out with a system layout (system screen) or a game
+ * layout (game list screens); the design's own when not given.
+ */
+export function designElements(d: Design, c: DesignContext, view: string, systemLayoutId = d.system, gameLayoutId?: string | null): DesignEl[] {
+  if (view === 'system') {
+    const l = systemLayout(systemLayoutId) ?? systemLayout(d.system)!;
+    const oneRow = !!l.grid && l.grid.autoLayout?.split(' ')[1] === '1';
+    return withMotion(withDepth(systemScreen(d, c, l), depthOf(d, c), 'system', { floor: !!l.floor, oneRow }), c);
+  }
+  if (GAME_VIEWS.includes(view)) {
+    const gl = gameLayout(gameLayoutId) ?? defaultGameLayout(d.game);
+    let els = settled(gameScreen(d, c, view, gl.archetype));
+    if (gl.mirror && LIST_VIEWS.includes(view)) els = mirrored(els);
     for (const n of LABELS_AND_EXTRAS) els.push({ type: n === 'md_lastplayed' ? 'datetime' : 'text', name: n, props: { visible: 'false' } });
-    return els;
+    return withMotion(withDepth(els, depthOf(d, c), 'game'), c);
   }
   return [];
+}
+
+/** Game list screens a design styles: the three list styles, and RetroBat's grid and carousel of games. */
+export const LIST_VIEWS = ['basic', 'detailed', 'video'];
+export const GAME_VIEWS = [...LIST_VIEWS, 'grid', 'gamecarousel'];
+
+/** Animations that turn things, which would straighten a part the layout set at an angle. */
+const TURNING = new Set(['swing-in', 'tilt-in', 'sway', 'swing', 'spin']);
+const settled = (els: DesignEl[]): DesignEl[] => els.map((e) => (e.props.rotation && e.anim && TURNING.has(e.anim) ? { ...e, anim: 'pop' } : e));
+
+/** The game layout a design comes with. */
+export const designGameLayout = (d: Design): string => defaultGameLayout(d.game).id;
+
+/** The theme's motion feel on every animation that doesn't have its own size and speed. */
+function withMotion(els: DesignEl[], c: DesignContext): DesignEl[] {
+  const m = c.motion;
+  if (!m || (m.amount === 1 && m.speed === 1)) return els;
+  return els.map((e) => {
+    if (!e.anim || e.animAmount !== undefined || e.anim === PARALLAX_ANIM) return e;
+    const preset = ANIMATIONS.find((a) => a.id === e.anim);
+    return { ...e, animAmount: preset?.amount ? m.amount : 1, animSpeed: m.speed };
+  });
+}
+
+const NO_MIRROR = new Set(['ccs_clock', 'help']);
+const r3 = (n: number) => String(Math.round(n * 1000) / 1000);
+
+/** A screen flipped left to right: each element keeps its anchor, right-aligned text turns left. */
+function mirrored(els: DesignEl[]): DesignEl[] {
+  return els.map((e) => {
+    const pos = e.props.pos;
+    if (NO_MIRROR.has(e.name) || typeof pos !== 'string') return e;
+    const p = { ...e.props };
+    const [x, y] = pos.split(' ').map(Number);
+    const [ox, oy] = String(p.origin ?? '0 0').split(' ').map(Number);
+    const w = Number(String(p.size ?? p.maxSize ?? '0 0').split(' ')[0]) || 0;
+    if (w) {
+      const left = x - ox * w;
+      p.pos = `${r3(1 - left - w + ox * w)} ${y}`;
+    } else {
+      p.pos = `${r3(1 - x)} ${y}`;
+      if (p.origin) p.origin = `${r3(1 - ox)} ${oy}`;
+    }
+    if (p.alignment === 'right') p.alignment = 'left';
+    if (e.name === 'ccs_fade') p.flipX = 'true';
+    return { ...e, props: p };
+  });
+}
+
+/**
+ * The selected logo's zoom at another depth. Layouts have their own zoom (a dock's logos grow a
+ * lot more than a carousel's), so depth scales it rather than replacing it.
+ */
+export function depthLogoScale(now: number, from: Depth, to: Depth): string {
+  const v = (now / depthLevel(from).logoScale) * depthLevel(to).logoScale;
+  return String(Math.round(Math.max(1, v) * 100) / 100);
+}
+
+const TEXT_TYPES = new Set(['text', 'textlist']);
+const r2 = (n: number) => String(Math.round(n * 100) / 100);
+const r4 = (n: number) => String(Math.round(n * 10000) / 10000);
+
+/**
+ * Depth on everything RetroBat can draw it on: shadows under art, text and panels, the selected
+ * logo's lift, reflections on a shelf or floor, the selected tile's lift, and layers moving at
+ * different distances (the background's slow zoom, decorations drifting).
+ */
+function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game', o: { floor?: boolean; oneRow?: boolean } = {}): DesignEl[] {
+  const lv = depthLevel(depth);
+  const ts = lv.textShadow;
+  const ps = lv.panelShadow;
+  const out: DesignEl[] = [];
+  for (const e0 of els) {
+    let e = e0;
+    const hidden = e.props.visible === 'false';
+    if (lv.shadow && e.type === 'image' && SHADOWED[kind].includes(e.name) && Object.keys(e.props).length > 1) e = { ...e, blocks: [...(e.blocks ?? []), shadowXml(lv.shadow)] };
+    if (e.type === 'carousel' || e.type === 'gamecarousel') e = { ...e, props: { ...e.props, logoScale: depthLogoScale(Number(e.props.logoScale ?? 1.25), 'subtle', depth) } };
+    if (lv.parallax && e.name === PARALLAX[kind] && !e.anim) e = { ...e, anim: PARALLAX_ANIM };
+    if (lv.parallax && e.name === 'ccs_deco') e = { ...e, anim: DRIFT_ANIM };
+    // Text shadows: titles on Subtle, all text on Strong; text that glows keeps its glow.
+    if (ts && !hidden && TEXT_TYPES.has(e.type) && !e.props.glowColor && (ts.on === 'all' || TITLES.includes(e.name))) e = { ...e, props: { ...e.props, glowColor: `000000${ts.alpha}`, glowSize: String(ts.size), glowOffset: `${ts.offset} ${ts.offset}` } };
+    // Reflections: logos on a shelf or floor, and tiles in a single row.
+    if (lv.reflect && kind === 'system' && o.floor && e.type === 'image' && e.name === 'logo') e = { ...e, props: { ...e.props, reflexion: `${lv.reflect} 0` } };
+    if (lv.reflect && kind === 'system' && o.oneRow && e.type === 'gridtile') e = { ...e, props: { ...e.props, reflexion: `${r2(lv.reflect * 0.8)} 0` } };
+    if (lv.lift !== 1 && e.type === 'imagegrid') e = { ...e, props: { ...e.props, autoLayoutSelectedZoom: r2(Number(e.props.autoLayoutSelectedZoom ?? 1.06) * lv.lift) } };
+    // Panels float on a soft shadow (kept on screen, so one along an edge just doesn't show there).
+    if (ps && e.type === 'ninepatch' && e.name.startsWith('ccs_') && typeof e.props.pos === 'string' && typeof e.props.size === 'string') {
+      const [x, y] = e.props.pos.split(' ').map(Number);
+      const [w, h] = e.props.size.split(' ').map(Number);
+      const sx = x + ps.dx;
+      const sy = y + ps.dy;
+      out.push({
+        type: 'ninepatch',
+        name: `${e.name}_shadow`,
+        props: { ...e.props, pos: `${r4(sx)} ${r4(sy)}`, size: `${r4(Math.min(w, 1 - sx))} ${r4(Math.min(h, 1 - sy))}`, color: `000000${ps.alpha}`, zIndex: r2(Number(e.props.zIndex ?? 5) - 0.5) },
+      });
+    }
+    out.push(e);
+  }
+  return out;
 }
 
 /** Markup lines (two-space indented, inside a <view>) for elements, with their animations. */
@@ -793,7 +859,7 @@ export function elementsMarkup(els: DesignEl[], extraNames: Set<string>, view: s
     const preset = e.anim ? ANIMATIONS.find((a: AnimPreset) => a.id === e.anim) : undefined;
     if (preset) {
       const pos = String(e.props.pos ?? '0 0').split(' ').map(Number) as [number, number];
-      for (const l of storyboardXml(preset, pos, 1, 1, screenOf(view)).split('\n')) lines.push(`    ${l}`);
+      for (const l of storyboardXml(preset, pos, e.animAmount ?? 1, e.animSpeed ?? 1, screenOf(view)).split('\n')) lines.push(`    ${l}`);
     }
     lines.push(`  </${e.type}>`);
   }

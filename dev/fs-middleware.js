@@ -95,6 +95,47 @@ export function devFs() {
         .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())),
     list_theme_files: ({ dir }) => walk(guard(dir)).map((p) => ({ rel: relative(dir, p).replace(/\\/g, '/'), kind: kind(p), size: statSync(p).size })),
     read_theme_xml: ({ dir }) => walk(guard(dir)).filter((p) => kind(p) === 'xml').map(readText),
+    // Read-only: retrobat.ini's [SplashScreen] section and the videos it can play.
+    read_intro: () => {
+      const ini = join(root, 'retrobat.ini');
+      const text = existsSync(ini) ? readFileSync(ini, 'utf8') : '';
+      const vals = {};
+      let inside = false;
+      for (const line of text.split(/\r?\n/)) {
+        const t = line.trim();
+        if (t.startsWith('[') && t.endsWith(']')) inside = t.slice(1, -1).trim().toLowerCase() === 'splashscreen';
+        else if (inside && t && !t.startsWith(';') && t.includes('=')) {
+          const i = t.indexOf('=');
+          vals[t.slice(0, i).trim().toLowerCase()] = t.slice(i + 1).trim().replace(/^"(.*)"$/, '$1');
+        }
+      }
+      const flag = (k, d) => (k in vals ? vals[k] === '1' || vals[k].toLowerCase() === 'true' : d);
+      const settings = {
+        enableIntro: flag('enableintro', true),
+        fileName: vals.filename ?? 'retrobat-neon.mp4',
+        filePath: vals.filepath || 'default',
+        randomVideo: flag('randomvideo', false),
+        videoDelay: Number(vals.videodelay ?? 1000) || 0,
+        waitForVideoEnd: flag('waitforvideoend', true),
+        killVideoWhenEsReady: flag('killvideowhenesready', false),
+        gamepadVideoKill: flag('gamepadvideokill', true),
+      };
+      const folder = settings.filePath.toLowerCase() === 'default' ? join(esHome(), 'video') : settings.filePath;
+      const videos = existsSync(folder)
+        ? readdirSync(folder)
+            .filter((n) => /\.(mp4|mkv|avi|webm|mov|wmv)$/i.test(n))
+            .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+            .map((name) => ({ name, path: join(folder, name), size: statSync(join(folder, name)).size }))
+        : [];
+      return { settings, found: !!text, folder, videos };
+    },
+    load_theme: ({ dir }) => {
+      const files = walk(guard(dir));
+      return {
+        entries: files.map((p) => ({ rel: relative(dir, p).replace(/\\/g, '/'), kind: kind(p), size: statSync(p).size })),
+        xml: files.filter((p) => kind(p) === 'xml').map(readText),
+      };
+    },
     read_text: ({ path }) => readText(guard(path)),
     read_text_optional: ({ path }) => (existsSync(path) && inside(path) ? readText(path) : null),
     read_themesettings: ({ theme }) => {

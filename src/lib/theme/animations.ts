@@ -146,6 +146,43 @@ export const ANIMATIONS: AnimPreset[] = [
     build: (_p, a, sp, s) => appear(s, [{ property: 'scale', from: r(1 + 0.6 * a), to: '1', duration: ms(500, sp), mode: 'easeOutCubic' }, fade(400, sp)]),
   },
   {
+    id: 'glide-up',
+    label: 'Glide up',
+    help: 'Glides up into place and slows down gently at the end. Smooth and calm.',
+    kind: 'entrance',
+    amount: true,
+    build: ([, y], a, sp, s) => appear(s, [{ property: 'y', from: r(y + 0.035 * a), to: r(y), duration: ms(900, sp), mode: 'easeOutQuint' }, fade(700, sp)]),
+  },
+  {
+    id: 'soft-zoom',
+    label: 'Soft zoom',
+    help: 'Grows the last little bit into place while fading in, like coming into focus.',
+    kind: 'entrance',
+    amount: true,
+    build: (_p, a, sp, s) => appear(s, [{ property: 'scale', from: r(Math.max(0.05, 1 - 0.08 * a)), to: '1', duration: ms(800, sp), mode: 'easeOutQuint' }, fade(600, sp)]),
+  },
+  {
+    id: 'drift-in',
+    label: 'Drift in',
+    help: 'Drifts in slowly from the left and settles. Good for big artwork.',
+    kind: 'entrance',
+    amount: true,
+    build: ([x], a, sp, s) => appear(s, [{ property: 'x', from: r(x - 0.035 * a), to: r(x), duration: ms(1100, sp), mode: 'easeOutQuint' }, fade(800, sp)]),
+  },
+  {
+    id: 'tilt-in',
+    label: 'Tilt in',
+    help: 'Turns upright while growing into place, as if tipping towards you.',
+    kind: 'entrance',
+    amount: true,
+    build: (_p, a, sp, s) =>
+      appear(s, [
+        { property: 'rotation', from: r(-6 * a), to: '0', duration: ms(750, sp), mode: 'easeOutCubic' },
+        { property: 'scale', from: '0.94', to: '1', duration: ms(750, sp), mode: 'easeOutCubic' },
+        fade(450, sp),
+      ]),
+  },
+  {
     id: 'rise-float',
     label: 'Rise, then float',
     help: 'Rises into place, then keeps bobbing gently.',
@@ -178,6 +215,51 @@ export const ANIMATIONS: AnimPreset[] = [
     kind: 'loop',
     amount: true,
     build: ([, y], a, sp) => loop([{ property: 'y', from: r(y), to: r(y - 0.008 * a), duration: ms(3000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
+  },
+  {
+    id: 'hover',
+    label: 'Hover',
+    help: 'Floats up and comes a little closer, then back, like it is hovering. Adds depth.',
+    kind: 'loop',
+    amount: true,
+    build: ([, y], a, sp) =>
+      loop([
+        { property: 'y', from: r(y), to: r(y - 0.007 * a), duration: ms(3200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+        { property: 'scale', from: '1', to: r(1 + 0.018 * a), duration: ms(3200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+      ]),
+  },
+  {
+    id: 'sway',
+    label: 'Gentle sway',
+    help: 'Rocks very slightly and bobs, like it is floating on water.',
+    kind: 'loop',
+    amount: true,
+    build: ([, y], a, sp) =>
+      loop([
+        { property: 'rotation', from: r(-1.5 * a), to: r(1.5 * a), duration: ms(4200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+        { property: 'y', from: r(y), to: r(y - 0.005 * a), duration: ms(2700, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+      ]),
+  },
+  {
+    id: 'drift',
+    label: 'Drift',
+    help: 'Drifts slowly sideways and back, so a layer seems to move at its own distance.',
+    kind: 'loop',
+    amount: true,
+    build: ([x, y], a, sp) =>
+      loop([
+        { property: 'x', from: r(x), to: r(x + 0.008 * a), duration: ms(9000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+        { property: 'y', from: r(y), to: r(y - 0.004 * a), duration: ms(6000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
+      ]),
+  },
+  {
+    id: 'slow-zoom',
+    label: 'Slow zoom',
+    help: 'Zooms in very slowly and back out, so a background seems to move behind the rest.',
+    kind: 'loop',
+    amount: true,
+    // Starts a little above full size, which also tells it apart from Pulse when read back.
+    build: (_p, a, sp) => loop([{ property: 'scale', from: '1.03', to: r(1.03 + 0.06 * a), duration: ms(16000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
   },
   {
     id: 'pulse',
@@ -509,6 +591,8 @@ export interface PlayOptions {
   token?: string;
   /** +1 after moving down the list, -1 after moving up. */
   dir?: number;
+  /** Preview only: movement, turning and growth times this, to make small motion easy to see. */
+  boost?: number;
 }
 
 /** The storyboard RetroBat plays on this screen (see the notes at the top). */
@@ -538,10 +622,17 @@ export function animationCss(el: ResolvedElement, W: number, H: number, base: st
       if (x !== undefined) v[k.prop] = x;
     }
     const opacity = v.opacity === undefined ? null : v.opacity > 1 ? v.opacity / 255 : v.opacity;
-    const dx = (v.x !== undefined ? (v.x - pos[0]) * W : 0) + (v.offsetX ?? 0) * W;
-    const dy = (v.y !== undefined ? (v.y - pos[1]) * H : 0) + (v.offsetY ?? 0) * H;
+    // Movement in screen fractions, times the screen size the element carries in --ccs-w / --ccs-h,
+    // so zooming the preview doesn't make new keyframes (which would restart the motion).
+    const k = o.boost ?? 1;
+    const dx = ((v.x !== undefined ? v.x - pos[0] : 0) + (v.offsetX ?? 0)) * k;
+    const dy = ((v.y !== undefined ? v.y - pos[1] : 0) + (v.offsetY ?? 0)) * k;
+    if (v.rotation !== undefined) v.rotation *= k;
+    if (v.scale !== undefined) v.scale = 1 + (v.scale - 1) * k;
     const f = (n: number) => Math.round(n * 1000) / 1000;
-    return `transform:${base} translate(${f(dx)}px, ${f(dy)}px) rotate(${f(v.rotation ?? 0)}deg) scale(${f(v.scale ?? 1)});${opacity !== null ? `opacity:${f(Math.max(0, Math.min(1, opacity)))};` : ''}`;
+    const g = (n: number) => Math.round(n * 1e6) / 1e6;
+    const move = dx || dy ? ` translate(calc(var(--ccs-w, ${W}px) * ${g(dx)}), calc(var(--ccs-h, ${H}px) * ${g(dy)}))` : '';
+    return `transform:${base}${move} rotate(${f(v.rotation ?? 0)}deg) scale(${f(v.scale ?? 1)});${opacity !== null ? `opacity:${f(Math.max(0, Math.min(1, opacity)))};` : ''}`;
   };
   const keyframes = (name: string, from: number, to: number) => {
     const span = Math.max(1, to - from);
@@ -550,7 +641,7 @@ export function animationCss(el: ResolvedElement, W: number, H: number, base: st
     for (let i = 0; i <= steps; i++) out.push(`${r((i / steps) * 100)}% { ${frame(from + (span * i) / steps)} }`);
     inject(name, `@keyframes ${name} { ${out.join(' ')} }`);
   };
-  const id = hash(`${el.name}|${src(anims)}|${base}|${W}x${H}|${o.token ?? ''}|${o.dir ?? 0}`);
+  const id = hash(`${el.name}|${src(anims)}|${base}|${o.token ?? ''}|${o.dir ?? 0}|${o.boost ?? 1}`);
   const forever = tracks.filter((k) => k.repeat === 0 && cycle(k) > 0);
   if (!forever.length) {
     const end = Math.max(50, ...tracks.map((k) => k.begin + cycle(k) * k.repeat));

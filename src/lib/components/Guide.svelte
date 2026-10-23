@@ -1,18 +1,20 @@
 <script lang="ts">
+  import AppDialog from './AppDialog.svelte';
+  import { Button } from '$lib/components/ui/button';
   import { ed } from '$lib/editor.svelte';
 
   const STEPS = [
     {
       title: 'Pick a screen',
-      text: 'The tabs above the preview switch between the System menu (where you pick a console) and the game lists. The console menu at the top right changes which console is shown.',
+      text: 'The screen menu in the top bar switches between the System menu (where you pick a console) and the game lists. Next to it, pick which console the preview shows; the arrows under the preview step through consoles and games.',
     },
     {
       title: 'Click something to change it',
-      text: 'Click any part of the preview, or pick it in the Layers panel. Its settings appear in the Properties panel on the right, and the quick ones in the bar at the top.',
+      text: 'Click any part of the preview, or pick it in Layers. Its settings slide in on the right: position and size at the top, everything else below.',
     },
     {
       title: 'Move, restyle, add',
-      text: 'Drag the selected part to move it, or use the arrow keys for small steps. The tools on the left add pictures, text, panels and more.',
+      text: 'Drag the selected part to move it, or use the arrow keys for small steps. The column on the left has Add (pictures, text, panels and more) and opens Layers, Presets, Colours and the other panels.',
     },
     {
       title: 'Save and try it',
@@ -28,15 +30,16 @@
   ];
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && ed.closeGuide()} />
-
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && ed.closeGuide()}>
-  <div class="guide" role="dialog" aria-modal="true" aria-labelledby="guide-title">
-    <h2 id="guide-title">Getting started</h2>
-    <p class="dim">
-      {#if ed.project}You're editing <strong>{ed.project.name}</strong>.{/if}
-      Nothing is written to a theme until you save, and Ctrl+Z undoes any change.
-    </p>
+<AppDialog
+  title="Getting started"
+  description={`${ed.project ? `You're editing ${ed.project.name}. ` : ''}Nothing is written to a theme until you save, and Ctrl+Z undoes any change.`}
+  onclose={() => ed.closeGuide()}
+  class="sm:max-w-[640px]"
+>
+  {#snippet footer()}
+    <span class="mr-auto self-center text-xs text-muted-foreground">Want every setting, file names and the XML? Switch to <em>Advanced</em> in the top bar.</span>
+    <Button onclick={() => ed.closeGuide()}>Got it</Button>
+  {/snippet}
 
     <ol>
       {#each STEPS as s, i}
@@ -57,37 +60,9 @@
         <dd>{d}</dd>
       {/each}
     </dl>
-
-    <div class="foot">
-      <span class="faint">Want every setting, file names and the XML? Switch to <em>Advanced</em> at the top right.</span>
-      <button class="primary" onclick={() => ed.closeGuide()}>Got it</button>
-    </div>
-  </div>
-</div>
+</AppDialog>
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.55);
-    display: grid;
-    place-items: center;
-    z-index: 200;
-  }
-  .guide {
-    width: min(640px, 94vw);
-    max-height: 90vh;
-    overflow: auto;
-    background: var(--panel);
-    border: 1px solid var(--line-strong);
-    border-radius: 12px;
-    padding: 22px 26px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
-  }
-  h2 {
-    margin: 0 0 4px;
-    font-size: 18px;
-  }
   h3 {
     margin: 18px 0 8px;
     font-size: 12px;
@@ -113,8 +88,8 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--brand-soft);
+    color: var(--brand);
     font-weight: 700;
   }
   li p {
@@ -133,15 +108,5 @@
   dd {
     margin: 0;
     color: var(--text-dim);
-  }
-  .foot {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 20px;
-  }
-  .foot span {
-    flex: 1;
-    font-size: 12px;
   }
 </style>

@@ -581,6 +581,8 @@ function cloneElement(e: ResolvedElement): ResolvedElement {
  */
 export function resolvePath(p: string, baseDir: string, themeDir: string, env: Environment): string {
   const t = p.trim();
+  // Online pictures (libretro-thumbnails in the preview) stay addresses.
+  if (/^https?:\/\//i.test(t)) return t;
   if (t.startsWith(':/')) return join(env.resourcesDir, t.slice(2));
   if (t.startsWith('~/') || t.startsWith('~\\')) return join(env.esHome, t.slice(2));
   if (isAbsolute(t)) return join(t);
@@ -590,6 +592,7 @@ export function resolvePath(p: string, baseDir: string, themeDir: string, env: E
 
 export function assetExists(p: string, project: ThemeProject, env: Environment): boolean {
   if (!p) return false;
+  if (/^https?:\/\//i.test(p.trim())) return true;
   const abs = resolvePath(p, project.dir, project.dir, env);
   if (project.isInside(abs)) return project.hasFile(abs);
   // Files outside the theme (built-in resources) are assumed to exist.

@@ -4,7 +4,7 @@ import { ThemeProject } from './project';
 import { resolveTheme } from './resolver';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
-import { splashScene } from './splash';
+import { splashScene, splashTemplate } from './splash';
 import type { Environment } from './context';
 
 const env: Environment = {
@@ -47,5 +47,24 @@ describe('loading screen defaults', () => {
     expect(scene.elements.find((e) => e.name === 'label')!.props.get('text')!.value).toBe('Loading…');
     expect(scene.bar).toMatchObject({ x: 0.25, w: 0.5, h: 0.036, activeColor: 'DF1010FF' });
     expect(scene.backgroundColor).toBe('000000FF');
+  });
+});
+
+describe('a new loading screen file', () => {
+  it('draws like RetroBat’s own, with its built-in parts written out', async () => {
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    for (const game of [false, true]) {
+      const rel = game ? 'gamesplash.xml' : 'splash.xml';
+      p.addFile(rel, splashTemplate(game));
+      const r = resolveTheme(p, env, rel);
+      const view = r.views.get('splash')!;
+      expect([...view.elements.keys()].sort()).toEqual(['background', 'label', 'progressbar', 'progressbar:active', 'splash']);
+      const scene = splashScene(view, p.fileAt(rel)!, 'splash.svg');
+      const own = splashScene(undefined, p.entry!, 'splash.svg');
+      expect(scene.bar).toEqual(own.bar);
+      expect(scene.backgroundColor).toBe(own.backgroundColor);
+      expect(scene.ignored).toEqual([]);
+      expect(scene.elements.find((e) => e.name === 'background')!.props.get('path')!.value).toBe('splash.svg');
+    }
   });
 });

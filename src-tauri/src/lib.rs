@@ -2,6 +2,7 @@ mod commands;
 mod storage;
 mod importing;
 mod assets;
+mod intro;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -77,6 +78,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        // Opens at the size and place it was closed at.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Updates from the GitHub releases (signed, see scripts/release.mjs), and restarting after one.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(commands::Roots::default())
         .manage(storage::Projects::default())
         .invoke_handler(tauri::generate_handler![
@@ -104,6 +110,8 @@ pub fn run() {
             commands::list_fonts,
             commands::add_font_to_theme,
             commands::download_font,
+            commands::google_fonts,
+            commands::google_font_file,
             storage::copy_theme,
             commands::delete_theme,
             storage::create_theme_from_starter,
@@ -111,6 +119,8 @@ pub fn run() {
             commands::read_themesettings,
             commands::set_active_theme,
             commands::launch_retrobat,
+            intro::read_intro,
+            intro::write_intro,
             storage::open_project,
             storage::close_project,
             storage::changed_files,

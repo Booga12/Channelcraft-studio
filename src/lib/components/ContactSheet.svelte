@@ -72,7 +72,7 @@
     <button class="ghost small" onclick={() => ed.stepSystem(6)}>Next 6 ›</button>
     <button class="small" onclick={() => (ed.contactSheet = false)}>Back to editing</button>
   </div>
-  <div class="grid" style:grid-template-columns="repeat(3, {tileW}px)">
+  <div class="tiles" style:grid-template-columns="repeat(3, {tileW}px)">
     {#each tiles as t (t.sys.name)}
       <button
         class="tile"
@@ -101,7 +101,9 @@
     min-height: 0;
     overflow: auto;
     background: var(--canvas);
-    padding: 16px 20px 24px;
+    /* Clear of the floating panels (EditorView sets the insets). */
+    padding: 16px var(--inset-r, 20px) var(--inset-b, 24px) var(--inset-l, 20px);
+    transition: padding var(--dur-slow) var(--ease-out);
   }
   .head {
     display: flex;
@@ -112,7 +114,7 @@
   .head .dim {
     flex: 1;
   }
-  .grid {
+  .tiles {
     display: grid;
     gap: 14px;
     justify-content: center;
@@ -125,13 +127,13 @@
     text-align: left;
   }
   .tile:hover .frame {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--brand);
   }
   .frame {
     position: relative;
     overflow: hidden;
     border-radius: 4px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--elev-3);
     pointer-events: none;
   }
   .stage {

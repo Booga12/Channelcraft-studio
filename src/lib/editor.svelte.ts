@@ -12,7 +12,8 @@ import { isGameListView, isOwnGamePath, perGameApplies, resolveTheme, romStem, t
 import { applyToText, copyOfShared, draftFile, EMPTY_GAME_FILE, GAMES_README, gameEditChanges, gameExtrasChange, ownFileGuards, screensWithoutGameExtras, type GameEdit } from './theme/perGame';
 import { fmtNum, parsePair, STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
-import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
+import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, presetOf, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from './theme/animations';
+import { DEPTH_VAR, depthLevel, FRAMED, MOTION_FEELS, MOTION_VAR, PARALLAX, PARALLAX_ANIM, SCREEN_FX_VAR, screenFxOf, SHADOWED, type Depth, type ScreenFx } from './theme/depth';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
 import { shaderOf, shadowXml } from './theme/shadow';
@@ -20,15 +21,22 @@ import { frameOf, frameXml, type Frame } from './theme/frame';
 
 /** A number with at most four decimals, as theme files write them. */
 const r4 = (v: number) => String(Math.round(v * 10000) / 10000);
-import { elementLabel, humanize, propLabel, typeLabel } from './friendly';
+import { elementLabel, humanize, propLabel, typeLabel, viewLabel } from './friendly';
 import { consoleScreenPath, isDataBound, NATIVE_BINDINGS, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
-import { appliedDesign, appliedSystemLayout, designChanges, designVarsChange, LAYOUTS, layoutChanges, type LayoutPreset, type Palette } from './theme/presets';
+import { reorder, zIndexFor } from './theme/layers';
+import { TILE_DIR, TILE_STYLES, tileArt, tileColoursFrom, tileStyleOfPath, tileStyleProps, type TileColours } from './theme/tiles';
+import { appliedDesign, appliedGameLayout, appliedSystemLayout, coloursFromVars, hidesOwn, readability, designChanges, designVarsChange, LAYOUTS, layoutChanges, paletteDesignVars, type LayoutPreset, type Palette } from './theme/presets';
 import { planMenuOptions, readMenuState, type MenuChoices, type MenuState } from './theme/menuOptions';
-import { DESIGNS, designAssets, type Design } from './theme/designs';
+import { SYSTEM_LAYOUTS } from './theme/systemLayouts';
+import { GAME_LAYOUTS } from './theme/gameLayouts';
+import { DESIGNS, designAssets, depthLogoScale, GAME_VIEWS, recoloured, type Design } from './theme/designs';
 import { catalogFont } from './theme/fonts';
+import { withOnlineArt } from './theme/libretro';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
 import { COVER_EL, FEATURED_FILE, FEATURED_MEDIA, featuredXml, pickGame, readFeatured, VIDEO_EL, type Choice, type FeaturedState } from './theme/featured';
+import { task } from './task.svelte';
+import { splashTemplate } from './theme/splash';
 
 /** RetroBat's loading screen files, read on their own (not through theme.xml). */
 export const SPLASH_FILES = ['splash.xml', 'gamesplash.xml'] as const;
@@ -38,12 +46,16 @@ interface HistoryEntry {
   applied: Applied[];
   time: number;
   coalesce?: string;
+  /** Several edits made one after another as one step (see `group`), in the order made. */
+  parts?: Applied[][];
 }
 
 export interface Toast {
   text: string;
   kind: 'info' | 'error';
   id: number;
+  /** How long it shows, if not the usual time. */
+  ms?: number;
 }
 
 const DEFAULT_SETTINGS: PreviewSettings = {
@@ -108,7 +120,35 @@ class Editor {
   locked = $state<Record<string, boolean>>({});
   /** On-screen boxes of drawn elements in screen fractions, measured by the preview. */
   rects = $state.raw<Record<string, { x: number; y: number; w: number; h: number }>>({});
-  playAnimations = $state(false);
+  /** Animations play in the preview (on by default, remembered between sessions). */
+  get playAnimations() {
+    return prefs.v.playAnimations;
+  }
+
+  /** Goes up each time the entrance animations should play again (Replay, a new animation). */
+  replay = $state(0);
+  /** The side the last replay came from: +1 as if moving down the list, -1 up. */
+  replayDir = $state(0);
+
+  /** Plays every entrance animation in the preview again, as RetroBat does when you move to a game. */
+  replayAnimations(dir = 0) {
+    this.playAnimations = true;
+    this.replayDir = dir;
+    this.replay++;
+  }
+
+  /**
+   * The next (+1) or previous (-1) game in the preview, like moving down or up RetroBat's list, so
+   * the animations play again. With sample data there's only one game: the animations just replay.
+   */
+  stepGame(dir: number) {
+    const n = this.currentGames.length;
+    if (n > 1) this.gameIndex = (this.gameIndex + dir + n) % n;
+    else this.replayAnimations(dir);
+  }
+  set playAnimations(on: boolean) {
+    if (prefs.v.playAnimations !== on) prefs.set('playAnimations', on);
+  }
   /** Edits of colours and properties go to the preview console's own values (RetroBat `if` on ${system.theme}). */
   consoleOnly = $state(false);
   /** Edits go to the game in the preview only: RetroBat's own file for that game (see perGame.ts). */
@@ -205,7 +245,12 @@ class Editor {
   /** Which game of the list the preview shows. */
   gameIndex = $state(0);
 
-  currentGames = $derived(prefs.v.realArtwork ? (this.games[this.settings.system.name] ?? []) : []);
+  currentGames = $derived.by(() => {
+    if (!prefs.v.realArtwork) return [];
+    const list = this.games[this.settings.system.name] ?? [];
+    // Pictures RetroBat hasn't scraped come from libretro-thumbnails, for the preview only.
+    return prefs.v.onlineArt ? withOnlineArt(this.settings.system.name, list) : list;
+  });
   currentGame = $derived<GameInfo | undefined>(this.currentGames.length ? this.currentGames[this.gameIndex % this.currentGames.length] : undefined);
 
   env = $derived<Environment>({
@@ -214,6 +259,7 @@ class Editor {
     resourcesDir: this.root?.resourcesDir ?? '',
     game: this.currentGame,
     gameNames: this.currentGames.length ? this.currentGames.map((g) => g.name) : undefined,
+    games: this.currentGames.length ? this.currentGames : undefined,
   });
 
   res = $derived.by<Resolution | null>(() => {
@@ -297,6 +343,21 @@ class Editor {
     for (const file of SPLASH_FILES) if (this.project?.fileAt(file)) tabs.push({ id: `@${file}`, view: 'splash', file });
     return tabs;
   });
+
+  /** Adds RetroBat's loading screen (splash.xml) or game launch screen (gamesplash.xml) to the theme and shows it. */
+  addLoadingScreen(file: (typeof SPLASH_FILES)[number]) {
+    const p = this.project;
+    if (!p) return;
+    if (!p.fileAt(file)) {
+      if (this.sharedOnly('Loading screens')) return;
+      // An empty <theme> until the edit below, so undoing it leaves nothing to save.
+      const f = p.addFile(file, '<theme>\n</theme>\n');
+      this.commit(file === 'splash.xml' ? 'add a loading screen' : 'add a game launch screen', [{ file: f, patch: { start: 0, end: f.src.length, text: splashTemplate(file === 'gamesplash.xml') } }]);
+      this.rev++;
+      this.notify(`${file === 'splash.xml' ? 'Loading screen' : 'Game launch screen'} added (${file}). Save to keep it, or Ctrl+Z to undo.`);
+    }
+    this.showScreen({ view: 'splash', file });
+  }
 
   showScreen(tab: { view: string; file: string }) {
     this.screenFile = tab.file;
@@ -501,13 +562,20 @@ class Editor {
     return dest;
   }
 
+  /** Themes being moved to the Recycle Bin right now; the start screen leaves them out. */
+  deleting = $state<string[]>([]);
+
   async deleteTheme(dir: string, name: string) {
+    this.deleting = [...this.deleting, dir];
+    this.notify(`Moving “${name}” to the Recycle Bin…`);
     try {
       await api.deleteTheme(dir);
       await this.refreshThemes();
-      this.notify(`“${name}” was moved to the Recycle Bin (a backup zip was saved too)`);
+      this.notify(`“${name}” was moved to the Recycle Bin. Restore it from there if you change your mind.`);
     } catch (e) {
       this.notify(String(e), 'error');
+    } finally {
+      this.deleting = this.deleting.filter((d) => d !== dir);
     }
   }
 
@@ -552,10 +620,36 @@ class Editor {
     this.rev++;
   }
 
+  /**
+   * Runs several edits (each its own commit) and keeps them as one undo step. Each edit sees
+   * the theme as the earlier ones left it.
+   */
+  group(label: string, fn: () => void) {
+    const mark = this.undoStack.at(-1);
+    fn();
+    const at = mark ? this.undoStack.lastIndexOf(mark) + 1 : 0;
+    const added = this.undoStack.slice(at);
+    if (added.length < 2) {
+      if (added.length) this.undoStack = [...this.undoStack.slice(0, at), { ...added[0], label, coalesce: undefined }];
+      return;
+    }
+    const parts = added.flatMap((e) => e.parts ?? [e.applied]);
+    this.undoStack = [...this.undoStack.slice(0, at), { label, applied: [], parts, time: Date.now() }];
+  }
+
   undo(quiet = false) {
     const p = this.project;
     const e = this.undoStack[this.undoStack.length - 1];
     if (!p || !e) return;
+    if (e.parts) {
+      // Last edit first; the redo step replays them in the order they were made.
+      const back = [...e.parts].reverse().map((part) => applyChanges(p, inverse(p, part)));
+      this.undoStack = this.undoStack.slice(0, -1);
+      this.redoStack = [...this.redoStack, { label: e.label, applied: [], parts: back.reverse(), time: 0 }];
+      this.rev++;
+      if (!quiet) this.notify(`Undid ${e.label}`);
+      return;
+    }
     const redo = applyChanges(p, inverse(p, e.applied));
     this.undoStack = this.undoStack.slice(0, -1);
     this.redoStack = [...this.redoStack, { label: e.label, applied: redo, time: 0 }];
@@ -567,6 +661,14 @@ class Editor {
     const p = this.project;
     const e = this.redoStack[this.redoStack.length - 1];
     if (!p || !e) return;
+    if (e.parts) {
+      const again = e.parts.map((part) => applyChanges(p, inverse(p, part)));
+      this.redoStack = this.redoStack.slice(0, -1);
+      this.undoStack = [...this.undoStack, { label: e.label, applied: [], parts: again, time: 0 }];
+      this.rev++;
+      if (!quiet) this.notify(`Redid ${e.label}`);
+      return;
+    }
     const undo = applyChanges(p, inverse(p, e.applied));
     this.redoStack = this.redoStack.slice(0, -1);
     this.undoStack = [...this.undoStack, { label: e.label, applied: undo, time: 0 }];
@@ -955,12 +1057,26 @@ class Editor {
     this.setPropsMany('layer order', updates);
   }
 
-  /** Puts `name` directly above `target` in the layer order (drag and drop in Layers). */
-  placeAbove(name: string, target: string) {
+  /** The screen's layers top first, as RetroBat draws them (zIndex, then later in the files on top). */
+  get layers(): ResolvedElement[] {
     const v = this.currentView;
-    const t = v?.elements.get(target);
-    if (!v || !t || name === target) return;
-    this.setProps(name, { zIndex: String(zOf(t) + 1) });
+    if (!v) return [];
+    return [...v.elements.values()].filter((e) => e.type !== 'gameextras').sort((a, b) => zOf(b) - zOf(a) || b.order - a.order);
+  }
+
+  /**
+   * Moves layers (Layers panel drag and drop) so they sit just above `before`, or at the bottom
+   * when it's null, keeping their own order. One undo step.
+   */
+  moveLayers(names: string[], before: string | null) {
+    const layers = this.layers.map((e) => ({ name: e.name, z: zOf(e) }));
+    const moving = layers.filter((l) => names.includes(l.name)).map((l) => l.name);
+    if (!moving.length || (before !== null && moving.includes(before))) return;
+    const order = reorder(layers, moving, before);
+    if (order.every((l, i) => l.name === layers[i].name)) return;
+    const z = zIndexFor(order, new Set(moving));
+    const updates = Object.fromEntries(Object.entries(z).map(([n, v]) => [n, { zIndex: String(v) }]));
+    this.setPropsMany(moving.length > 1 ? `layer order of ${moving.length} layers` : `layer order of ${elementLabel(moving[0])}`, updates);
   }
 
   // ---- clipboard ----
@@ -1073,7 +1189,8 @@ class Editor {
     const pos = parsePair(el.props.get('pos')?.value) ?? [0, 0];
     const xml = storyboardXml(preset, pos, 1, 1, screenOf(this.view));
     this.commit(`animation “${preset.label}”`, this.replaceBoards(existing, target, xml, removeAll));
-    this.playAnimations = true;
+    // Shown straight away, as it will look when you move to a game or console in RetroBat.
+    this.replayAnimations();
   }
 
   /** Replaces the first storyboard in place (the others go), or adds the markup. */
@@ -1152,11 +1269,19 @@ class Editor {
     if (!el) return;
     const now = frameOf(el);
     const sh = shaderOf(el);
-    if (sh && !now) {
-      this.notify(sh.shadow ? 'Remove the soft shadow first: a picture can have one RetroBat shader, and the frame has its own shadow.' : 'This picture already uses another RetroBat shader, so it can’t have a frame. Remove that shader in Advanced mode first.', 'error');
+    if (sh && !now && !sh.shadow) {
+      this.notify('This picture already uses another RetroBat shader, so it can’t have a frame. Remove that shader in Advanced mode first.', 'error');
       return;
     }
     const round = el.props.get('roundCorners');
+    // A picture has one RetroBat shader, and the frame draws its own shadow: it takes the soft
+    // shadow's place (and the place of roundCorners, which the frame's corners replace).
+    if (frame && sh?.shadow && !now) {
+      const { file, node } = sh.def;
+      const ownRound = round && round.node.parent === node.parent ? [{ file: round.file, patch: patchRemoveNode(round.file.doc, round.node) }] : [];
+      this.commit(`frame on ${elementLabel(name)}`, [{ file, patch: patchReplaceSpan(file.doc, node, node, frameXml(frame)) }, ...ownRound]);
+      return;
+    }
     if (!frame) {
       if (!now) return;
       const { file, node } = now.def;
@@ -1380,12 +1505,289 @@ class Editor {
     if (!p) return;
     // A system layout can come dressed in a design: its background, colours, fonts and the
     // console name, maker, game count and picture placed to suit the layout.
-    if (style && preset.kind === 'system') return this.applyDesign(style, { hideOwn, views: ['system'], systemLayout: preset.id });
+    if (style && preset.kind === 'system') {
+      const same = appliedDesign(p, 'system')?.id === style.id;
+      return this.applyDesign(style, { hideOwn, views: ['system'], systemLayout: preset.id, carry: same ? 'layout' : 'design' });
+    }
+    // A game list layout on a design theme: the same design, laid out the new way.
+    if (preset.kind === 'game' && (style ?? appliedDesign(p, views[0]))) {
+      const d = style ?? appliedDesign(p, views[0])!;
+      return this.applyDesign(d, { hideOwn, views, gameLayout: preset.id, carry: appliedDesign(p, views[0])?.id === d.id ? 'layout' : 'design' });
+    }
     if (preset.assets) await this.writeArt('_inc/ccs/common', preset.assets);
     const res = this.res;
     if (!res) return;
     this.commit(`layout “${preset.label}”`, layoutChanges(p, res, preset, views));
     this.selected = null;
+  }
+
+  // ---- design artwork follows the design colours ----
+
+  /** What the design artwork on disk was drawn with, per theme folder ('' = not known yet). */
+  #artDrawn = new Map<string, string>();
+  #artTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** The design artwork folders in this theme and the colours they should be drawn in now. */
+  /** The theme's design colours (designAccent...), as shared across consoles, if it has them. */
+  private designColours() {
+    const res = this.res;
+    return res ? coloursFromVars((n) => (sharedIn(res.varHistory.get(n)) ?? res.vars.get(n))?.value) : null;
+  }
+
+  private designArtNow(): { key: string; jobs: { dir: string; files: () => Record<string, string> }[] } | null {
+    const p = this.project;
+    const colours = this.designColours();
+    if (!p || !colours) return null;
+    const dirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/([^/]+)\//)?.[1]).filter(Boolean));
+    const tileDirs = new Set(p.assets.map((a) => a.rel.toLowerCase().match(/^_inc\/ccs\/tiles\/([^/]+)\//)?.[1]).filter(Boolean));
+    const jobs = [
+      ...DESIGNS.filter((d) => dirs.has(d.id)).map((d) => ({ dir: `_inc/ccs/${d.id}`, files: () => designAssets(recoloured(d, colours), this.depth ?? d.depth), id: d.id })),
+      ...TILE_STYLES.filter((t) => tileDirs.has(t.id)).map((t) => ({ dir: `${TILE_DIR}/${t.id}`, files: () => tileArt(t, this.tileColours()), id: `tiles/${t.id}` })),
+    ];
+    if (!jobs.length) return null;
+    return { key: `${jobs.map((j) => j.id).join(',')}|${Object.values(colours).join(',')}|${this.depth ?? ''}`, jobs };
+  }
+
+  /** Colours for grid tiles: the design colours, else the tiles' own colours on this screen. */
+  private tileColours(): TileColours {
+    const c = this.designColours();
+    if (c) return { tile: c.text, accent: c.accent, text: c.text };
+    // Otherwise the theme's accent and text colours when it names them (as the starter theme
+    // does), else the tiles' colours as written (white once a style has been applied).
+    const els = this.currentView?.elements;
+    const v = (n: string) => this.res?.vars.get(n)?.value;
+    const bg = (n: string) => els?.get(n)?.props.get('backgroundColor')?.value;
+    return tileColoursFrom(v('textColor') ?? bg('default'), v('accentColor') ?? bg('selected'), v('textColor'));
+  }
+
+  /** The image grid's tile style on this screen ('' for one ChannelCraft didn't make), or null without a grid. */
+  get tileStyle(): string | null {
+    const v = this.currentView;
+    if (!v || ![...v.elements.values()].some((e) => e.type === 'imagegrid')) return null;
+    return tileStyleOfPath(v.elements.get('default')?.props.get('backgroundImage')?.value) ?? '';
+  }
+
+  /** Gives the image grid on this screen a tile style: new tile pictures and matching settings. */
+  async applyTileStyle(id: string) {
+    const style = TILE_STYLES.find((t) => t.id === id);
+    const v = this.currentView;
+    if (!style || !v || this.tileStyle === null) return;
+    if (!v.elements.has('default') || !v.elements.has('selected')) {
+      this.notify('This grid has no tile settings (“default” and “selected”) to style. Grids from Presets have them.', 'error');
+      return;
+    }
+    const wrote = await this.writeArt(`${TILE_DIR}/${style.id}`, tileArt(style, this.tileColours()));
+    const props = tileStyleProps(style);
+    const grid = [...v.elements.values()].find((e) => e.type === 'imagegrid')!;
+    const updates: Record<string, Record<string, string>> = {};
+    for (const [name, p] of Object.entries(props)) {
+      const target = name === 'imagegrid' ? grid.name : name;
+      if (v.elements.has(target)) updates[target] = p;
+    }
+    this.setPropsMany(`tile style “${style.label}”`, updates);
+    this.notify(wrote ? `Tiles now use “${style.label}”. Ctrl+Z to undo.` : `Tile style “${style.label}” shown in the preview only (files can’t be written here).`);
+  }
+
+  /**
+   * Redraws a design theme's artwork (background, panels, tiles) when its design colours change,
+   * from a palette, the Colours tab or undo, so the picture never keeps the old colours.
+   * The first call for a theme only notes what the artwork was drawn with.
+   */
+  syncDesignArt() {
+    const p = this.project;
+    const now = this.designArtNow();
+    if (!p || !now) return;
+    const drawn = this.#artDrawn.get(p.dir);
+    if (drawn === undefined) return void this.#artDrawn.set(p.dir, now.key);
+    if (drawn === now.key) return;
+    if (this.#artTimer) clearTimeout(this.#artTimer);
+    this.#artTimer = setTimeout(async () => {
+      this.#artTimer = null;
+      const again = this.designArtNow();
+      if (this.project !== p || !again || this.#artDrawn.get(p.dir) === again.key) return;
+      this.#artDrawn.set(p.dir, again.key);
+      for (const j of again.jobs) await this.writeArt(j.dir, j.files());
+    }, 350);
+  }
+
+  // ---- depth (see theme/depth.ts) ----
+
+  /** This design theme's depth, or null for a theme that wasn't made from a design. */
+  get depth(): Depth | null {
+    const res = this.themeRes ?? this.res;
+    if (!res?.vars.has('designAccent')) return null;
+    return depthLevel(res.vars.get(DEPTH_VAR)?.value).id;
+  }
+
+  /**
+   * Gives a design theme more or less depth on every screen at once, as one undo step. Each screen
+   * made from a design is drawn again at the new depth (shadows under art, text and panels,
+   * frames, reflections, lifts, layers moving), keeping everything you chose on it.
+   */
+  async setDepth(id: Depth) {
+    if (this.sharedOnly('Depth settings')) return;
+    const p = this.project;
+    const res = this.themeRes ?? this.res;
+    if (!p || !res || this.depth === null) return void this.notify('Depth works on themes made from a design (New theme, or a design in Presets).', 'error');
+    if (this.menuGuard()) return;
+    const lv = depthLevel(id);
+    if (!['system', ...GAME_VIEWS].some((v) => appliedDesign(p, v))) return this.setDepthPartly(id);
+    const v = this.designVarChange(DEPTH_VAR, id);
+    const wrote = await this.redesignAll(`depth “${lv.label}”`, { depth: id }, v ? [v] : []);
+    if (wrote !== null) this.notify(`Depth “${lv.label}”: ${lv.help}${wrote ? '' : ' (Preview only: files can’t be written here.)'} Ctrl+Z to undo.`);
+  }
+
+  /** The design theme's screen effect (a RetroBat shader over everything). */
+  get screenFx(): ScreenFx {
+    return screenFxOf((this.themeRes ?? this.res)?.vars.get(SCREEN_FX_VAR)?.value).id;
+  }
+
+  /** Puts a screen effect (CRT, scanlines...) over every screen of a design theme, as one undo step. */
+  async setScreenFx(id: ScreenFx) {
+    if (this.sharedOnly('Screen effects')) return;
+    const p = this.project;
+    if (!p || this.depth === null || !['system', ...GAME_VIEWS].some((v) => appliedDesign(p, v))) return void this.notify('Screen effects work on themes made from a design (New theme, or a design in Presets).', 'error');
+    if (this.menuGuard()) return;
+    const fx = screenFxOf(id);
+    const v = this.designVarChange(SCREEN_FX_VAR, id);
+    const wrote = await this.redesignAll(`screen effect “${fx.label}”`, { screenFx: id }, v ? [v] : []);
+    if (wrote !== null) this.notify(`Screen effect “${fx.label}”: ${fx.help}${wrote ? '' : ' (Preview only: files can’t be written here.)'} Ctrl+Z to undo.`);
+  }
+
+  /**
+   * Draws every screen made from a design again, with a new depth or screen effect, keeping
+   * everything you chose on them; one undo step together with `extra` changes. Returns whether the
+   * artwork could be written, or null if the theme closed meanwhile.
+   */
+  private async redesignAll(label: string, o: { depth?: Depth; screenFx?: string }, extra: Change[]): Promise<boolean | null> {
+    const p = this.project;
+    if (!p) return null;
+    const id = o.depth ?? this.depth ?? 'subtle';
+    const views = ['system', ...GAME_VIEWS].filter((v) => appliedDesign(p, v));
+    const colours = this.designColours();
+    const byDesign = new Map<Design, string[]>();
+    for (const v of views) {
+      const d = appliedDesign(p, v)!;
+      byDesign.set(d, [...(byDesign.get(d) ?? []), v]);
+    }
+    const has = (dir: string) => p.assets.some((a) => a.rel.toLowerCase().startsWith(`${dir}/`));
+    const changes: Change[] = [];
+    let wrote = true;
+    for (const [d, vs] of byDesign) {
+      const artRel = `_inc/ccs/${d.id}`;
+      wrote = (await this.writeArt(artRel, designAssets(colours ? recoloured(d, colours) : d, id))) && wrote;
+      const font = await this.ensureFont(d.font);
+      const titleFont = d.titleFont ? await this.ensureFont(d.titleFont) : null;
+      if (this.project !== p) return null;
+      const ctx = { vars: true, art: `./${artRel}`, font: font ? `./${font}` : null, titleFont: titleFont ? `./${titleFont}` : null, logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null, consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null, depth: id, motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined, screenFx: o.screenFx ?? this.screenFx };
+      const now = this.res;
+      if (!now) return null;
+      const gameLayouts = Object.fromEntries(vs.map((v) => [v, appliedGameLayout(p, v)]));
+      changes.push(...designChanges(p, now, d, ctx, vs, hidesOwn(p, now, vs), appliedSystemLayout(p) ?? undefined, { gameLayouts, carry: 'layout' }));
+    }
+    this.commit(label, [...extra, ...changes]);
+    return wrote;
+  }
+
+  /** Depth on a theme whose screens aren't recognised as a design's: only the parts it can find. */
+  private setDepthPartly(id: Depth) {
+    const res = this.themeRes ?? this.res;
+    if (!res) return;
+    const lv = depthLevel(id);
+    const from = this.depth ?? 'subtle';
+    const keep = { view: this.view, file: this.screenFile, consoleOnly: this.consoleOnly, selected: this.selected, selection: this.selection };
+    this.consoleOnly = false;
+    this.group(`depth “${lv.label}”`, () => {
+      this.setDesignVar(DEPTH_VAR, id);
+      if (this.screenFile !== 'theme.xml') this.screenFile = 'theme.xml';
+      for (const view of ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v))) {
+        this.view = view;
+        const kind = view === 'system' ? 'system' : 'game';
+        const el = (n: string) => this.currentView?.elements.get(n);
+        for (const n of SHADOWED[kind]) {
+          const e = el(n);
+          if (!e || e.type !== 'image' || frameOf(e)) continue;
+          const sh = shaderOf(e);
+          if (lv.shadow && (!sh || sh.shadow)) this.setShadow(n, lv.shadow);
+          else if (!lv.shadow && sh?.shadow) this.setShadow(n, null);
+        }
+        for (const n of FRAMED) {
+          const f = el(n) && frameOf(el(n)!);
+          if (f && f.frame.shadow !== lv.frameShadow) this.setFrame(n, { ...f.frame, shadow: lv.frameShadow });
+        }
+        for (const e of [...(this.currentView?.elements.values() ?? [])].filter((x) => x.type === 'carousel')) {
+          const now = Number(e.props.get('logoScale')?.value ?? depthLevel(from).logoScale) || depthLevel(from).logoScale;
+          this.setProps(e.name, { logoScale: depthLogoScale(now, from, id) });
+        }
+        const bg = el(PARALLAX[kind]);
+        if (bg) {
+          const now = presetOf(bg, screenOf(view));
+          if (lv.parallax && !now) this.setAnimation(bg.name, PARALLAX_ANIM);
+          else if (!lv.parallax && now === PARALLAX_ANIM) this.setAnimation(bg.name, null);
+        }
+      }
+    });
+    if (keep.file !== this.screenFile) this.screenFile = keep.file;
+    this.view = keep.view;
+    this.consoleOnly = keep.consoleOnly;
+    this.selection = keep.selection;
+    this.selected = keep.selected;
+    this.notify(`Depth “${lv.label}”: ${lv.help} Ctrl+Z to undo.`);
+  }
+
+  /** Writes one of the design's own variables (depth, motion feel) next to its colours. */
+  private setDesignVar(name: string, value: string) {
+    const c = this.designVarChange(name, value);
+    if (c) this.commit(name, [c]);
+  }
+
+  /** The change that sets one of the design's own variables, or null when there's nothing to do. */
+  private designVarChange(name: string, value: string): Change | null {
+    const res = this.themeRes ?? this.res;
+    if (!res) return null;
+    const def = sharedIn(res.varHistory.get(name)) ?? res.vars.get(name);
+    const accent = sharedIn(res.varHistory.get('designAccent')) ?? res.vars.get('designAccent');
+    if (def) return def.value.trim() !== value ? setTextChange(def.file, def.node, value) : null;
+    if (accent?.node.parent) return { file: accent.file, patch: patchInsertChild(accent.file.doc, accent.node.parent as XElement, `<${name}>${value}</${name}>`, { first: true }) };
+    return null;
+  }
+
+  /** The design theme's motion feel, or null when it hasn't been set. */
+  get motionFeel(): keyof typeof MOTION_FEELS | null {
+    const v = (this.themeRes ?? this.res)?.vars.get(MOTION_VAR)?.value.trim();
+    return v && v in MOTION_FEELS ? (v as keyof typeof MOTION_FEELS) : null;
+  }
+
+  /**
+   * One feel for every animation in theme.xml's screens: calm (smaller, slower), normal (each
+   * preset's own) or lively (bigger, quicker). One undo step.
+   */
+  setMotionFeel(feel: keyof typeof MOTION_FEELS) {
+    if (this.sharedOnly('Motion settings')) return;
+    const f = MOTION_FEELS[feel];
+    const keep = { view: this.view, file: this.screenFile, consoleOnly: this.consoleOnly };
+    this.consoleOnly = false;
+    let count = 0;
+    this.group(`${f.label.toLowerCase()} motion`, () => {
+      // Kept with the design, so layouts and designs applied later move the same way.
+      if (this.depth !== null) this.setDesignVar(MOTION_VAR, feel);
+      if (this.screenFile !== 'theme.xml') this.screenFile = 'theme.xml';
+      for (const view of this.viewNames) {
+        this.view = view;
+        for (const e of [...(this.currentView?.elements.values() ?? [])]) {
+          const t = tuningOf(e, screenOf(view));
+          // The background's slow zoom keeps its pace: it belongs to the depth setting.
+          if (!t || t.preset.id === PARALLAX_ANIM) continue;
+          const before = this.history.done.length;
+          this.tuneAnimation(e.name, t.preset.amount ? f.amount : 1, f.speed);
+          if (this.history.done.length > before) count++;
+        }
+      }
+    });
+    if (keep.file !== this.screenFile) this.screenFile = keep.file;
+    this.view = keep.view;
+    this.consoleOnly = keep.consoleOnly;
+    this.notify(count ? `${f.label} motion for ${count} animation${count === 1 ? '' : 's'}. Ctrl+Z to undo.` : 'Nothing to change: no animations here yet, or they already move like this.');
   }
 
   /** Writes generated SVG artwork into the theme (and shows it straight away). Returns false if it couldn't be written. */
@@ -1411,14 +1813,20 @@ class Editor {
   }
 
   /** Applies the choices from the New theme dialog to a freshly created theme and saves it. */
-  async applyStarter(choice: { design: string; artFrom: string | null }) {
+  async applyStarter(choice: { design: string; artFrom: string | null; systemLayout?: string; gameLayout?: string }) {
     const p = this.project;
     if (!p) return;
     const design = DESIGNS.find((d) => d.id === choice.design);
-    // Copying logos and downloading the design's fonts can take a while; say so meanwhile.
-    this.notify(`Setting up “${p.name}”${choice.artFrom ? ': copying console logos and pictures' : ''}${design ? `${choice.artFrom ? ', then' : ':'} adding the ${design.label} design` : ''}…`, 'info', 120000);
-    if (choice.artFrom) await this.importConsoleArt(choice.artFrom);
-    if (design) await this.applyDesign(design, { hideOwn: true });
+    // Each step shows in the loading overlay (TaskOverlay) while it runs.
+    if (choice.artFrom) {
+      task.step('art');
+      await this.importConsoleArt(choice.artFrom);
+    }
+    if (design) {
+      task.step('design');
+      await this.applyDesign(design, { hideOwn: true, systemLayout: choice.systemLayout, gameLayout: choice.gameLayout });
+    }
+    task.step('save');
     await this.save();
     this.notify(`“${p.name}” is ready${design ? ` with the ${design.label} design` : ''}. It's saved; your changes from here can be undone.`);
     // The starting point is the saved theme, not something to undo back past.
@@ -1455,11 +1863,25 @@ class Editor {
     }
   }
 
+  /** Downloads any Google Fonts family into the theme (with its licence); its theme-relative path. */
+  async ensureGoogleFont(family: string): Promise<string> {
+    const p = this.project;
+    if (!p) throw new Error('No theme is open');
+    const f = await api.googleFontFile(family);
+    const existing = p.assets.find((a) => a.rel.toLowerCase() === `_inc/fonts/${f.file_name}`.toLowerCase());
+    if (existing) return existing.rel;
+    const rel = await api.downloadFont(p.dir, f.url, f.file_name);
+    p.setAssets([...p.assets, { rel, kind: 'font', size: 0 }]);
+    return rel;
+  }
+
   /**
-   * Applies a design: writes its artwork into the theme, fetches its fonts, and replaces the
-   * layout of each screen with the design's (one undo step for the layout).
+   * Applies a design to the theme's screens. `carry: 'layout'` re-lays out the design that's already
+   * there: the theme's colours, fonts, animations, tile style and your own elements all stay.
+   * Otherwise your own elements and hidden parts stay, and the design brings its colours (unless it
+   * only goes on some screens of a theme that already has design colours).
    */
-  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string } = {}) {
+  async applyDesign(design: Design, opts: { hideOwn?: boolean; views?: string[]; systemLayout?: string; gameLayout?: string; carry?: 'layout' | 'design' | 'none' } = {}) {
     if (this.sharedOnly('Designs')) return;
     const p = this.project;
     if (!p) return;
@@ -1467,7 +1889,17 @@ class Editor {
     // Designs style theme.xml's screens, not the loading screens.
     if (this.screenFile !== 'theme.xml') this.showScreen({ view: this.viewNames.includes('system') ? 'system' : (this.viewNames[0] ?? 'system'), file: 'theme.xml' });
     const artRel = `_inc/ccs/${design.id}`;
-    const wrote = await this.writeArt(artRel, designAssets(design));
+    // A depth chosen for this theme stays when another design is applied.
+    const depth = this.depth ?? design.depth ?? 'subtle';
+    const allViews = [...['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v)), 'grid', 'gamecarousel'];
+    const views = opts.views ?? allViews;
+    const colours = this.designColours();
+    // The theme's own colours stay when only the layout changes, or the design only goes on some screens.
+    const keepColours = !!colours && (opts.carry === 'layout' || views.length < allViews.length);
+    const wrote = await this.writeArt(artRel, designAssets(keepColours ? recoloured(design, colours!) : design, depth));
+    // Drawn in the design's own colours, which the commit below sets: note them afresh.
+    if (!keepColours) this.#artDrawn.delete(p.dir);
+    task.step('fonts');
     const font = await this.ensureFont(design.font);
     const titleFont = design.titleFont ? await this.ensureFont(design.titleFont) : null;
     // The theme may have been closed while the fonts downloaded.
@@ -1480,17 +1912,26 @@ class Editor {
       titleFont: titleFont ? `./${titleFont}` : null,
       logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null,
       consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null,
+      depth,
+      motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined,
+      screenFx: this.screenFx,
     };
     this.rev++;
     const res = this.res;
     if (!res) return;
-    const views = opts.views ?? ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v));
-    const label = opts.systemLayout ? `“${LAYOUTS.find((l) => l.id === opts.systemLayout)?.label ?? opts.systemLayout}” in the ${design.label} style` : `design “${design.label}”`;
+    // A layout on some screens, rather than a whole design with layouts picked for it.
+    const layoutId = views.length < allViews.length ? (opts.systemLayout ?? opts.gameLayout) : undefined;
+    const label = layoutId ? `“${LAYOUTS.find((l) => l.id === layoutId)?.label ?? layoutId}” in the ${design.label} style` : `design “${design.label}”`;
+    const carry = opts.carry === 'none' ? undefined : (opts.carry ?? 'design');
+    const changes = designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout, { gameLayout: opts.gameLayout, carry });
     // The design's colours become shared colours (variables) its parts refer to.
-    this.commit(label, [designVarsChange(p, design), ...designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout)]);
+    this.commit(label, keepColours ? changes : [designVarsChange(p, design, depth, this.motionFeel), ...changes]);
     this.selected = null;
     const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
-    if (opts.systemLayout) return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to the System screen.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
+    if (layoutId) {
+      const where = opts.systemLayout ? 'the System screen' : views.map((v) => viewLabel(v)).join(', ');
+      return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to ${where}.${keepColours ? ' Your colours stay.' : ''}${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
+    }
     this.notify(wrote ? `Design “${design.label}” applied.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `Design “${design.label}” applied in the preview only (files can’t be written here).`);
   }
 
@@ -1545,7 +1986,7 @@ class Editor {
     let wrote = true;
     for (const a of plan.art) {
       if (p.assets.some((x) => x.rel.toLowerCase().startsWith(`${a.dir.toLowerCase()}/`))) continue;
-      wrote = (await this.writeArt(a.dir, designAssets({ ...a.design, palette: a.palette }))) && wrote;
+      wrote = (await this.writeArt(a.dir, designAssets(recoloured(a.design, a.palette)))) && wrote;
     }
     if (this.project !== p) return false;
     const changes: Change[] = plan.changes(p);
@@ -1660,6 +2101,16 @@ class Editor {
     return (root && attr(root, 'defaultTransition')) || '';
   }
 
+  /**
+   * How RetroBat moves between consoles: its own Transition Style, or the theme's when that is
+   * Auto, else a slide.
+   */
+  get transition(): 'slide' | 'fade' | 'instant' {
+    const own = (this.root?.es?.transitionStyle ?? 'auto').toLowerCase();
+    const v = own !== 'auto' && own ? own : this.themeTransition.toLowerCase();
+    return v.includes('fade') ? 'fade' : v === 'instant' ? 'instant' : 'slide';
+  }
+
   /** Sets the transition RetroBat uses between screens when its Transition Style is Auto. */
   setThemeTransition(value: string) {
     const entry = this.project?.fileAt('theme.xml');
@@ -1670,10 +2121,51 @@ class Editor {
   }
 
   /** Sets every colour of a palette that this theme has a variable for. Returns how many were set. */
+  /** How readable a design theme's text is on its background and panels, or null for other themes. */
+  get readability() {
+    const c = this.designColours();
+    return c ? readability(c) : null;
+  }
+
+  /** Makes a design theme's text readable again: near-black or white, whichever suits the background. */
+  fixReadability() {
+    const r = this.readability;
+    if (!r) return;
+    const changes = [this.varChange('designText', `${r.text}FF`), this.varChange('designDimText', `${r.dim}FF`)].filter((c): c is Change => !!c);
+    if (changes.length) this.commit('readable text', changes);
+    this.notify('Text colours changed so everything is easy to read. Ctrl+Z to undo.');
+  }
+
+  /**
+   * Puts one screen back to its design as it comes, at the theme's colours and depth, keeping its
+   * layouts. What you added or changed on that screen goes; other screens aren't touched.
+   */
+  async resetScreen(view: string) {
+    const p = this.project;
+    const d = p ? appliedDesign(p, view) : null;
+    if (!p || !d) return;
+    await this.applyDesign(d, { views: [view], carry: 'none', systemLayout: view === 'system' ? (appliedSystemLayout(p) ?? undefined) : undefined, gameLayout: appliedGameLayout(p, view) ?? undefined });
+    this.notify(`${viewLabel(view)} is back to the ${d.label} design. Ctrl+Z to undo.`);
+  }
+
+  /** A random design with random layouts that go together (Surprise me). */
+  async surprise(opts: { hideOwn?: boolean; group?: string } = {}) {
+    const pool = DESIGNS.filter((d) => !opts.group || opts.group === 'all' || d.group === opts.group);
+    const d = pool[Math.floor(Math.random() * pool.length)];
+    const sys = SYSTEM_LAYOUTS[Math.floor(Math.random() * SYSTEM_LAYOUTS.length)];
+    const games = GAME_LAYOUTS.filter((l) => !l.flipOf || Math.random() < 0.3);
+    const game = games[Math.floor(Math.random() * games.length)];
+    await this.applyDesign(d, { hideOwn: opts.hideOwn ?? true, systemLayout: sys.id, gameLayout: game.id });
+    this.notify(`Surprise: ${d.label}, with ${sys.label} and ${game.label}. Press again for another, or Ctrl+Z to undo.`);
+  }
+
   applyPalette(palette: Palette): number {
     const res = this.res;
     if (!res || this.sharedOnly('Colour palettes')) return 0;
-    const changes = Object.entries(palette.colors)
+    // Themes made from a design draw with the design colours (designAccent...), so those change
+    // too; their artwork follows by itself (syncDesignArt).
+    const colours: Record<string, string> = { ...palette.colors, ...(res.vars.has('designAccent') ? paletteDesignVars(palette) : {}) };
+    const changes = Object.entries(colours)
       .filter(([name]) => res.vars.has(name))
       .map(([name, value]) => this.varChange(name, value))
       .filter((c): c is Change => !!c);
@@ -2000,7 +2492,7 @@ class Editor {
 
   notify(text: string, kind: Toast['kind'] = 'info', ms?: number) {
     clearTimeout(this.toastTimer);
-    this.toast = { text, kind, id: Date.now() };
+    this.toast = { text, kind, id: Date.now(), ms };
     this.toastTimer = setTimeout(() => (this.toast = null), ms ?? (kind === 'error' ? 8000 : 2800));
   }
 }

@@ -44,10 +44,10 @@
     color: var(--text-dim);
   }
   .step:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: color-mix(in srgb, var(--text) 5%, transparent);
   }
   .step.cur {
-    background: #474747;
+    background: var(--hover);
     color: var(--text);
   }
   .step.undone {

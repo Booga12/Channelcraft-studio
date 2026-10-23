@@ -60,5 +60,16 @@
     },
     "license": "MIT",
     "licenseFile": "../LICENSE"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxNjFERUZCRTNCRjAwOTcKUldTWEFML2orOTVoUVFHWlc2eTkrbVRab1QvU3VxN1h3UWNpSzc0QjVrUkNhaitWYVAyQVpYcUcK",
+      "endpoints": [
+        "https://github.com/Booga12/Channelcraft-studio/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

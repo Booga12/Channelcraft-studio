@@ -6,6 +6,7 @@ import { FALLBACK_SYSTEMS } from './systems';
 import { applyChanges } from './edits';
 import { designChanges, LAYOUTS, layoutChanges } from './presets';
 import { DESIGNS, type DesignContext } from './designs';
+import { GAME_LAYOUTS } from './gameLayouts';
 import { SYSTEM_LAYOUTS } from './systemLayouts';
 import { LIBRARY } from './library';
 import { isKnownType, propertyKind, supportsProperty } from './retrobatProfile';
@@ -49,15 +50,19 @@ describe('RetroBat property profile', () => {
     const problems = new Set<string>();
     for (const d of DESIGNS) {
       const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
-      applyChanges(p, designChanges(p, resolveTheme(p, env), d, ctx(d.id), ['basic', 'detailed', 'video'], true));
+      applyChanges(p, designChanges(p, resolveTheme(p, env), d, ctx(d.id), ['basic', 'detailed', 'video', 'grid', 'gamecarousel'], true));
       for (const u of unsupported(p)) problems.add(`${d.id}: ${u}`);
+      for (const g of GAME_LAYOUTS) {
+        applyChanges(p, designChanges(p, resolveTheme(p, env), d, ctx(d.id), ['detailed'], true, undefined, { gameLayout: g.id }));
+        for (const u of unsupported(p)) problems.add(`${d.id}+${g.id}: ${u}`);
+      }
       for (const l of SYSTEM_LAYOUTS) {
         applyChanges(p, designChanges(p, resolveTheme(p, env), d, ctx(d.id), ['system'], true, l.id));
         for (const u of unsupported(p)) problems.add(`${d.id}+${l.id}: ${u}`);
       }
     }
     expect([...problems]).toEqual([]);
-  });
+  }, 180_000);
 
   it('every plain layout preset only uses what RetroBat reads', async () => {
     const problems: string[] = [];

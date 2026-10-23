@@ -64,7 +64,7 @@
     color: var(--text-faint);
   }
   .cur {
-    background: var(--accent-soft);
+    background: var(--brand-soft);
   }
   .dot {
     color: var(--warn);

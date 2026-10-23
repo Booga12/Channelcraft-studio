@@ -53,7 +53,7 @@
     border: 1px solid var(--line-strong);
     background:
       linear-gradient(var(--c), var(--c)),
-      repeating-conic-gradient(#555 0 25%, #888 0 50%) 0 0 / 8px 8px;
+      repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 8px 8px;
     cursor: pointer;
     overflow: hidden;
   }
@@ -73,6 +73,6 @@
   .alpha {
     flex: 1;
     min-width: 40px;
-    accent-color: var(--accent);
+    accent-color: var(--brand);
   }
 </style>
