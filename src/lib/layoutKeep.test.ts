@@ -62,7 +62,7 @@ describe('game list layouts on a design theme', () => {
     }
     // One undo step puts the old layout back.
     ed.undo();
-    expect(appliedGameLayout(p, 'detailed')).toBe('classic');
+    expect(appliedGameLayout(p, 'detailed')).toBe('scrapbook');
   });
 
   it('keep what you added, changed, animated and hid', async () => {

@@ -6,6 +6,7 @@
   import { viewLabel } from '$lib/friendly';
   import { appliedDesign, appliedGameLayout, appliedLayout, appliedSystemLayout, layoutsFor, paletteCoverage, PALETTES, type LayoutPreset, type Rect } from '$lib/theme/presets';
   import { designGameLayout } from '$lib/theme/designs';
+  import { flipped, gameLayout } from '$lib/theme/gameLayouts';
   import Icon from './Icon.svelte';
   import DesignThumb from './DesignThumb.svelte';
   import { DESIGNS, DESIGN_GROUPS, type Design, type DesignGroup } from '$lib/theme/designs';
@@ -35,7 +36,13 @@
     }
   }
 
-  const layouts = $derived(layoutsFor(ed.view));
+  /** Flipped game list layouts are picked with the Flip option rather than shown as cards of their own. */
+  let flip = $state(false);
+  const layouts = $derived(layoutsFor(ed.view).filter((l) => l.kind !== 'game' || !gameLayout(l.id)?.flipOf));
+  const asApplied = (l: LayoutPreset): LayoutPreset => {
+    const id = flip && l.kind === 'game' ? flipped(l.id) : null;
+    return (id && layoutsFor(ed.view).find((x) => x.id === id)) || l;
+  };
   const current = $derived.by(() => {
     ed.rev;
     return ed.project ? appliedLayout(ed.project, ed.view) : null;
@@ -51,7 +58,10 @@
   const currentLayout = $derived.by(() => {
     ed.rev;
     if (!ed.project) return null;
-    return isSystem ? appliedSystemLayout(ed.project) : isGameList ? appliedGameLayout(ed.project, ed.view) : current;
+    if (isSystem) return appliedSystemLayout(ed.project);
+    // A flipped layout ticks the card it flips.
+    const g = isGameList ? appliedGameLayout(ed.project, ed.view) : null;
+    return g ? (gameLayout(g)?.flipOf ?? g) : current;
   });
   const sysDesign = $derived.by(() => {
     ed.rev;
@@ -93,11 +103,12 @@
     info: '#8a8a8a',
   };
 
-  async function apply(l: LayoutPreset, choice?: 'plain' | Design) {
+  async function apply(card: LayoutPreset, choice?: 'plain' | Design) {
+    const l = asApplied(card);
     const style = choice === 'plain' ? null : (choice ?? styleFor(l));
     // A game list layout on a theme without a design: ask first.
     if (!style && isGameList && choice !== 'plain') {
-      asking = l;
+      asking = card;
       restyleWith = (DESIGNS.find((d) => designGameLayout(d) === l.id) ?? DESIGNS[0]).id;
       return;
     }
@@ -199,6 +210,7 @@
       {/if}
       {#if GAME_LISTS.includes(ed.view)}
         <label class="chk"><input type="checkbox" bind:checked={allLists} /> Apply to all game list screens</label>
+        <label class="chk" title="Puts the list on the other side: every layout works both ways round."><input type="checkbox" bind:checked={flip} /> Flip left and right</label>
       {/if}
       <div class="tiles">
         {#each layouts as l (l.id)}

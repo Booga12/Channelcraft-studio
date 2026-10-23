@@ -248,7 +248,8 @@ export const PALETTES: Palette[] = [
 ];
 
 export function layoutsFor(view: string): LayoutPreset[] {
-  const kind = view === 'system' ? 'system' : ['menu', 'screen', 'splash'].includes(view) ? null : 'game';
+  // The grid and game carousel screens are styled by the design itself, with no layouts of their own.
+  const kind = view === 'system' ? 'system' : ['menu', 'screen', 'splash', 'grid', 'gamecarousel'].includes(view) ? null : 'game';
   return LAYOUTS.filter((l) => l.kind === kind);
 }
 

@@ -229,6 +229,7 @@ class Editor {
     resourcesDir: this.root?.resourcesDir ?? '',
     game: this.currentGame,
     gameNames: this.currentGames.length ? this.currentGames.map((g) => g.name) : undefined,
+    games: this.currentGames.length ? this.currentGames : undefined,
   });
 
   res = $derived.by<Resolution | null>(() => {
@@ -1780,7 +1781,7 @@ class Editor {
     const artRel = `_inc/ccs/${design.id}`;
     // A depth chosen for this theme stays when another design is applied.
     const depth = this.depth ?? design.depth ?? 'subtle';
-    const allViews = ['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v));
+    const allViews = [...['system', 'basic', 'detailed', 'video'].filter((v) => this.viewNames.includes(v)), 'grid', 'gamecarousel'];
     const views = opts.views ?? allViews;
     const colours = this.designColours();
     // The theme's own colours stay when only the layout changes, or the design only goes on some screens.

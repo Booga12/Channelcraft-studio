@@ -127,7 +127,9 @@ export function designAssets(d: Design, depth: Depth = d.depth ?? 'subtle'): Rec
   // art is written as PNG (given here as SVG source; the editor rasterizes it when writing).
   // An arrow for layouts with arrows beside the logo (white, tinted by the theme; the left one is flipped).
   const arrow = svg(64, 96, `<path d="M14 10L50 48L14 86" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>`);
-  const out: Record<string, string> = { 'background.png': bg, 'panel.svg': panel, 'fade.png': fade, 'tile.svg': tile, 'tile-selected.svg': tileSelected, 'arrow.svg': arrow };
+  // A diagonal band behind split layouts (white, tinted by the theme).
+  const slash = svg(W, H, `<path d="M860 0H1160L900 ${H}H600Z" fill="#ffffff"/>`);
+  const out: Record<string, string> = { 'background.png': bg, 'panel.svg': panel, 'fade.png': fade, 'tile.svg': tile, 'tile-selected.svg': tileSelected, 'arrow.svg': arrow, 'slash.svg': slash };
   const deco = decoSvg(d);
   if (deco) out['deco.png'] = deco;
   if (d.scanlines) out['scanlines.svg'] = svg(4, 4, `<rect width="4" height="2" fill="#000" fill-opacity="0.35"/>`);
@@ -317,8 +319,246 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
   const desc = (pos: string, size: string, fs = '0.02') => text(d, c, 'md_description', { pos, size, fontSize: fs, lineSpacing: '1.45', verticalAlignment: 'top', zIndex: '40' }, { dim: true, native: true });
   const title = (pos: string, size: string, fs = '0.046', align = 'left') => ({ ...text(d, c, 'ccs_title', { pos, size, fontSize: fs, alignment: align, text: '{game:name}', zIndex: '45', ...tilt((d.tilt ?? 0) / 2) }, { title: true }), anim: d.anims?.title });
   const marquee = (pos: string, max: string, origin = '0 0') => art('md_marquee', pos, max, 46, { origin });
+  // Set at an angle by the layout (stickers, cards, slanted panels).
+  const rot = (e: DesignEl, deg: number): DesignEl => ({ ...e, props: { ...e.props, rotation: String(deg), rotationOrigin: '0.5 0.5' } });
+
+  // RetroBat's other game list styles, which people pick in its settings: a wall of covers and a
+  // sliding row of covers. Every design styles them too.
+  if (view === 'grid') {
+    const { corner, margin } = tileGeometry(d);
+    const pad = String(margin + 8);
+    els.push(
+      fanart('1A'),
+      systemLogo('0.04 0.04', '0 0', '0.2 0.06'),
+      systemLogoText('0.04 0.04', '0 0', '0.2 0.06'),
+      { type: 'imagegrid', name: 'gamegrid', props: { pos: '0.04 0.13', size: '0.92 0.6', autoLayout: '6 2', margin: '0.01 0.02', padding: '0.01 0.01 0.01 0.01', imageSource: 'boxart', autoLayoutSelectedZoom: '1.1', animateSelection: 'true', scrollDirection: 'vertical', centerSelection: 'false', scrollbarColor: '00000000', zIndex: '30' } },
+      { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/tile.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designTile'), imageColor: 'FFFFFFDD', padding: `${pad} ${pad} ${pad} ${pad}`, selectionMode: 'full', imageSizeMode: 'maxSize' } },
+      { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/tile-selected.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designAccent'), imageColor: 'FFFFFFFF', padding: `${pad} ${pad} ${pad} ${pad}` } },
+      panel(d, c, 'ccs_infopanel', '0.04 0.76', '0.92 0.17', 10),
+      title('0.06 0.775', '0.42 0.05', '0.032'),
+      ...details(0.06, 0.83, 0.42, 0.03),
+      desc('0.5 0.785', '0.28 0.13', '0.015'),
+      screenshot('0.86 0.845', '0.12 0.13'),
+    );
+    return els;
+  }
+  if (view === 'gamecarousel') {
+    els.push(
+      fanart('FF'),
+      { type: 'image', name: 'ccs_fade', props: { pos: '0 0', size: '1 1', path: `${c.art}/fade.png`, zIndex: '2' } },
+      systemLogo('0.04 0.04', '0 0', '0.2 0.06'),
+      systemLogoText('0.04 0.04', '0 0', '0.2 0.06'),
+      marquee('0.05 0.12', '0.3 0.12', '0 0'),
+      title('0.05 0.25', '0.5 0.06', '0.046'),
+      ...details(0.05, 0.32, 0.4, 0.034),
+      desc('0.05 0.43', '0.4 0.1', '0.017'),
+      screenshot('0.8 0.27', '0.3 0.3'),
+      { type: 'gamecarousel', name: 'gamecarousel', props: { type: 'horizontal', pos: '0 0.58', size: '1 0.34', logoSize: '0.12 0.24', maxLogoCount: '7', logoScale: '1.35', minLogoOpacity: '0.5', imageSource: 'boxart', color: '00000000', zIndex: '40' } },
+    );
+    return els;
+  }
 
   switch (archetype) {
+    case 'showcase':
+      els.push(
+        fanart('20'),
+        systemLogo('0.04 0.05', '0 0', '0.22 0.07'),
+        systemLogoText('0.04 0.05', '0 0', '0.22 0.07'),
+        marquee('0.42 0.1', '0.24 0.08', '0.5 0'),
+        boxart('0.42 0.44', '0.28 0.46'),
+        (() => {
+          const r = boxart('0.42 0.67', '0.28 0.46', 31, { origin: '0.5 0', flipY: 'true', color: 'FFFFFF2E' });
+          delete r.props.rotation;
+          delete r.props.rotationOrigin;
+          return { ...r, name: 'ccs_reflection', anim: undefined };
+        })(),
+        screenshot('0.14 0.42', '0.18 0.2'),
+        desc('0.04 0.56', '0.2 0.16', '0.016'),
+        title('0.08 0.74', '0.68 0.06', '0.042', 'center'),
+        ...details(0.2, 0.82, 0.44, 0.032),
+        panel(d, c, 'ccs_listpanel', '0.74 0.1', '0.23 0.82', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.75 0.12', '0.21 0.78'),
+      );
+      break;
+    case 'hero':
+      els.push(
+        fanart('FF'),
+        panel(d, c, 'ccs_heroband', '0 0.5', '1 0.5', 5, K(d, c, 'designListPanel')),
+        systemLogo('0.04 0.04', '0 0', '0.16 0.06'),
+        systemLogoText('0.04 0.04', '0 0', '0.16 0.06'),
+        marquee('0.05 0.28', '0.34 0.16', '0 0'),
+        title('0.05 0.44', '0.5 0.06', '0.05'),
+        gameList(d, c, '0.05 0.54', '0.42 0.38'),
+        ...details(0.53, 0.53, 0.42, 0.034),
+        boxart('0.6 0.73', '0.1 0.2'),
+        screenshot('0.81 0.73', '0.2 0.2'),
+        desc('0.53 0.85', '0.43 0.09', '0.015'),
+      );
+      break;
+    case 'sidebar':
+      els.push(
+        fanart('FF'),
+        panel(d, c, 'ccs_listpanel', '0 0', '0.3 1', 20, K(d, c, 'designListPanel')),
+        systemLogo('0.03 0.04', '0 0', '0.24 0.07'),
+        systemLogoText('0.03 0.04', '0 0', '0.24 0.07'),
+        gameList(d, c, '0.02 0.13', '0.26 0.8'),
+        marquee('0.34 0.06', '0.24 0.1', '0 0'),
+        screenshot('0.85 0.3', '0.2 0.2'),
+        panel(d, c, 'ccs_infopanel', '0.34 0.62', '0.62 0.32', 10),
+        boxart('0.415 0.78', '0.1 0.26'),
+        title('0.49 0.64', '0.46 0.06', '0.04'),
+        ...details(0.49, 0.71, 0.46, 0.032),
+        desc('0.49 0.81', '0.46 0.11', '0.016'),
+      );
+      break;
+    case 'tvguide':
+      els.push(
+        fanart('22'),
+        systemLogo('0.04 0.02', '0 0', '0.18 0.05'),
+        systemLogoText('0.04 0.02', '0 0', '0.18 0.05'),
+        screenshot('0.3 0.3', '0.5 0.44'),
+        title('0.58 0.1', '0.3 0.06', '0.044'),
+        marquee('0.58 0.18', '0.2 0.08', '0 0'),
+        boxart('0.91 0.25', '0.08 0.14'),
+        ...details(0.58, 0.29, 0.28, 0.034),
+        desc('0.58 0.4', '0.38 0.14', '0.017'),
+        panel(d, c, 'ccs_listpanel', '0.04 0.58', '0.92 0.34', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.06 0.6', '0.88 0.3'),
+      );
+      break;
+    case 'trading-card':
+      els.push(
+        fanart('1A'),
+        systemLogo('0.04 0.035', '0 0', '0.22 0.06'),
+        systemLogoText('0.04 0.035', '0 0', '0.22 0.06'),
+        rot(panel(d, c, 'ccs_cardpanel', '0.07 0.12', '0.32 0.78', 8, K(d, c, 'designAccent')), -4),
+        rot(boxart('0.23 0.45', '0.26 0.5'), -4),
+        rot(title('0.08 0.79', '0.3 0.05', '0.032', 'center'), -4),
+        panel(d, c, 'ccs_infopanel', '0.42 0.12', '0.24 0.78', 10),
+        marquee('0.54 0.15', '0.2 0.08', '0.5 0'),
+        screenshot('0.54 0.36', '0.2 0.16'),
+        ...details(0.44, 0.5, 0.2, 0.034),
+        desc('0.44 0.62', '0.2 0.26', '0.016'),
+        panel(d, c, 'ccs_listpanel', '0.69 0.12', '0.28 0.8', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.705 0.14', '0.25 0.76'),
+      );
+      break;
+    case 'manga-spread':
+      els.push(
+        fanart('1A'),
+        systemLogo('0.04 0.03', '0 0', '0.2 0.06'),
+        systemLogoText('0.04 0.03', '0 0', '0.2 0.06'),
+        rot(panel(d, c, 'ccs_coverpanel', '0.04 0.12', '0.3 0.56', 8), -3),
+        rot(boxart('0.19 0.4', '0.24 0.48'), -3),
+        marquee('0.19 0.76', '0.24 0.1', '0.5 0'),
+        rot(panel(d, c, 'ccs_shotpanel', '0.37 0.1', '0.3 0.34', 8), 2),
+        rot(screenshot('0.52 0.27', '0.26 0.28'), 2),
+        rot(panel(d, c, 'ccs_infopanel', '0.37 0.48', '0.3 0.44', 8), -1.5),
+        title('0.39 0.5', '0.26 0.06', '0.036'),
+        ...details(0.39, 0.58, 0.26, 0.032),
+        desc('0.39 0.69', '0.26 0.2', '0.016'),
+        rot(panel(d, c, 'ccs_listpanel', '0.7 0.1', '0.27 0.82', 20, K(d, c, 'designListPanel')), 1.5),
+        gameList(d, c, '0.715 0.13', '0.24 0.76'),
+      );
+      break;
+    case 'versus':
+      els.push(
+        fanart('22'),
+        { type: 'image', name: 'ccs_slash', props: { pos: '0 0', size: '1 1', path: `${c.art}/slash.svg`, color: K(d, c, 'designAccent'), opacity: '0.16', zIndex: '4' } },
+        systemLogo('0.04 0.04', '0 0', '0.22 0.07'),
+        systemLogoText('0.04 0.04', '0 0', '0.22 0.07'),
+        boxart('0.2 0.48', '0.3 0.6'),
+        { ...text(d, c, 'ccs_vs', { pos: '0.33 0.74', size: '0.1 0.1', fontSize: '0.08', alignment: 'center', text: 'VS', color: K(d, c, 'designAccent'), zIndex: '44' }, { title: true }), anim: 'pulse' },
+        title('0.42 0.14', '0.31 0.06', '0.042'),
+        marquee('0.42 0.22', '0.2 0.07', '0 0'),
+        ...details(0.42, 0.32, 0.31, 0.034),
+        screenshot('0.575 0.56', '0.3 0.2'),
+        desc('0.42 0.7', '0.31 0.2', '0.016'),
+        panel(d, c, 'ccs_listpanel', '0.76 0.12', '0.21 0.8', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.77 0.14', '0.19 0.76'),
+      );
+      break;
+    case 'marquee-top':
+      els.push(
+        fanart('1E'),
+        systemLogo('0.04 0.04', '0 0', '0.16 0.06'),
+        systemLogoText('0.04 0.04', '0 0', '0.16 0.06'),
+        { ...marquee('0.5 0.03', '0.5 0.18', '0.5 0'), anim: d.anims?.logo ?? 'breathe' },
+        panel(d, c, 'ccs_listpanel', '0.3 0.25', '0.4 0.64', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.32 0.27', '0.36 0.6', 'center'),
+        boxart('0.15 0.42', '0.22 0.36'),
+        title('0.04 0.62', '0.24 0.05', '0.03'),
+        ...details(0.04, 0.69, 0.24, 0.032),
+        screenshot('0.85 0.4', '0.24 0.3'),
+        desc('0.73 0.6', '0.24 0.3', '0.016'),
+      );
+      break;
+    case 'terminal':
+      els.push(
+        fanart('10'),
+        systemLogo('0.04 0.04', '0 0', '0.2 0.06'),
+        systemLogoText('0.04 0.04', '0 0', '0.2 0.06'),
+        panel(d, c, 'ccs_listpanel', '0.03 0.12', '0.55 0.8', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.05 0.14', '0.51 0.76'),
+        panel(d, c, 'ccs_infopanel', '0.61 0.12', '0.36 0.8', 10),
+        title('0.63 0.14', '0.32 0.05', '0.03'),
+        ...details(0.63, 0.21, 0.32, 0.03),
+        boxart('0.7 0.44', '0.12 0.2'),
+        screenshot('0.87 0.44', '0.16 0.2'),
+        marquee('0.63 0.56', '0.32 0.06', '0 0'),
+        desc('0.63 0.64', '0.32 0.26', '0.016'),
+      );
+      break;
+    case 'handheld':
+      els.push(
+        fanart('16'),
+        systemLogo('0.5 0.015', '0.5 0', '0.2 0.05'),
+        systemLogoText('0.5 0.015', '0.5 0', '0.2 0.05'),
+        panel(d, c, 'ccs_device', '0.22 0.08', '0.56 0.86', 6),
+        panel(d, c, 'ccs_screen', '0.27 0.13', '0.46 0.5', 8, K(d, c, 'designBackground')),
+        gameList(d, c, '0.29 0.15', '0.42 0.46', 'center'),
+        title('0.27 0.66', '0.46 0.05', '0.028', 'center'),
+        panel(d, c, 'ccs_dpad_h', '0.29 0.8', '0.08 0.025', 9, K(d, c, 'designDimText')),
+        panel(d, c, 'ccs_dpad_v', '0.3175 0.7625', '0.025 0.1', 9, K(d, c, 'designDimText')),
+        panel(d, c, 'ccs_btn_a', '0.65 0.79', '0.035 0.06', 9, K(d, c, 'designAccent')),
+        panel(d, c, 'ccs_btn_b', '0.6 0.82', '0.035 0.06', 9, K(d, c, 'designAccent')),
+        boxart('0.11 0.36', '0.18 0.4'),
+        marquee('0.11 0.62', '0.18 0.08', '0.5 0'),
+        screenshot('0.89 0.3', '0.18 0.24'),
+        ...details(0.8, 0.48, 0.18, 0.03),
+        desc('0.8 0.6', '0.18 0.3', '0.014'),
+      );
+      break;
+    case 'scrapbook':
+      els.push(
+        fanart('18'),
+        systemLogo('0.04 0.04', '0 0', '0.2 0.06'),
+        systemLogoText('0.04 0.04', '0 0', '0.2 0.06'),
+        rot(boxart('0.2 0.36', '0.22 0.42'), -6),
+        rot(screenshot('0.46 0.3', '0.24 0.24'), 4),
+        rot(marquee('0.36 0.5', '0.2 0.08', '0 0'), -3),
+        rot(title('0.06 0.66', '0.5 0.07', '0.05'), -2),
+        ...details(0.06, 0.76, 0.5, 0.034),
+        desc('0.06 0.865', '0.5 0.07', '0.015'),
+        rot(panel(d, c, 'ccs_listpanel', '0.62 0.1', '0.35 0.82', 20, K(d, c, 'designListPanel')), 2),
+        gameList(d, c, '0.64 0.13', '0.31 0.76'),
+      );
+      break;
+    case 'magazine-cover':
+      els.push(
+        fanart('16'),
+        title('0.04 0.06', '0.6 0.1', '0.08'),
+        systemLogo('0.66 0.07', '0 0', '0.14 0.06'),
+        systemLogoText('0.66 0.07', '0 0', '0.14 0.06'),
+        marquee('0.04 0.17', '0.2 0.06', '0 0'),
+        boxart('0.22 0.55', '0.32 0.6'),
+        ...details(0.41, 0.22, 0.24, 0.034),
+        desc('0.41 0.36', '0.24 0.32', '0.016'),
+        screenshot('0.53 0.8', '0.24 0.18'),
+        panel(d, c, 'ccs_listpanel', '0.69 0.14', '0.28 0.78', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.705 0.16', '0.25 0.74'),
+      );
+      break;
     case 'list-only':
       els.push(
         fanart('1E'),
@@ -488,15 +728,23 @@ const depthOf = (d: Design, c: DesignContext): Depth => c.depth ?? d.depth ?? 's
  */
 export function designElements(d: Design, c: DesignContext, view: string, systemLayoutId = d.system, gameLayoutId?: string | null): DesignEl[] {
   if (view === 'system') return withMotion(withDepth(systemScreen(d, c, systemLayout(systemLayoutId) ?? systemLayout(d.system)!), depthOf(d, c), 'system'), c);
-  if (['basic', 'detailed', 'video'].includes(view)) {
+  if (GAME_VIEWS.includes(view)) {
     const gl = gameLayout(gameLayoutId) ?? defaultGameLayout(d.game);
-    let els = gameScreen(d, c, view, gl.archetype);
-    if (gl.mirror) els = mirrored(els);
+    let els = settled(gameScreen(d, c, view, gl.archetype));
+    if (gl.mirror && LIST_VIEWS.includes(view)) els = mirrored(els);
     for (const n of LABELS_AND_EXTRAS) els.push({ type: n === 'md_lastplayed' ? 'datetime' : 'text', name: n, props: { visible: 'false' } });
     return withMotion(withDepth(els, depthOf(d, c), 'game'), c);
   }
   return [];
 }
+
+/** Game list screens a design styles: the three list styles, and RetroBat's grid and carousel of games. */
+export const LIST_VIEWS = ['basic', 'detailed', 'video'];
+export const GAME_VIEWS = [...LIST_VIEWS, 'grid', 'gamecarousel'];
+
+/** Animations that turn things, which would straighten a part the layout set at an angle. */
+const TURNING = new Set(['swing-in', 'tilt-in', 'sway', 'swing', 'spin']);
+const settled = (els: DesignEl[]): DesignEl[] => els.map((e) => (e.props.rotation && e.anim && TURNING.has(e.anim) ? { ...e, anim: 'pop' } : e));
 
 /** The game layout a design comes with. */
 export const designGameLayout = (d: Design): string => defaultGameLayout(d.game).id;
@@ -551,7 +799,7 @@ function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game'): Desi
   const lv = depthLevel(depth);
   return els.map((e) => {
     if (lv.shadow && e.type === 'image' && SHADOWED[kind].includes(e.name) && Object.keys(e.props).length > 1) return { ...e, blocks: [...(e.blocks ?? []), shadowXml(lv.shadow)] };
-    if (e.type === 'carousel') return { ...e, props: { ...e.props, logoScale: depthLogoScale(Number(e.props.logoScale ?? 1.25), 'subtle', depth) } };
+    if (e.type === 'carousel' || e.type === 'gamecarousel') return { ...e, props: { ...e.props, logoScale: depthLogoScale(Number(e.props.logoScale ?? 1.25), 'subtle', depth) } };
     if (lv.parallax && e.name === PARALLAX[kind] && !e.anim) return { ...e, anim: PARALLAX_ANIM };
     return e;
   });

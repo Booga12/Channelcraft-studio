@@ -5,6 +5,7 @@
   import { resolveAsset, resolveAssetWithFallbacks, type ResolvedElement } from '$lib/theme/resolver';
   import { cssColor, parsePair } from '$lib/theme/schema';
   import { MOCK_GAME, MOCK_GAMES, type SystemInfo } from '$lib/theme/systems';
+  import { gameArt } from '$lib/theme/games';
   import type { Resolution } from '$lib/theme/resolver';
   import type { Environment } from '$lib/theme/context';
   import { animationCss, screenOf } from '$lib/theme/animations';
@@ -282,7 +283,8 @@
   // Laid out the way EmulationStation's SystemView does it: logos spaced across the carousel
   // (horizontal / vertical), or all on one spot and turned around a far-away point (wheels).
   const carouselItems = $derived.by(() => {
-    if (el.type !== 'carousel') return [];
+    if (el.type !== 'carousel' && el.type !== 'gamecarousel') return [];
+    const ofGames = el.type === 'gamecarousel';
     const type = (val('type') ?? 'horizontal').trim();
     const n = Math.max(1, Math.round(num('maxLogoCount', 3)));
     const cw = box.w ?? W;
@@ -311,15 +313,24 @@
       yOff = logoAlign === 'top' ? lh / 10 : logoAlign === 'bottom' ? ch - lh * 1.1 : (ch - lh) / 2;
     }
     const list = carousel.systems;
-    const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
+    const realGames = env.games ?? [];
+    const gameNames = env.gameNames ?? MOCK_GAMES;
+    const count = ofGames ? realGames.length || gameNames.length : list.length;
+    const cur = ofGames ? Math.max(0, realGames.findIndex((g) => g.path === env.game?.path)) : Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
+    const source = val('imageSource') ?? 'marquee';
+    const entry = (i: number) => {
+      const j = ((i % Math.max(1, count)) + count) % Math.max(1, count);
+      if (!ofGames) return { name: (list[j] ?? env.settings.system).fullName, logo: list.length ? logoFor(list[j]) : logoFor(env.settings.system) };
+      return realGames.length ? { name: realGames[j].name, logo: gameArt(realGames[j], source) } : { name: gameNames[j], logo: null };
+    };
     // RetroBat also draws a couple of logos past each end (they're clipped by the carousel box).
     // While scrolling, logos sit `shift` slots away from their resting place.
     const shift = slide.by;
     const reach = n === 1 ? 0 : Math.floor(n / 2) + 2;
     const extra = Math.ceil(Math.abs(shift));
-    const items: { sys: SystemInfo; logo: string | null; selected: boolean; x: number; y: number; w: number; h: number; transform: string; opacity: number; z: number }[] = [];
+    const items: { name: string; logo: string | null; selected: boolean; x: number; y: number; w: number; h: number; transform: string; opacity: number; z: number }[] = [];
     for (let k = -reach - extra; k <= reach + extra; k++) {
-      const sys = list.length ? list[(((cur + k) % list.length) + list.length) % list.length] : env.settings.system;
+      const it = entry(cur + k);
       const p = k + shift;
       if (n === 1 && Math.abs(p) >= 1) continue;
       const d = Math.abs(p);
@@ -332,7 +343,7 @@
       const dy = (ro[1] - 0.5) * h;
       const transform = wheel ? `scale(${scale}) translate(${dx}px, ${dy}px) rotate(${rot * p}deg) translate(${-dx}px, ${-dy}px)` : `scale(${scale})`;
       const fade = n === 1 ? 1 - d : 1;
-      items.push({ sys, logo: logoFor(sys), selected: k === 0, x: p * sx + xOff + lw / 2 - w / 2, y: p * sy + yOff + lh / 2 - h / 2, w, h, transform, opacity: opacity * fade, z: 100 - Math.round(d * 10) });
+      items.push({ name: it.name, logo: it.logo, selected: k === 0, x: p * sx + xOff + lw / 2 - w / 2, y: p * sy + yOff + lh / 2 - h / 2, w, h, transform, opacity: opacity * fade, z: 100 - Math.round(d * 10) });
     }
     return items;
   });
@@ -472,7 +483,7 @@
         </div>
       {/each}
     </div>
-  {:else if el.type === 'carousel'}
+  {:else if el.type === 'carousel' || el.type === 'gamecarousel'}
     {@const lt = carousel.logoText}
     {@const ltFont = familyFor(lt && ed.project ? resolveAsset(lt.props.get('fontPath'), res, ed.project, env) : null)}
     <div class="carousel" style:background={carouselBg}>
@@ -483,7 +494,7 @@
           {:else}
             <span
               style="font-family:{ltFont};font-size:{parseFloat(lt?.props.get('fontSize')?.value ?? '0.07') * H * 0.6}px;color:{cssColor(lt?.props.get('color')?.value, '#fff')};{lt?.props.get('forceUppercase')?.value === 'true' ? 'text-transform:uppercase' : ''}"
-              >{it.sys.fullName}</span
+              >{it.name}</span
             >
           {/if}
         </div>
@@ -560,7 +571,8 @@
       {#each Array(grid.cols * grid.rows) as _, i}
         {@const on = i === grid.selIndex}
         {@const sys = list[(cur + i - grid.selIndex + list.length * 10) % Math.max(1, list.length)]}
-        {@const logo = systemGrid && sys ? logoFor(sys) : null}
+        {@const g = !systemGrid && env.games?.length ? env.games[(Math.max(0, env.games.findIndex((x) => x.path === env.game?.path)) + i - grid.selIndex + env.games.length * 10) % env.games.length] : null}
+        {@const logo = systemGrid && sys ? logoFor(sys) : g ? gameArt(g, val('imageSource') ?? 'thumbnail') : null}
         {@const art = on ? grid.selArt : grid.art}
         <div
           class="tile"
@@ -577,7 +589,7 @@
           {#if logo}
             <!-- A logo that can't be loaded shows the console's name, as RetroBat does without a logo. -->
             <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} onerror={(e) => ((e.currentTarget as HTMLImageElement).dataset.failed = '1')} />
-            <span class="fallback">{sys?.fullName ?? ''}</span>
+            <span class="fallback">{systemGrid ? (sys?.fullName ?? '') : (g?.name ?? '')}</span>
           {:else}
             <span>{systemGrid ? (sys?.fullName ?? '') : (env.gameNames ?? MOCK_GAMES)[i % (env.gameNames ?? MOCK_GAMES).length]}</span>
           {/if}

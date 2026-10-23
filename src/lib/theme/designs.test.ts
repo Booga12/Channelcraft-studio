@@ -159,7 +159,8 @@ describe('designs on the starter theme (in memory)', () => {
       expect(!!files['deco.png']).toBe(!!d.deco);
       const els = designElements(d, ctx(d.id), 'detailed');
       expect(els.some((e) => e.name === 'ccs_deco')).toBe(!!d.deco);
-      if (d.tilt) expect(els.find((e) => e.name === 'ccs_boxart')!.props.rotation).toBe(String(d.tilt));
+      // Tilted: the design's own angle, or the one its layout sets (cards, stickers).
+      if (d.tilt) expect(els.find((e) => e.name === 'ccs_boxart')!.props.rotation).toBeTruthy();
       expect(els.find((e) => e.name === 'ccs_reflection')?.props.rotation).toBeUndefined();
     }
   });
