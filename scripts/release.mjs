@@ -8,7 +8,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const REPO = 'Booga12/Channelcraft-studio';
 const conf = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
@@ -19,10 +19,28 @@ if (!process.env.TAURI_SIGNING_PRIVATE_KEY && !existsSync(key)) {
   process.exit(1);
 }
 
+// Built like scripts/check-release.mjs does: this PC's folders are mapped away, so source paths
+// compiled into Rust panic messages don't name the user. The check runs on the result afterwards.
+execSync('node scripts/third-party-notices.mjs', { stdio: 'inherit' });
+const home = homedir();
+const remap = [
+  [join(process.env.CARGO_HOME ?? join(home, '.cargo'), 'registry', 'src'), 'crates'],
+  [join(process.env.CARGO_HOME ?? join(home, '.cargo'), 'git', 'checkouts'), 'git'],
+  [process.env.RUSTUP_HOME ?? join(home, '.rustup'), 'rustup'],
+  [resolve('src-tauri'), 'channelcraft'],
+  [home, '~'],
+].map(([from, to]) => `--remap-path-prefix=${from}=${to}`);
 execSync('pnpm tauri build --config src-tauri/tauri.release.json', {
   stdio: 'inherit',
-  env: { ...process.env, TAURI_SIGNING_PRIVATE_KEY: process.env.TAURI_SIGNING_PRIVATE_KEY ?? readFileSync(key, 'utf8'), TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? '' },
+  env: {
+    ...process.env,
+    RUSTFLAGS: [process.env.RUSTFLAGS, ...remap].filter(Boolean).join(' '),
+    TAURI_SIGNING_PRIVATE_KEY: process.env.TAURI_SIGNING_PRIVATE_KEY ?? readFileSync(key, 'utf8'),
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? '',
+  },
 });
+// Nothing personal inside, only the starter theme bundled, MIT licence included.
+execSync('node scripts/check-release.mjs --no-build', { stdio: 'inherit' });
 
 const dir = 'src-tauri/target/release/bundle/nsis';
 const exe = readdirSync(dir).find((f) => f.endsWith(`_${version}_x64-setup.exe`));

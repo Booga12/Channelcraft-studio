@@ -65,6 +65,14 @@ describe('game list layouts on a design theme', () => {
     expect(appliedGameLayout(p, 'detailed')).toBe('scrapbook');
   });
 
+  it('take the new layout’s own looks, not the old layout’s (fan art faded in Showcase)', async () => {
+    await fresh('synthwave');
+    ed.view = 'detailed';
+    expect(el('detailed', 'ccs_fanart')!.props.get('color')!.value).toBe('FFFFFFFF');
+    await ed.applyLayout(layout('showcase'), ['detailed']);
+    expect(el('detailed', 'ccs_fanart')!.props.get('color')!.value).toBe('FFFFFF20');
+  });
+
   it('keep what you added, changed, animated and hid', async () => {
     await fresh();
     ed.view = 'detailed';

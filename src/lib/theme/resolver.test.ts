@@ -31,7 +31,8 @@ function env(over: Partial<PreviewSettings> = {}): Environment {
 
 describe.skipIf(!existsSync(THEMES))('resolver on installed themes (read-only)', () => {
   it('summarizes every theme', async () => {
-    for (const name of ['Booga\'s WiiTheme v5', 'es-theme-carbon', 'Alekfull-ARTFLIX', 'BatWiiCera-theme', 'es-theme-RELOAD-']) {
+    // Themes that happen to be installed on this PC; ones that aren't are skipped.
+    for (const name of ['Booga\'s WiiTheme v5', 'es-theme-carbon', 'Alekfull-ARTFLIX', 'BatWiiCera-theme', 'es-theme-RELOAD-'].filter((n) => existsSync(`${THEMES}\\${n}`))) {
       const p = await ThemeProject.load(`${THEMES}\\${name}`, nodeFs);
       const r = resolveTheme(p, env());
       const views = [...r.views.values()].map((v) => `${v.name}(${v.elements.size})`).join(' ');
@@ -42,7 +43,7 @@ describe.skipIf(!existsSync(THEMES))('resolver on installed themes (read-only)',
 
   const V5 = `${THEMES}\\Booga's WiiTheme v5`;
 
-  it('merges v5 elements across views and applies subset-conditional properties', async () => {
+  it.skipIf(!existsSync(V5))('merges v5 elements across views and applies subset-conditional properties', async () => {
     const p = await ThemeProject.load(V5, nodeFs);
     const classic = resolveTheme(p, env());
     expect(classic.unknownConditions).toBe(0);
@@ -66,7 +67,7 @@ describe.skipIf(!existsSync(THEMES))('resolver on installed themes (read-only)',
     expect(help.props.get('textColor')!.value).toBe('B8B8B8FF');
   });
 
-  it('evaluates per-system conditional variables', async () => {
+  it.skipIf(!existsSync(V5))('evaluates per-system conditional variables', async () => {
     const p = await ThemeProject.load(V5, nodeFs);
     const sony = FALLBACK_SYSTEMS.find((x) => x.name === 'psx')!;
     expect(resolveTheme(p, env()).vars.get('consoleAccent')!.value).toBe('B50D1BFF');
