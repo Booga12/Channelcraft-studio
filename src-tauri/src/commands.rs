@@ -101,6 +101,10 @@ pub struct EsSettings {
     transition_style: String,
     /// "instant" turns every transition off.
     power_saver: String,
+    /// RetroBat plays music in its menus (audio.bgmusic).
+    music: bool,
+    /// Themes may choose that music (audio.thememusics, "Play system-specific music").
+    theme_music: bool,
 }
 
 fn es_value(cfg: &str, name: &str) -> Option<String> {
@@ -119,6 +123,8 @@ fn es_settings(root: &Path) -> EsSettings {
         draw_clock: flag("DrawClock", true),
         transition_style: es_value(&cfg, "TransitionStyle").filter(|v| !v.is_empty()).unwrap_or_else(|| "auto".into()),
         power_saver: es_value(&cfg, "PowerSaverMode").unwrap_or_else(|| "disabled".into()),
+        music: flag("audio.bgmusic", true),
+        theme_music: flag("audio.thememusics", true),
     }
 }
 
@@ -671,25 +677,44 @@ pub fn set_active_theme(roots: State<Roots>, theme: String) -> CmdResult<()> {
     if !themes_dir(&root).join(&theme).join("theme.xml").is_file() {
         return Err(format!("Theme \"{theme}\" not found"));
     }
-    let cfg_path = es_home(&root).join("es_settings.cfg");
-    let line = format!("<string name=\"ThemeSet\" value=\"{}\" />", escape_attr(&theme));
-    let text = if cfg_path.is_file() {
-        let cur = fs::read_to_string(&cfg_path).map_err(err)?;
-        fs::copy(&cfg_path, cfg_path.with_extension("cfg.bak")).map_err(err)?;
-        if let Some(pos) = cur.find("name=\"ThemeSet\"") {
-            let start = cur[..pos].rfind('<').ok_or("Malformed es_settings.cfg")?;
-            let end = cur[pos..].find('>').ok_or("Malformed es_settings.cfg")? + pos + 1;
-            format!("{}{}{}", &cur[..start], line, &cur[end..])
-        } else if let Some(pos) = cur.rfind("</config>") {
-            let eol = if cur.contains("\r\n") { "\r\n" } else { "\n" };
-            format!("{}\t{}{}{}", &cur[..pos], line, eol, &cur[pos..])
+    write_es_settings(&es_home(&root).join("es_settings.cfg"), &[("string", "ThemeSet", &theme)])
+}
+
+/// Sets settings in es_settings.cfg (kind is "string", "bool" or "int"), keeping everything else
+/// and a copy of the old file as es_settings.cfg.bak.
+fn write_es_settings(cfg_path: &Path, settings: &[(&str, &str, &str)]) -> CmdResult<()> {
+    let mut text = if cfg_path.is_file() {
+        let cur = fs::read_to_string(cfg_path).map_err(err)?;
+        fs::copy(cfg_path, cfg_path.with_extension("cfg.bak")).map_err(err)?;
+        cur
+    } else {
+        "<?xml version=\"1.0\"?>\r\n<config>\r\n</config>\r\n".to_string()
+    };
+    for (kind, name, value) in settings {
+        let line = format!("<{kind} name=\"{name}\" value=\"{}\" />", escape_attr(value));
+        text = if let Some(pos) = text.find(&format!("name=\"{name}\"")) {
+            let start = text[..pos].rfind('<').ok_or("Malformed es_settings.cfg")?;
+            let end = text[pos..].find('>').ok_or("Malformed es_settings.cfg")? + pos + 1;
+            format!("{}{}{}", &text[..start], line, &text[end..])
+        } else if let Some(pos) = text.rfind("</config>") {
+            let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
+            format!("{}\t{}{}{}", &text[..pos], line, eol, &text[pos..])
         } else {
             return Err("es_settings.cfg has no <config> element".into());
-        }
-    } else {
-        format!("<?xml version=\"1.0\"?>\r\n<config>\r\n\t{line}\r\n</config>\r\n")
-    };
-    fs::write(&cfg_path, text).map_err(err)
+        };
+    }
+    fs::write(cfg_path, text).map_err(err)
+}
+
+/// Turns on RetroBat's menu music and lets themes choose it ("Frontend music" and "Play
+/// system-specific music"). RetroBat has to be closed, or it writes its old settings back.
+#[tauri::command(async)]
+pub fn enable_theme_music(roots: State<Roots>) -> CmdResult<()> {
+    let root = roots.root()?;
+    if es_running() {
+        return Err("Close RetroBat first, or it puts its old settings back when it quits.".into());
+    }
+    write_es_settings(&es_home(&root).join("es_settings.cfg"), &[("bool", "audio.bgmusic", "true"), ("bool", "audio.thememusics", "true")])
 }
 
 #[tauri::command(async)]
@@ -755,6 +780,24 @@ pub fn close_retrobat() -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn es_settings_are_replaced_or_added_and_the_rest_kept() {
+        let dir = std::env::temp_dir().join(format!("ccs-es-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let cfg = dir.join("es_settings.cfg");
+        fs::write(&cfg, "<?xml version=\"1.0\"?>\r\n<config>\r\n\t<bool name=\"audio.bgmusic\" value=\"false\" />\r\n\t<int name=\"MusicVolume\" value=\"60\" />\r\n</config>\r\n").unwrap();
+        write_es_settings(&cfg, &[("bool", "audio.bgmusic", "true"), ("bool", "audio.thememusics", "true")]).unwrap();
+        let text = fs::read_to_string(&cfg).unwrap();
+        assert_eq!(es_value(&text, "audio.bgmusic").as_deref(), Some("true"));
+        assert_eq!(es_value(&text, "audio.thememusics").as_deref(), Some("true"));
+        assert_eq!(es_value(&text, "MusicVolume").as_deref(), Some("60"));
+        assert_eq!(text.matches("audio.bgmusic").count(), 1);
+        assert!(text.trim_end().ends_with("</config>"));
+        assert!(dir.join("es_settings.cfg.bak").is_file());
+        fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn load_theme_matches_listing_and_reading_separately() {

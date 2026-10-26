@@ -337,3 +337,51 @@ describe('editor operations (starter theme, in memory)', () => {
     }
   });
 });
+
+describe('sound and music (starter theme, in memory)', () => {
+  beforeEach(async () => {
+    await open();
+    respond = (cmd, args) => (cmd === 'copy_sound_into_theme' ? `${args.destRelDir}/My Song.ogg` : cmd === 'download_font' ? `_inc/fonts/${args.fileName}` : null);
+  });
+
+  it('sets the menu music, changes it, and takes it away again, each as one undo step', async () => {
+    const before = ed.project!.entry!.src;
+    await ed.setMusic({ preset: 'lofi' });
+    expect(calls.some((c) => c.cmd === 'write_binary' && String(c.args.path).endsWith('lofi.wav'))).toBe(true);
+    expect(ed.themeMusic()?.preset).toBe('lofi');
+    expect(ed.project!.entry!.src).toContain('<sound name="bgsound">');
+    await ed.setMusic({ file: 'C:\\Music\\My Song.ogg' });
+    expect(ed.themeMusic()?.path).toBe('./_inc/ccs/music/My Song.ogg');
+    expect(ed.themeMusic()?.preset).toBeNull();
+    await ed.setMusic(null);
+    expect(ed.themeMusic()).toBeNull();
+    ed.undo(true);
+    ed.undo(true);
+    ed.undo(true);
+    expect(ed.project!.entry!.src).toBe(before);
+  });
+
+  it('gives the console carousel and the game lists one scroll sound', async () => {
+    await ed.setScrollSound({ preset: 'blip' });
+    expect(ed.themeScrollSound()?.preset).toBe('blip');
+    const res = ed.themeRes ?? ed.res;
+    for (const [view, name] of [['system', 'systemcarousel'], ['detailed', 'gamelist'], ['basic', 'gamelist']]) {
+      expect(res!.views.get(view)?.elements.get(name)?.props.get('scrollSound')?.value, `${view} ${name}`).toBe('./_inc/ccs/sounds/blip.wav');
+    }
+    expect(ed.history.done.length).toBe(1);
+    await ed.setScrollSound(null);
+    expect(ed.themeScrollSound()).toBeNull();
+  });
+
+  it('keeps the music and scroll sound when another design is applied', async () => {
+    const { DESIGNS } = await import('./theme/designs');
+    await ed.applyDesign(DESIGNS[0]);
+    await ed.setMusic({ preset: 'chiptune' });
+    await ed.setScrollSound({ preset: 'coin' });
+    await ed.applyDesign(DESIGNS[3]);
+    expect(ed.themeMusic()?.preset).toBe('chiptune');
+    const res = ed.themeRes ?? ed.res;
+    expect(res!.views.get('system')?.elements.get('systemcarousel')?.props.get('scrollSound')?.value).toBe('./_inc/ccs/sounds/coin.wav');
+    expect(res!.views.get('detailed')?.elements.get('gamelist')?.props.get('scrollSound')?.value).toBe('./_inc/ccs/sounds/coin.wav');
+  });
+});

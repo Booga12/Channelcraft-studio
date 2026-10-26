@@ -23,6 +23,7 @@
   import AssetsPanel from './AssetsPanel.svelte';
   import AssetDragLayer from './AssetDragLayer.svelte';
   import PresetsPanel from './PresetsPanel.svelte';
+  import SoundPanel from './SoundPanel.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
 
   // The first time a theme is open, a short tour of the editor (after the layout has settled, and
@@ -160,6 +161,8 @@
     <AssetsPanel />
   {:else if id === 'presets'}
     <PresetsPanel />
+  {:else if id === 'sound'}
+    <SoundPanel />
   {:else if id === 'variables'}
     <VariablesPanel />
   {:else if id === 'options'}

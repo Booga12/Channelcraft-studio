@@ -482,6 +482,9 @@ function carryOver(project: ThemeProject, res: Resolution, view: string, els: De
       const own = drawn(name);
       const yours = (k: string, v: string) => !own || String(own[k] ?? '') !== v;
       if (props.get('visible')?.trim() === 'false' && el.props.visible !== 'false' && yours('visible', 'false')) el.props = { ...el.props, visible: 'false' };
+      // The scroll sound you picked (Sound panel) stays whatever design comes next.
+      const sound = props.get('scrollSound')?.trim();
+      if (sound && !sound.includes('<') && yours('scrollSound', sound)) el.props = { ...el.props, scrollSound: sound };
       if (mode !== 'layout') continue;
       // A glow moved by glowOffset is the depth's text shadow, which follows the depth, not the old block.
       const depthGlow = props.has('glowOffset');

@@ -61,6 +61,7 @@
       cmd('Select all', 'move', () => ed.selectAll(), 'Ctrl+A'),
       cmd('Try it in RetroBat (on the TV)', 'play', tryInRetroBat),
       cmd('Check theme for problems', 'sparkle', () => (ed.showHealth = true)),
+      cmd('Menu music and scroll sound', 'sparkle', () => ed.showPanel('sound')),
       cmd('Use in RetroBat', 'monitor', () => ed.setActive()),
       cmd('Launch RetroBat', 'play', launchRetroBat),
       cmd('Export theme as zip…', 'folder', exportTheme),

@@ -881,9 +881,68 @@ pub fn copy_media_into_theme(roots: State<Roots>, theme_dir: String, src: String
     copy_hashed(Path::new(&src), &dir, &dest_rel_dir)
 }
 
+/// Copies a song or sound into a theme folder, keeping its name (RetroBat can show it as the
+/// song title). The same file already there is reused; a different one with that name gets a
+/// number. Returns the theme-relative path.
+#[tauri::command(async)]
+pub fn copy_sound_into_theme(roots: State<Roots>, theme_dir: String, src: String, dest_rel_dir: String) -> CmdResult<String> {
+    let dir = PathBuf::from(&theme_dir);
+    ensure_writable(&roots, &dir.join(&dest_rel_dir).join("x"))?;
+    copy_sound(Path::new(&src), &dir, &dest_rel_dir)
+}
+
+fn copy_sound(src: &Path, dir: &Path, dest_rel_dir: &str) -> CmdResult<String> {
+    safe_rel(dest_rel_dir)?;
+    let ext = src
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .filter(|e| matches!(e.as_str(), "mp3" | "ogg" | "wav" | "flac" | "mod" | "xm" | "s3m" | "it"))
+        .ok_or_else(|| format!("{} isn't a sound RetroBat can play (mp3, ogg, wav or flac)", src.display()))?;
+    let stem: String = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default().chars().map(|c| if c.is_alphanumeric() || " -_()'.,&".contains(c) { c } else { '_' }).collect();
+    let stem = stem.trim().trim_matches('.').chars().take(80).collect::<String>();
+    let stem = if stem.is_empty() { "music".to_string() } else { stem };
+    let size = fs::metadata(src).map_err(|e| format!("{}: {e}", src.display()))?.len();
+    for i in 1..1000 {
+        let name = if i == 1 { format!("{stem}.{ext}") } else { format!("{stem} ({i}).{ext}") };
+        let rel = format!("{dest_rel_dir}/{name}");
+        let target = dir.join(&rel);
+        if target.is_file() {
+            if fs::metadata(&target).map(|m| m.len()).unwrap_or(0) == size && fs::read(&target).ok() == fs::read(src).ok() {
+                return Ok(rel);
+            }
+            continue;
+        }
+        fs::create_dir_all(target.parent().unwrap()).map_err(err)?;
+        let tmp = target.with_extension(format!("{}.ccs-tmp", unique_id()));
+        let copied = fs::copy(src, &tmp).map_err(err).and_then(|_| fs::rename(&tmp, &target).map_err(err));
+        if copied.is_err() {
+            let _ = fs::remove_file(&tmp);
+        }
+        copied?;
+        return Ok(rel);
+    }
+    Err("Too many files with that name".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sounds_keep_their_name_and_the_same_file_is_reused() {
+        let s = Scratch::new("sound");
+        let src = s.base.join("My Song!.OGG");
+        fs::write(&src, b"OggS one").unwrap();
+        let a = copy_sound(&src, &s.theme(), "_inc/ccs/music").unwrap();
+        assert_eq!(a, "_inc/ccs/music/My Song_.ogg");
+        assert_eq!(copy_sound(&src, &s.theme(), "_inc/ccs/music").unwrap(), a);
+        fs::write(&src, b"OggS two").unwrap();
+        assert_eq!(copy_sound(&src, &s.theme(), "_inc/ccs/music").unwrap(), "_inc/ccs/music/My Song_ (2).ogg");
+        let bad = s.base.join("notes.txt");
+        fs::write(&bad, b"x").unwrap();
+        assert!(copy_sound(&bad, &s.theme(), "_inc/ccs/music").is_err());
+        assert!(copy_sound(&src, &s.theme(), "../outside").is_err());
+    }
 
     /// A scratch folder with `themes/My Theme`, a journals folder and a backups folder.
     struct Scratch {

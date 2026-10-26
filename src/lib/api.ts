@@ -8,7 +8,7 @@ export interface RootInfo {
   resourcesDir: string;
   activeTheme: string | null;
   /** RetroBat settings that change how themes look (from es_settings.cfg). */
-  es: { clock12: boolean; drawClock: boolean; transitionStyle: string; powerSaver: string };
+  es: { clock12: boolean; drawClock: boolean; transitionStyle: string; powerSaver: string; music: boolean; themeMusic: boolean };
 }
 
 export interface ThemeInfo {
@@ -171,6 +171,10 @@ export const api = {
   retrobatRunning: () => invoke<boolean>('retrobat_running'),
   /** Closes RetroBat the gentle way and waits for it; fails if it stays open. */
   closeRetrobat: () => invoke<void>('close_retrobat'),
+  /** Turns on RetroBat's menu music and lets themes choose it (RetroBat must be closed). */
+  enableThemeMusic: () => invoke<void>('enable_theme_music'),
+  /** Copies a song or sound into the theme, keeping its name; returns the theme-relative path. */
+  copySoundIntoTheme: (themeDir: string, src: string, destRelDir: string) => invoke<string>('copy_sound_into_theme', { themeDir, src, destRelDir }),
   readIntro: () => invoke<IntroInfo>('read_intro'),
   /** Writes the intro settings into retrobat.ini (backed up the first time). */
   writeIntro: (settings: IntroSettings) => invoke<IntroInfo>('write_intro', { settings }),

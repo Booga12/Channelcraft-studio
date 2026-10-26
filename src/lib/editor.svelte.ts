@@ -33,6 +33,7 @@ import * as restyle from './editor/restyle';
 import * as themeOptions from './editor/themeOptions';
 import * as health from './editor/health';
 import * as sharing from './editor/sharing';
+import * as sound from './editor/sound';
 import { checkTheme, type HealthIssue } from './theme/health';
 import { splashTemplate } from './theme/splash';
 
@@ -172,7 +173,7 @@ export class Editor {
   /** Bumped whenever a panel is asked for, so asking twice still brings it forward. */
   panelRequest = $state(0);
 
-  showPanel(id: 'elements' | 'library' | 'assets' | 'presets' | 'options' | 'variables' | 'files' | 'history' | 'properties') {
+  showPanel(id: 'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'options' | 'variables' | 'files' | 'history' | 'properties') {
     this.leftTab = id as typeof this.leftTab;
     this.panelRequest++;
   }
@@ -199,7 +200,7 @@ export class Editor {
   hidden = $state<Record<string, boolean>>({});
   sourceFile = $state<string | null>(null);
   sourceLine = $state<number | null>(null);
-  leftTab = $state<'elements' | 'library' | 'assets' | 'presets' | 'options' | 'variables' | 'files' | 'history' | 'properties'>('elements');
+  leftTab = $state<'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'options' | 'variables' | 'files' | 'history' | 'properties'>('elements');
   showSource = $state(false);
   toast = $state<Toast | null>(null);
   busy = $state(false);
@@ -1199,7 +1200,7 @@ export class Editor {
 // Parts of the editor kept in their own files: each function there is a method of Editor.
 type Methods<T> = { [K in keyof T]: T[K] extends (this: Editor, ...args: infer A) => infer R ? (...args: A) => R : never };
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Editor extends Methods<typeof look>, Methods<typeof parts>, Methods<typeof gameLook>, Methods<typeof assets>, Methods<typeof saving>, Methods<typeof restyle>, Methods<typeof themeOptions>, Methods<typeof health>, Methods<typeof sharing> {}
-Object.assign(Editor.prototype, look, parts, gameLook, assets, saving, restyle, themeOptions, health, sharing);
+export interface Editor extends Methods<typeof look>, Methods<typeof parts>, Methods<typeof gameLook>, Methods<typeof assets>, Methods<typeof saving>, Methods<typeof restyle>, Methods<typeof themeOptions>, Methods<typeof health>, Methods<typeof sharing>, Methods<typeof sound> {}
+Object.assign(Editor.prototype, look, parts, gameLook, assets, saving, restyle, themeOptions, health, sharing, sound);
 
 export const ed = new Editor();
