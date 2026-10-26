@@ -4,22 +4,15 @@
   import { ask } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
   import StartScreen from '$lib/components/StartScreen.svelte';
-  import EditorView from '$lib/components/EditorView.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import TaskOverlay from '$lib/components/TaskOverlay.svelte';
   import UpdateBanner from '$lib/components/UpdateBanner.svelte';
-  import Guide from '$lib/components/Guide.svelte';
   import SettingsDialog from '$lib/components/SettingsDialog.svelte';
-  import ShortcutsDialog from '$lib/components/ShortcutsDialog.svelte';
-  import ReportDialog from '$lib/components/ReportDialog.svelte';
   import { installErrorLog } from '$lib/problems';
-  import SearchPalette from '$lib/components/SearchPalette.svelte';
-  import RestoreDialog from '$lib/components/RestoreDialog.svelte';
-  import FeaturedDialog from '$lib/components/FeaturedDialog.svelte';
-  import MediaCheckDialog from '$lib/components/MediaCheckDialog.svelte';
-  import MenuOptionsDialog from '$lib/components/MenuOptionsDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { api } from '$lib/api';
+  // The editor and the dialogs opened now and then are loaded the first time they are needed, so
+  // the start screen comes up without waiting for them.
 
   onMount(() => {
     prefs.applyLook();
@@ -74,36 +67,36 @@
 </script>
 
 {#if ed.project}
-  <EditorView />
+  {#await import('$lib/components/EditorView.svelte') then m}<m.default />{/await}
 {:else}
   <StartScreen />
 {/if}
 {#if ed.showGuide}
-  <Guide />
+  {#await import('$lib/components/Guide.svelte') then m}<m.default />{/await}
 {/if}
 {#if ed.showSettings}
   <SettingsDialog />
 {/if}
 {#if ed.showShortcuts}
-  <ShortcutsDialog />
+  {#await import('$lib/components/ShortcutsDialog.svelte') then m}<m.default />{/await}
 {/if}
 {#if ed.showReport}
-  <ReportDialog />
+  {#await import('$lib/components/ReportDialog.svelte') then m}<m.default />{/await}
 {/if}
 {#if ed.showMenuOptions && ed.project}
-  <MenuOptionsDialog />
+  {#await import('$lib/components/MenuOptionsDialog.svelte') then m}<m.default />{/await}
 {/if}
 {#if ed.showMediaCheck && ed.project}
-  <MediaCheckDialog />
+  {#await import('$lib/components/MediaCheckDialog.svelte') then m}<m.default />{/await}
 {/if}
 {#if ed.showFeatured && ed.project}
-  <FeaturedDialog />
+  {#await import('$lib/components/FeaturedDialog.svelte') then m}<m.default />{/await}
 {/if}
 {#if ed.showRestore && ed.project}
-  <RestoreDialog />
+  {#await import('$lib/components/RestoreDialog.svelte') then m}<m.default />{/await}
 {/if}
 {#if ed.project}
-  <SearchPalette />
+  {#await import('$lib/components/SearchPalette.svelte') then m}<m.default />{/await}
 {/if}
 <Toast />
 <TaskOverlay />

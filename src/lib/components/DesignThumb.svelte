@@ -1,16 +1,33 @@
+<script lang="ts" module>
+  import type { Design as D } from '$lib/theme/designs';
+  import { backgroundSvg as bgSvg, decoSvg as deco } from '$lib/theme/designArt';
+
+  // Each design's background is made once and kept (as the same data URL, so the browser keeps
+  // the drawn picture too): opening a picker again doesn't redraw 43 backgrounds.
+  const made = new Map<string, string>();
+  // The whole design is the key, so a recoloured or changed design gets its own picture.
+  const key = (d: D) => JSON.stringify(d);
+  function backgroundOf(d: D): string {
+    const k = key(d);
+    let v = made.get(k);
+    if (!v) {
+      const u = (svg: string) => `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+      const top = deco(d);
+      v = top ? `${u(top)}, ${u(bgSvg(d))}` : u(bgSvg(d));
+      made.set(k, v);
+    }
+    return v;
+  }
+</script>
+
 <script lang="ts">
   // A small picture of a design: its real background with the layout sketched on top.
   import type { Design } from '$lib/theme/designs';
-  import { backgroundSvg, decoSvg } from '$lib/theme/designArt';
   import { defaultGameLayout } from '$lib/theme/gameLayouts';
 
   let { design }: { design: Design } = $props();
 
-  const url = (svg: string) => `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
-  const bg = $derived.by(() => {
-    const deco = decoSvg(design);
-    return deco ? `${url(deco)}, ${url(backgroundSvg(design))}` : url(backgroundSvg(design));
-  });
+  const bg = $derived(backgroundOf(design));
   const p = $derived(design.palette);
   const c = (h: string, a = 1) => `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
 
