@@ -27,7 +27,12 @@ const env = (g?: GameInfo, subsets: Record<string, string> = {}): Environment =>
 /** Path-like property values ChannelCraft writes (not data bindings, expressions or variables). */
 const PATH_PROPS = /^(path|default|fontPath|filledPath|unfilledPath|selectorImagePath|scrollSound|backgroundImage|gameImage|folderImage)$/;
 
-describe.each(MADE_HERE.filter((t) => existsSync(`${THEMES}\\${t}\\theme.xml`)))('%s: every file it names is found by RetroBat', (name) => {
+// Without those themes (on GitHub, or another PC) the file still needs a test, skipped.
+describe.skipIf(FOUND.length > 0)('files named by themes made on this PC', () => {
+  it.skip('needs the themes ChannelCraft made on this PC', () => {});
+});
+
+describe.each(FOUND)('%s: every file it names is found by RetroBat', (name) => {
   it('on every screen, with and without a game of its own', async () => {
     const p = await ThemeProject.load(`${THEMES}\\${name}`, nodeFs);
     const problems: string[] = [];
