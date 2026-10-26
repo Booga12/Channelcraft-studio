@@ -29,7 +29,7 @@ export const SHORTCUTS: { group: string; items: [string, string][] }[] = [
       ['Drag a handle', 'Resize (Shift: keep proportions, Alt: from the centre)'],
       ['Arrow keys', 'Nudge (Shift: 10× further)'],
       ['Ctrl+D', 'Duplicate'],
-      ['Ctrl+C / Ctrl+V', 'Copy / paste'],
+      ['Ctrl+C / Ctrl+V', 'Copy / paste (Ctrl+V also adds a copied picture or screenshot as a new layer)'],
       ['Delete', 'Delete'],
       ['Ctrl+] / Ctrl+[', 'Bring forward / send backward'],
       ['Ctrl+Shift+] / Ctrl+Shift+[', 'Bring to front / send to back'],

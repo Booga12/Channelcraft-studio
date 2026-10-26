@@ -117,3 +117,28 @@ export function newAssetBody(kind: 'image' | 'video', rel: string, at: { x: numb
   lines.push(`<zIndex>${fmtNum(z)}</zIndex>`);
   return lines.join('\n');
 }
+
+// ---- pasting a picture ---------------------------------------------------------------------
+
+/** Picture types kept as they are when pasted; anything else is saved as PNG. */
+const PASTE_KEEP: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
+
+/** The file format a pasted picture is saved in: its own when RetroBat reads it well, else PNG. */
+export function pastedFormat(type: string): { ext: string; convert: boolean } {
+  const ext = PASTE_KEEP[type.toLowerCase()];
+  return ext ? { ext, convert: false } : { ext: 'png', convert: true };
+}
+
+/**
+ * Where a pasted picture goes in the theme: `_inc/images/<name>.<ext>`, named after the copied
+ * file, or "pasted_picture" for a screenshot (which browsers call "image.png"), never over a file
+ * that is already there (`taken`: theme-relative paths, any case).
+ */
+export function pastedPath(fileName: string, ext: string, taken: Iterable<string>): string {
+  const used = new Set([...taken].map((t) => t.toLowerCase()));
+  const own = fileName && !/^image\.\w+$/i.test(fileName) ? nameFromFile(fileName, 'image') : 'picture';
+  const stem = own === 'picture' ? 'pasted_picture' : own;
+  let rel = `_inc/images/${stem}.${ext}`;
+  for (let n = 2; used.has(rel.toLowerCase()); n++) rel = `_inc/images/${stem}_${n}.${ext}`;
+  return rel;
+}

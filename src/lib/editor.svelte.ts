@@ -3,7 +3,7 @@ import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-
 import { api, registerVirtualFile, tauriFs, type LibraryAsset, type RootInfo, type ThemeInfo } from './api';
 import { svgToPngBase64 } from './raster';
 import { join, relative, dirname, pathKey, basename } from './path';
-import { addsAsNew, ASSET_KIND_LABEL, ASSET_THEME_DIR, dropFit, dropPropLabel, kindOfFile, nameFromFile, newAssetBody, type AssetKind } from './theme/assetDrop';
+import { addsAsNew, ASSET_KIND_LABEL, ASSET_THEME_DIR, dropFit, dropPropLabel, kindOfFile, nameFromFile, newAssetBody, pastedFormat, pastedPath, type AssetKind } from './theme/assetDrop';
 import { parseGamelist, type GameInfo } from './theme/games';
 import { screenSize, type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
@@ -19,6 +19,17 @@ import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, pat
 import { SHADOW_TYPES, shaderOf, shadowXml } from './theme/shadow';
 import { glowProps, hex8, snapPos, type Glow, type PictureLook, type SnapX, type SnapY, type TextLook } from './theme/simpleProps';
 import { frameOf, frameXml, type Frame } from './theme/frame';
+
+/** A file's bytes as base64 (no data: prefix). */
+async function blobBase64(blob: Blob): Promise<string> {
+  const url = await new Promise<string>((ok, bad) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result));
+    r.onerror = () => bad(r.error);
+    r.readAsDataURL(blob);
+  });
+  return url.slice(url.indexOf(',') + 1);
+}
 
 /** A number with at most four decimals, as theme files write them. */
 const r4 = (v: number) => String(Math.round(v * 10000) / 10000);
@@ -2484,6 +2495,11 @@ class Editor {
         this.notify(String(e), 'error');
       }
     }
+    return this.placeNewAssets(p, view, copied, at, skipped);
+  }
+
+  /** Adds files already in the theme as new layers on `view`, centred on `at`. One undo step. */
+  private placeNewAssets(p: ThemeProject, view: string, copied: { kind: 'image' | 'video'; abs: string; src: string }[], at?: { x: number; y: number }, skipped = 0): string[] {
     // The theme or screen may have changed while files were copied.
     if (!copied.length || this.project !== p || this.view !== view || !this.res || !this.currentView) return [];
     const gameFile = this.gameEditing ? this.gameFilePath() : null;
@@ -2514,6 +2530,55 @@ class Editor {
         (skipped ? ` ${skipped} sound or font file${skipped === 1 ? ' was' : 's were'} left out: drop those on an element instead.` : ''),
     );
     return names;
+  }
+
+  /**
+   * Adds a picture from the clipboard (a screenshot, or a picture copied in a browser or
+   * Explorer) as a new layer: saved into the theme's _inc/images, as PNG unless it is already a
+   * PNG, JPEG or GIF.
+   */
+  async pasteImage(file: File): Promise<string[]> {
+    const p = this.project;
+    const view = this.view;
+    if (!p || !this.currentView) return [];
+    if (file.size > 64 << 20) {
+      this.notify('That picture is over 64 MB, too big for a theme. Make it smaller first.', 'error');
+      return [];
+    }
+    if (file.type === 'image/svg+xml') {
+      this.notify('Pasted SVG pictures aren’t supported. Save it as a file and drop it on the preview instead.', 'error');
+      return [];
+    }
+    let data: string;
+    const fmt = pastedFormat(file.type);
+    try {
+      // Decoding it first also checks that it really is a picture.
+      const bitmap = await createImageBitmap(file);
+      if (fmt.convert) {
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+        data = canvas.toDataURL('image/png').split(',')[1];
+      } else {
+        data = await blobBase64(file);
+      }
+      bitmap.close();
+    } catch {
+      this.notify('The clipboard has something that isn’t a picture RetroBat can show.', 'error');
+      return [];
+    }
+    const rel = pastedPath(file.name, fmt.ext, p.assets.map((a) => a.rel));
+    const abs = join(p.dir, rel);
+    try {
+      await api.writeBinary(abs, data);
+      p.setAssets(await api.listThemeFiles(p.dir));
+      this.rev++;
+    } catch (e) {
+      this.notify(`Couldn't save the picture: ${e}`, 'error');
+      return [];
+    }
+    return this.placeNewAssets(p, view, [{ kind: 'image', abs, src: rel }]);
   }
 
   /** Asks for pictures or videos and adds them to this screen. */

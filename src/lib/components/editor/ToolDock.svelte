@@ -109,7 +109,7 @@
         <ImagePlusIcon class="mt-0.5" />
         <div class="flex min-w-0 flex-col">
           <span>Your own picture or video…</span>
-          <span class="text-xs text-muted-foreground">Pick files from your PC. Each one is added as a new layer.</span>
+          <span class="text-xs text-muted-foreground">Pick files from your PC, or paste a picture with Ctrl+V. Each one becomes a new layer.</span>
         </div>
       </DropdownMenu.Item>
       <DropdownMenu.Item onSelect={() => (open = 'library')} class="items-start gap-2.5 py-1.5">

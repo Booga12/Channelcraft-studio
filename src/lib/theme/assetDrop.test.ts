@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addsAsNew, dropFit, kindOfFile, nameFromFile, newAssetBody } from './assetDrop';
+import { addsAsNew, dropFit, kindOfFile, nameFromFile, newAssetBody, pastedFormat, pastedPath } from './assetDrop';
 
 describe('dropFit', () => {
   it('links matching kinds to the main path', () => {
@@ -68,5 +68,20 @@ describe('adding a file as a new element', () => {
     expect(body).toContain('<path>./_inc/images/a&amp;b&lt;c>.png</path>');
     // Only the element's own tags remain.
     expect(body.match(/<[a-zA-Z]+>/g)).toEqual(['<pos>', '<origin>', '<maxSize>', '<path>', '<zIndex>']);
+  });
+});
+
+describe('pasting a picture', () => {
+  it('keeps PNG, JPEG and GIF, and turns the rest into PNG', () => {
+    expect(pastedFormat('image/png')).toEqual({ ext: 'png', convert: false });
+    expect(pastedFormat('image/JPEG')).toEqual({ ext: 'jpg', convert: false });
+    expect(pastedFormat('image/webp')).toEqual({ ext: 'png', convert: true });
+    expect(pastedFormat('image/bmp')).toEqual({ ext: 'png', convert: true });
+  });
+
+  it('names it after the copied file, or as a pasted picture, never over another file', () => {
+    expect(pastedPath('Mario Logo.png', 'png', [])).toBe('_inc/images/mario_logo.png');
+    expect(pastedPath('image.png', 'png', [])).toBe('_inc/images/pasted_picture.png');
+    expect(pastedPath('', 'png', ['_inc/images/Pasted_Picture.png', '_inc/images/pasted_picture_2.png'])).toBe('_inc/images/pasted_picture_3.png');
   });
 });

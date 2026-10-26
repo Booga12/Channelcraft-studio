@@ -66,6 +66,18 @@
     return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
   }
 
+  let pasteWaiting = false;
+
+  /** Ctrl+V: a picture on the clipboard becomes a new layer; otherwise copied parts are pasted. */
+  function onpaste(e: ClipboardEvent) {
+    if (inField(e.target) || !ed.project || ed.showSearch || ed.showSettings || ed.showShortcuts || ed.showGuide) return;
+    pasteWaiting = false;
+    const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
+    e.preventDefault();
+    if (file) ed.pasteImage(file);
+    else ed.paste();
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if (ed.showSearch || ed.showSettings || ed.showShortcuts || ed.showGuide) return;
     // A menu or popover handles its own keys (an Escape there closes only it).
@@ -91,7 +103,17 @@
     if (typing) return;
     if (mod && k === 'd') return run(() => ed.duplicate());
     if (mod && k === 'c') return run(() => ed.copy());
-    if (mod && k === 'v') return run(() => ed.paste());
+    if (mod && k === 'v') {
+      // Not prevented, so the browser's paste event brings a copied picture (see onpaste). When
+      // no paste event comes (nothing the webview can read), copied parts are pasted as before.
+      pasteWaiting = true;
+      setTimeout(() => {
+        if (!pasteWaiting) return;
+        pasteWaiting = false;
+        ed.paste();
+      }, 120);
+      return;
+    }
     if (mod && k === 'a') return run(() => ed.selectAll());
     if (mod && k === 'l') return run(() => ed.selection.forEach((n) => ed.setLocked(n, !ed.locked[n])));
     if (mod && e.key === ']') return run(() => ed.arrange(e.shiftKey ? 'front' : 'forward'));
@@ -120,7 +142,7 @@
   }
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} {onpaste} />
 
 {#snippet panelBody(id: PanelId)}
   {#if id === 'elements'}
