@@ -15,3 +15,14 @@ export async function svgToPngBase64(svg: string): Promise<string> {
   canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/png').split(',')[1];
 }
+
+/** A file's bytes as base64 (no data: prefix). */
+export async function blobBase64(blob: Blob): Promise<string> {
+  const url = await new Promise<string>((ok, bad) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result));
+    r.onerror = () => bad(r.error);
+    r.readAsDataURL(blob);
+  });
+  return url.slice(url.indexOf(',') + 1);
+}
