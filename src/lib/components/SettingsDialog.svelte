@@ -171,6 +171,7 @@
             <option value="1">Normal</option>
             <option value="1.1">Large (110%)</option>
             <option value="1.25">Extra large (125%)</option>
+            <option value="1.5">Huge (150%)</option>
           </select>
         </div>
       {:else if section === 'intro'}

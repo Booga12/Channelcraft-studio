@@ -400,3 +400,12 @@
     background: transparent;
   }
 }
+
+/* Keyboard use: whatever has focus from the keyboard shows a clear outline, also in the new
+   markup. Zero specificity, so components with their own focus ring (shadcn) keep it. */
+@layer base {
+  :where(.ui-new) :where(button, a[href], summary, select, [role='button'], [role='tab'], [tabindex]:not([tabindex='-1'])):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
