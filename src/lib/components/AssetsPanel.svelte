@@ -1,13 +1,14 @@
 <script lang="ts">
-  // The user's own asset library. Drag a file onto an element (preview, Layers or a property row)
-  // to copy it into the theme and link it there.
+  // The user's own asset library. Drag a picture or video onto the preview to add it as a new
+  // element (Shift, a layer or a property row: replace that element's file instead). Each file is
+  // copied into the theme.
   import { onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
   import { revealItemInDir } from '@tauri-apps/plugin-opener';
   import { ed } from '$lib/editor.svelte';
   import { api, fileUrl, type LibraryAsset } from '$lib/api';
   import { assetDrag } from '$lib/assetDrag.svelte';
-  import { ASSET_KIND_LABEL, dropFit, type AssetKind } from '$lib/theme/assetDrop';
+  import { addsAsNew, ASSET_KIND_LABEL, dropFit, type AssetKind } from '$lib/theme/assetDrop';
   import { basename } from '$lib/path';
   import { elementLabel } from '$lib/friendly';
   import Icon from './Icon.svelte';
@@ -105,6 +106,12 @@
     ed.linkAsset(a.path, a.kind, s.el.name);
   }
 
+  /** Double-click or Enter: pictures and videos become a new element; sounds and fonts go on the selected one. */
+  function use(a: LibraryAsset) {
+    if (addsAsNew(a.kind)) ed.addAssets([{ path: a.path, kind: a.kind }]);
+    else useOnSelected(a);
+  }
+
   // ---- previews ----
   let playing = $state<string | null>(null);
   let audio: HTMLAudioElement | null = null;
@@ -143,8 +150,9 @@
     const a = menu.a;
     const s = onSelected(a);
     return [
+      ...(addsAsNew(a.kind) ? [{ label: 'Add to this screen', action: () => ed.addAssets([{ path: a.path, kind: a.kind }]) }] : []),
       {
-        label: s ? (s.fit.ok ? `Use on ${elementLabel(s.el.name)}` : `Doesn't fit ${elementLabel(s.el.name)}`) : 'Use on the selected element',
+        label: s ? (s.fit.ok ? `${addsAsNew(a.kind) ? 'Replace the file of' : 'Use on'} ${elementLabel(s.el.name)}` : `Doesn't fit ${elementLabel(s.el.name)}`) : 'Use on the selected element',
         disabled: !s || !s.fit.ok,
         action: () => useOnSelected(a),
       },
@@ -173,11 +181,11 @@
     <div class="empty">
       <Icon name="folder" size={22} />
       <p><strong>Your own pictures, videos, sounds and fonts</strong></p>
-      <p class="dim">Drop files here from Explorer, or use <strong>Add</strong>. Then drag one onto an element in the preview, in Layers or on a property to use it.</p>
+      <p class="dim">Drop files here from Explorer, or use <strong>Add</strong>. Then drag one onto the preview to add it to the screen.</p>
       <button onclick={addFiles}><Icon name="plus" size={13} /> Add files…</button>
     </div>
   {:else}
-    <p class="hint faint">Drag onto an element to use it. It's copied into the theme (<span class="mono">_inc/…</span>), so the theme keeps working on its own. Double-click to use it on the selected element.</p>
+    <p class="hint faint">Drag a picture or video onto the preview, or double-click it, to add it to this screen. Hold Shift while dropping to replace the picture under it instead. Files are copied into the theme, so it keeps working on its own.</p>
     <div class="tiles">
       {#each shown as a (a.path)}
         <div
@@ -186,8 +194,8 @@
           tabindex="0"
           title="{a.rel} · {ASSET_KIND_LABEL[a.kind]}, {size(a.size)}"
           onpointerdown={(e) => down(e, a)}
-          ondblclick={() => useOnSelected(a)}
-          onkeydown={(e) => e.key === 'Enter' && useOnSelected(a)}
+          ondblclick={() => use(a)}
+          onkeydown={(e) => e.key === 'Enter' && use(a)}
           oncontextmenu={(e) => {
             e.preventDefault();
             menu = { x: e.clientX, y: e.clientY, a };

@@ -40,6 +40,7 @@
   import StarIcon from '@lucide/svelte/icons/star';
   import VideoIcon from '@lucide/svelte/icons/video';
   import PlusIcon from '@lucide/svelte/icons/plus';
+  import ImagePlusIcon from '@lucide/svelte/icons/image-plus';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
   import * as Tooltip from '$lib/components/ui/tooltip';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -104,6 +105,13 @@
         {/each}
       </DropdownMenu.Group>
       <DropdownMenu.Separator />
+      <DropdownMenu.Item onSelect={() => ed.pickAndAddAssets()} class="items-start gap-2.5 py-1.5">
+        <ImagePlusIcon class="mt-0.5" />
+        <div class="flex min-w-0 flex-col">
+          <span>Your own picture or video…</span>
+          <span class="text-xs text-muted-foreground">Pick files from your PC. Each one is added as a new layer.</span>
+        </div>
+      </DropdownMenu.Item>
       <DropdownMenu.Item onSelect={() => (open = 'library')} class="items-start gap-2.5 py-1.5">
         <SparklesIcon class="mt-0.5" />
         <div class="flex min-w-0 flex-col">

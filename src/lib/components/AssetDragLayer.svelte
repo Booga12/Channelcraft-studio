@@ -1,6 +1,8 @@
 <script lang="ts">
   // Draws an asset drag (highlight on the element under the pointer, a label by the pointer) and
-  // handles files dragged in from Explorer: onto an element links it, anywhere else adds it to Assets.
+  // handles files dragged in from Explorer: pictures and videos dropped on the preview become new
+  // elements (all of them, if several), a drop on an element's file replaces it, and anywhere else
+  // the files are added to Assets.
   import { onMount } from 'svelte';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { ed } from '$lib/editor.svelte';
@@ -9,7 +11,7 @@
   import { basename } from '$lib/path';
   import { prefs } from '$lib/prefs.svelte';
 
-  let dropped: string[] = [];
+  let dropped = $state<string[]>([]);
 
   onMount(() => {
     let unlisten: (() => void) | undefined;
@@ -30,9 +32,8 @@
           } else if (d.type === 'drop') {
             const paths = d.paths.length ? d.paths : dropped;
             if (assetDrag.item) assetDrag.move(...toCss(d.position));
-            const onElement = assetDrag.target;
-            if (onElement) {
-              await assetDrag.drop();
+            if (assetDrag.target) {
+              await assetDrag.drop(paths);
               return;
             }
             assetDrag.cancel();
@@ -57,13 +58,13 @@
   });
 
   const t = $derived(assetDrag.target);
-  const label = $derived(assetDrag.item ? (assetDrag.external && !t ? 'Drop to add to your Assets' : describe(t, assetDrag.item)) : '');
+  const label = $derived(assetDrag.item ? (assetDrag.external && !t ? 'Drop to add to your Assets' : describe(t, assetDrag.item, assetDrag.external ? dropped.filter((p) => kindOfFile(p)).length : 1)) : '');
 </script>
 
 {#if assetDrag.item}
   <div class="layer" aria-hidden="true">
     {#if t}
-      <div class="hl" class:bad={!t.fit.ok} style:left="{t.rect.x}px" style:top="{t.rect.y}px" style:width="{t.rect.w}px" style:height="{t.rect.h}px"></div>
+      <div class="hl" class:bad={!t.fit.ok} class:add={!!t.add} style:left="{t.rect.x}px" style:top="{t.rect.y}px" style:width="{t.rect.w}px" style:height="{t.rect.h}px"></div>
     {/if}
     <!-- Near the right edge the label goes left of the pointer, so it isn't squeezed. -->
     <div
@@ -97,6 +98,10 @@
     background: rgba(63, 185, 80, 0.12);
     border-radius: 3px;
     box-sizing: border-box;
+  }
+  .hl.add {
+    border-style: dashed;
+    border-radius: 6px;
   }
   .hl.bad {
     border-color: var(--warn);

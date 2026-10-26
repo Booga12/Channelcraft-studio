@@ -1,7 +1,8 @@
 // Which property of an element a dropped library asset sets, or why it doesn't fit.
 
-import { SCHEMA, specFor } from './schema';
+import { fmtNum, SCHEMA, specFor } from './schema';
 import { typeLabel } from '../friendly';
+import { extname } from '../path';
 
 const an = (w: string) => (/^[aeiou]/i.test(w) ? `an ${w}` : `a ${w}`);
 
@@ -11,6 +12,18 @@ export const ASSET_KIND_LABEL: Record<AssetKind, string> = { image: 'picture', v
 
 /** Theme folder each kind is copied into (the same folders Import uses). */
 export const ASSET_THEME_DIR: Record<AssetKind, string> = { image: '_inc/images', video: '_inc/videos', sound: '_inc/sounds', font: '_inc/fonts' };
+
+/** File kinds by extension (lower case, with the dot). */
+const EXT_KIND: Record<string, AssetKind> = {
+  '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image', '.svg': 'image', '.webp': 'image', '.bmp': 'image',
+  '.mp4': 'video', '.m4v': 'video', '.mov': 'video', '.mkv': 'video', '.webm': 'video', '.avi': 'video', '.mpg': 'video', '.mpeg': 'video',
+  '.wav': 'sound', '.ogg': 'sound', '.mp3': 'sound', '.flac': 'sound',
+  '.ttf': 'font', '.otf': 'font',
+};
+
+export function kindOfFile(path: string): AssetKind | null {
+  return EXT_KIND[extname(path)] ?? null;
+}
 
 export type DropFit = { ok: true; prop: string; note?: string } | { ok: false; hint: string };
 
@@ -74,4 +87,33 @@ export function dropFit(type: string, name: string, kind: AssetKind, prop?: stri
 /** How a drop's property is named to the user: "video file" for a video path, else the property. */
 export function dropPropLabel(prop: string, kind: AssetKind, propLabel: (p: string) => string): string {
   return prop === 'path' ? `${ASSET_KIND_LABEL[kind]} file` : propLabel(prop).toLowerCase();
+}
+
+// ---- adding a file as a new element ----------------------------------------------------------
+
+/** Pictures and videos can become an element of their own; sounds and fonts go on one. */
+export function addsAsNew(kind: AssetKind): kind is 'image' | 'video' {
+  return kind === 'image' || kind === 'video';
+}
+
+/** A layer name from a file name: "My Logo (1).png" → "my_logo_1", else the element type. */
+export function nameFromFile(file: string, kind: 'image' | 'video'): string {
+  const stem = file.replace(/^.*[\\/]/, '').replace(/\.[^.]*$/, '');
+  const clean = stem.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
+  return /^[a-z]/.test(clean) ? clean : kind === 'image' ? 'picture' : 'video';
+}
+
+/**
+ * The inside of a new picture or video element: centred on `at` (0–1 of the screen), fitted in
+ * a box that keeps its shape (maxSize), drawn above everything at `z`.
+ */
+export function newAssetBody(kind: 'image' | 'video', rel: string, at: { x: number; y: number }, z: number): string {
+  const box = kind === 'image' ? 0.3 : 0.4;
+  const half = box / 2;
+  const clamp = (v: number) => Math.min(1 - half, Math.max(half, v));
+  const pos = `${fmtNum(Math.round(clamp(at.x) * 1000) / 1000)} ${fmtNum(Math.round(clamp(at.y) * 1000) / 1000)}`;
+  const lines = [`<pos>${pos}</pos>`, '<origin>0.5 0.5</origin>', `<maxSize>${box} ${box}</maxSize>`, `<path>${rel.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</path>`];
+  if (kind === 'video') lines.push('<delay>0</delay>');
+  lines.push(`<zIndex>${fmtNum(z)}</zIndex>`);
+  return lines.join('\n');
 }

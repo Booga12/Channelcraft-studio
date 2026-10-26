@@ -1,9 +1,9 @@
 import { load, type Store } from '@tauri-apps/plugin-store';
-import { ask, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { api, registerVirtualFile, tauriFs, type LibraryAsset, type RootInfo, type ThemeInfo } from './api';
 import { svgToPngBase64 } from './raster';
 import { join, relative, dirname, pathKey, basename } from './path';
-import { ASSET_THEME_DIR, dropFit, dropPropLabel, type AssetKind } from './theme/assetDrop';
+import { addsAsNew, ASSET_KIND_LABEL, ASSET_THEME_DIR, dropFit, dropPropLabel, kindOfFile, nameFromFile, newAssetBody, type AssetKind } from './theme/assetDrop';
 import { parseGamelist, type GameInfo } from './theme/games';
 import { screenSize, type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
@@ -2346,6 +2346,75 @@ class Editor {
         ' Save to keep it, or Ctrl+Z to undo.',
     );
     return true;
+  }
+
+  /**
+   * Adds pictures and videos as new elements on this screen, centred on `at` (0–1 of the screen,
+   * else the middle) and stepped a little apart, above everything else. Each file is copied into
+   * the theme first. All of it is one undo step. Returns the new element names.
+   */
+  async addAssets(files: { path: string; kind: AssetKind }[], at?: { x: number; y: number }): Promise<string[]> {
+    const p = this.project;
+    const res = this.res;
+    if (!p || !res || !this.currentView) return [];
+    const usable = files.filter((f): f is { path: string; kind: 'image' | 'video' } => addsAsNew(f.kind));
+    const skipped = files.length - usable.length;
+    if (!usable.length) {
+      if (skipped) this.notify('Sounds and fonts go on an element: drag them onto text, a game list or a sound in Layers.', 'error');
+      return [];
+    }
+    const view = this.view;
+    const copied: { kind: 'image' | 'video'; abs: string; src: string }[] = [];
+    for (const f of usable) {
+      try {
+        const abs = await this.importAsset(f.path, f.kind);
+        if (abs) copied.push({ kind: f.kind, abs, src: f.path });
+      } catch (e) {
+        this.notify(String(e), 'error');
+      }
+    }
+    // The theme or screen may have changed while files were copied.
+    if (!copied.length || this.project !== p || this.view !== view || !this.res || !this.currentView) return [];
+    const gameFile = this.gameEditing ? this.gameFilePath() : null;
+    const holder = gameFile ?? p.entry?.abs ?? p.dir;
+    const top = Math.max(0, ...[...this.currentView.elements.values()].map(zOf).filter(Number.isFinite));
+    const used = new Set(this.currentView.elements.keys());
+    const centre = at ?? { x: 0.5, y: 0.5 };
+    const added: { name: string; type: string; body: string }[] = [];
+    copied.forEach((c, i) => {
+      const base = nameFromFile(c.src, c.kind);
+      let name = base;
+      for (let n = 2; used.has(name); n++) name = `${base}${n}`;
+      used.add(name);
+      const rel = relative(dirname(holder), c.abs);
+      added.push({ name, type: c.kind, body: newAssetBody(c.kind, rel, { x: centre.x + i * 0.04, y: centre.y + i * 0.04 }, Math.floor(top) + 1 + i) });
+    });
+    const label = added.length === 1 ? `adding ${ASSET_KIND_LABEL[added[0].type as AssetKind]} ${elementLabel(added[0].name)}` : `adding ${added.length} files`;
+    if (this.gameEditing) {
+      if (!this.gameSet(label, added.map((a) => ({ name: a.name, type: a.type, props: {}, extra: true, body: a.body })))) return [];
+    } else {
+      this.commit(label, added.map((a) => addElementChange(p, this.res!, view, a.type, a.name, a.body)));
+    }
+    const names = added.map((a) => a.name);
+    this.selection = names;
+    this.notify(
+      (names.length === 1 ? `Added ${elementLabel(names[0])}.` : `Added ${names.length} new layers.`) +
+        ' Drag to move it, pull a corner to resize, or Ctrl+Z to undo.' +
+        (skipped ? ` ${skipped} sound or font file${skipped === 1 ? ' was' : 's were'} left out: drop those on an element instead.` : ''),
+    );
+    return names;
+  }
+
+  /** Asks for pictures or videos and adds them to this screen. */
+  async pickAndAddAssets() {
+    const picked = await openDialog({
+      title: 'Add your own picture or video',
+      multiple: true,
+      filters: [{ name: 'Pictures and videos', extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'mp4', 'm4v', 'mov', 'mkv', 'webm', 'avi', 'mpg', 'mpeg'] }],
+    });
+    const paths = Array.isArray(picked) ? picked : typeof picked === 'string' ? [picked] : [];
+    const files = paths.map((path) => ({ path, kind: kindOfFile(path) })).filter((f): f is { path: string; kind: AssetKind } => !!f.kind);
+    if (files.length) await this.addAssets(files);
   }
 
   // ---- saving ------------------------------------------------------------------------------
