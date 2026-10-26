@@ -60,6 +60,7 @@
 
 <style>
   .card {
+    min-width: 0;
     border: 1px solid var(--line);
     border-radius: 10px;
     background: var(--panel-2);
@@ -93,8 +94,15 @@
     display: grid;
     place-items: center;
   }
+  .t {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .sum {
     margin-left: auto;
+    min-width: 0;
     font-weight: 400;
     color: var(--text-faint);
     font-size: 12px;
@@ -106,6 +114,7 @@
   .body {
     padding: 0 12px 12px;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     min-width: 0;
   }

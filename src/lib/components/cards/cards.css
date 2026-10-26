@@ -1,6 +1,7 @@
 /* Shared pieces of Simple mode's property cards (inside .cards-panel). */
 .cards-panel .row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   min-width: 0;
 }

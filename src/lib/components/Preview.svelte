@@ -762,7 +762,7 @@
       </span>
     {/if}
     <span class="spacer"></span>
-    <div class="pill" role="group" aria-label="Canvas options">
+    <div class="pill tools" role="group" aria-label="Canvas options">
       <button class="ic wide" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title={ed.playAnimations ? 'Animations are playing. Click (or press P) to stop them.' : 'Animations are stopped. Click (or press P) to play them.'} aria-pressed={ed.playAnimations}>{#if ed.playAnimations}<PauseIcon />{:else}<PlayIcon />{/if}<span>{ed.playAnimations ? 'Animations on' : 'Animations off'}</span></button>
       <button class="ic" onclick={() => ed.replayAnimations()} title="Play the animations again, as when you move to a game in RetroBat (R, or ↓ ↑ to change game)"><RotateCcwIcon /></button>
       <button class="ic" class:on={prefs.v.boostMotion} onclick={() => prefs.set('boostMotion', !prefs.v.boostMotion)} title="Show small movements bigger, to check them. Preview only: RetroBat plays them as they are." aria-pressed={prefs.v.boostMotion}><MoveIcon /></button>
@@ -1006,6 +1006,7 @@
   }
   /* Floating controls along the bottom of the work area, between the side panels. */
   .status {
+    container: status / inline-size;
     position: absolute;
     left: var(--inset-l, 12px);
     right: var(--inset-r, 12px);
@@ -1037,6 +1038,7 @@
   }
   .pill .ic,
   .pill .pct {
+    flex: none;
     display: grid;
     place-items: center;
     height: 28px;
@@ -1069,7 +1071,30 @@
     font-weight: 500;
     white-space: nowrap;
   }
+  /* The canvas buttons keep their size; the console and game names give way first, then the
+     "Animations on" label, and in a very narrow window the buttons scroll. */
+  .pill.tools {
+    flex: 0 1 auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .pill:not(.tools) {
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+  .pill .sys {
+    min-width: 0;
+  }
+  @container status (max-width: 760px) {
+    .pill .ic.wide span {
+      display: none;
+    }
+    .pill .ic.wide {
+      padding: 0 6px;
+    }
+  }
   .pill .div {
+    flex: none;
     width: 1px;
     height: 16px;
     margin: 0 4px;

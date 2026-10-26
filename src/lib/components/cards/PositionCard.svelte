@@ -114,7 +114,8 @@
 <style>
   .place {
     display: flex;
-    gap: 18px;
+    flex-wrap: wrap;
+    gap: 8px 18px;
   }
   .snap {
     display: grid;
@@ -197,10 +198,13 @@
   }
   .order {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 6px;
   }
   .order button {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
     display: inline-flex;
     align-items: center;
     gap: 4px;

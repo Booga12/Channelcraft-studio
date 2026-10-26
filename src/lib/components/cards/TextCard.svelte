@@ -193,7 +193,7 @@
 <style>
   .fonts {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
     gap: 6px;
   }
   .fonts button {

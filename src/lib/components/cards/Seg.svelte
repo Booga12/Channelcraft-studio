@@ -42,6 +42,9 @@
     border-radius: 6px;
     color: var(--text-dim);
     font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     display: inline-flex;
     justify-content: center;
     align-items: center;

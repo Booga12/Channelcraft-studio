@@ -10,15 +10,29 @@
 </script>
 
 <script lang="ts">
-  // Right-click menu, kept inside the window.
+  // Right-click menu, kept inside the window. It is moved to the end of the page, so a panel it
+  // opens from (whose blur or transform would hold fixed elements) can't cut it off.
   let { x, y, items, onclose }: { x: number; y: number; items: MenuItem[]; onclose: () => void } = $props();
 
   let el: HTMLDivElement;
   let pos = $state({ x: 0, y: 0 });
+  let maxH = $state(0);
+
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 
   $effect(() => {
+    // x and y are window points; the page may be zoomed (UI size), so styles use x / zoom.
+    const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     const r = el.getBoundingClientRect();
-    pos = { x: Math.min(x, window.innerWidth - r.width - 6), y: Math.min(y, window.innerHeight - r.height - 6) };
+    const m = 6;
+    maxH = (window.innerHeight - 2 * m) / z;
+    const h = Math.min(r.height, window.innerHeight - 2 * m);
+    const px = Math.max(m, Math.min(x, window.innerWidth - r.width - m));
+    const py = Math.max(m, Math.min(y, window.innerHeight - h - m));
+    pos = { x: px / z, y: py / z };
   });
 
   function run(it: MenuItem) {
@@ -35,6 +49,9 @@
   role="menu"
   tabindex="-1"
   bind:this={el}
+  use:portal
+  style:max-height="{maxH || 9999}px"
+  style:overflow-y="auto"
   style:left="{pos.x}px"
   style:top="{pos.y}px"
 >

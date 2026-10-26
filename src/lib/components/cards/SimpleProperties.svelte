@@ -189,6 +189,12 @@
 </div>
 
 <style>
+  /* The top stays in view while scrolling, unless the window is too short to spare the room. */
+  @media (max-height: 720px) {
+    .top {
+      position: static !important;
+    }
+  }
   .top {
     position: sticky;
     top: 0;
@@ -197,6 +203,7 @@
     border-bottom: 1px solid var(--line);
     padding: 12px 12px 10px;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
   .title {
@@ -270,6 +277,7 @@
   .cards {
     padding: 10px;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
   .nofind {
