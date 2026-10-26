@@ -18,7 +18,7 @@
   import ScopeSwitch from './ScopeSwitch.svelte';
   import ModeToggle from './ModeToggle.svelte';
   import IconButton from './IconButton.svelte';
-  import { isActiveTheme, launchRetroBat } from './actions';
+  import { isActiveTheme, tryInRetroBat } from './actions';
 
   const active = $derived(isActiveTheme());
   const lastUndo = $derived(ed.history.done[ed.history.done.length - 1]);
@@ -67,10 +67,7 @@
     </div>
     <ModeToggle />
     <Separator orientation="vertical" class="mx-1 !h-5" />
-    <Button variant="outline" size="sm" onclick={launchRetroBat} title="Start RetroBat to see the theme for real"><PlayIcon data-icon="inline-start" />Launch</Button>
-    {#if !active}
-      <Button variant="outline" size="sm" onclick={() => ed.setActive()} title="Make RetroBat use this theme (your RetroBat settings are backed up first)">Use in RetroBat</Button>
-    {/if}
+    <Button variant="outline" size="sm" onclick={tryInRetroBat} data-tour="try" title="Save, make this RetroBat's theme and start RetroBat to see it for real (RetroBat's settings are backed up first)"><PlayIcon data-icon="inline-start" />Try in RetroBat</Button>
     <Button size="sm" class="min-w-20 shadow-elev-1" onclick={() => ed.save()} disabled={ed.dirtyCount === 0 || ed.busy} title="Save your changes (Ctrl+S). A backup is made first.">
       {#if ed.busy}
         <Spinner data-icon="inline-start" />Saving

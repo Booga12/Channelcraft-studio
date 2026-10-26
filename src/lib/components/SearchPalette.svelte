@@ -11,7 +11,7 @@
   import Icon, { TYPE_ICONS } from './Icon.svelte';
   import { PANELS } from './editor/ToolDock.svelte';
   import { screenLabel } from './editor/screens';
-  import { closeTheme, launchRetroBat, reloadFromDisk } from './editor/actions';
+  import { closeTheme, exportTheme, launchRetroBat, reloadFromDisk, tryInRetroBat } from './editor/actions';
 
   interface Entry {
     group: string;
@@ -59,9 +59,11 @@
       ...[cmd('Space evenly across', 'distH', () => ed.distribute('h')), cmd('Space evenly down', 'distV', () => ed.distribute('v'))].map((e) => ({ ...e, disabled: ed.selection.length < 3 })),
       cmd('Paste', 'copy', () => ed.paste(), 'Ctrl+V'),
       cmd('Select all', 'move', () => ed.selectAll(), 'Ctrl+A'),
+      cmd('Try it in RetroBat (on the TV)', 'play', tryInRetroBat),
+      cmd('Check theme for problems', 'sparkle', () => (ed.showHealth = true)),
       cmd('Use in RetroBat', 'monitor', () => ed.setActive()),
       cmd('Launch RetroBat', 'play', launchRetroBat),
-      cmd('Export theme as zip…', 'folder', () => ed.exportZip()),
+      cmd('Export theme as zip…', 'folder', exportTheme),
       cmd('Make preview.png from this screen', 'image', () => ed.makePreviewImage()),
       cmd('RetroBat menu options…', 'sliders', () => (ed.showMenuOptions = true)),
       cmd('Matching game video & cover…', 'video', () => (ed.showFeatured = true)),

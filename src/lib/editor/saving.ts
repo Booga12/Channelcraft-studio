@@ -119,7 +119,10 @@ export async function save(this: Editor) {
     this.rev++;
     this.lastSave = Date.now();
     api.clearRecovery(this.recoveryKey(p.dir)).catch(() => {});
-    this.notify(`Saved ${dirty.length} file${dirty.length === 1 ? '' : 's'}${backup ? ' (backup made first)' : ''}`);
+    const saved = `Saved ${dirty.length} file${dirty.length === 1 ? '' : 's'}${backup ? ' (backup made first)' : ''}`;
+    const issues = this.healthIssues.length;
+    if (issues) this.notify(`${saved}. The health check found ${issues} thing${issues === 1 ? '' : 's'} worth a look.`, 'info', 6000, { label: 'Check', run: () => (this.showHealth = true) });
+    else this.notify(saved);
   } catch (e) {
     this.notify(`Save failed: ${e}`, 'error');
   } finally {
@@ -143,6 +146,39 @@ export async function launch(this: Editor) {
   try {
     await api.launchRetrobat();
     this.notify('Starting RetroBat…');
+  } catch (e) {
+    this.notify(String(e), 'error');
+  }
+}
+
+/**
+ * Try it on the TV: saves, makes this RetroBat's theme and starts RetroBat. RetroBat writes its
+ * settings back when it closes, so if it's open it is closed first (after asking), or it would
+ * put its old theme back.
+ */
+export async function tryInRetroBat(this: Editor) {
+  const p = this.project;
+  if (!p || this.busy) return;
+  if (this.dirtyCount) {
+    await this.save();
+    if (this.dirtyCount) return; // Save failed or was cancelled; it said why.
+  }
+  try {
+    if (await api.retrobatRunning()) {
+      const go = await ask('RetroBat is open. To show this theme it has to restart. Close RetroBat and open it again with this theme?', {
+        title: 'Try it in RetroBat',
+        kind: 'info',
+        okLabel: 'Restart RetroBat',
+        cancelLabel: 'Not now',
+      });
+      if (!go) return;
+      this.notify('Closing RetroBat…', 'info', 20000);
+      await api.closeRetrobat();
+    }
+    await api.setActiveTheme(p.name);
+    await this.refreshThemes();
+    await api.launchRetrobat();
+    this.notify(`Starting RetroBat with ${p.name}…`);
   } catch (e) {
     this.notify(String(e), 'error');
   }

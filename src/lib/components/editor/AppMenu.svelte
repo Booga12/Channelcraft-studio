@@ -4,7 +4,7 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import { ed } from '$lib/editor.svelte';
   import { prefs } from '$lib/prefs.svelte';
-  import { closeTheme, isActiveTheme, launchRetroBat, reloadFromDisk } from './actions';
+  import { closeTheme, exportTheme, isActiveTheme, launchRetroBat, reloadFromDisk, tryInRetroBat } from './actions';
 
   interface Item {
     label: string;
@@ -22,14 +22,16 @@
       label: 'File',
       items: [
         { label: 'Save', shortcut: 'Ctrl+S', action: () => ed.save(), disabled: ed.dirtyCount === 0 },
-        { label: 'Export as zip…', action: () => ed.exportZip() },
+        { label: 'Export as zip…', action: exportTheme },
         { label: 'Make preview.png from this screen', action: () => ed.makePreviewImage() },
         'sep',
         { label: 'RetroBat menu options…', action: () => (ed.showMenuOptions = true) },
+        { label: 'Check theme…', action: () => (ed.showHealth = true) },
         { label: 'Check game media…', action: () => (ed.showMediaCheck = true) },
         { label: 'Restore a backup…', action: () => (ed.showRestore = true) },
         { label: 'Reload from disk', action: reloadFromDisk },
         'sep',
+        { label: 'Try it in RetroBat', action: tryInRetroBat },
         { label: isActiveTheme() ? 'In use by RetroBat' : 'Use in RetroBat', action: () => ed.setActive(), disabled: isActiveTheme() },
         { label: 'Launch RetroBat', action: launchRetroBat },
       ],

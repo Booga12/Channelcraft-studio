@@ -31,6 +31,8 @@ import * as assets from './editor/assets';
 import * as saving from './editor/saving';
 import * as restyle from './editor/restyle';
 import * as themeOptions from './editor/themeOptions';
+import * as health from './editor/health';
+import { checkTheme, type HealthIssue } from './theme/health';
 import { splashTemplate } from './theme/splash';
 
 /** RetroBat's loading screen files, read on their own (not through theme.xml). */
@@ -51,6 +53,8 @@ export interface Toast {
   id: number;
   /** How long it shows, if not the usual time. */
   ms?: number;
+  /** A button on the message. */
+  action?: { label: string; run: () => void };
 }
 
 const DEFAULT_SETTINGS: PreviewSettings = {
@@ -70,6 +74,15 @@ function readPref(key: string): string | null {
     return localStorage.getItem(key);
   } catch {
     return null;
+  }
+}
+
+function readJson<T extends object>(key: string): T {
+  try {
+    const v = JSON.parse(readPref(key) ?? '{}');
+    return v && typeof v === 'object' ? v : ({} as T);
+  } catch {
+    return {} as T;
   }
 }
 
@@ -927,6 +940,46 @@ export class Editor {
   showFeatured = $state(false);
   showMediaCheck = $state(false);
 
+  // ---- theme health check (editor/health.ts) ----
+
+  showHealth = $state(false);
+  /** What the check opened before (Try it in RetroBat, Export), to carry on with. */
+  healthThen = $state.raw<{ label: string; run: () => void } | null>(null);
+  /** Issues ignored on purpose, by theme folder. */
+  healthIgnored = $state.raw<Record<string, string[]>>(readJson('ccs.healthIgnore'));
+
+  /** Everything the check finds, ignored ones included. Worked out only while something reads it. */
+  healthAll = $derived.by<HealthIssue[]>(() => {
+    this.rev;
+    const p = this.project;
+    const res = this.themeRes;
+    if (!p || !res) return [];
+    const list = checkTheme(p, res, this.env);
+    const r = this.readability;
+    if (r && !r.ok) list.unshift({ kind: 'hard-to-read', key: 'hard-to-read', text: `Text is hard to read on the background (contrast ${r.ratio}:1; 3 or more reads well).`, views: [], element: '', fix: { label: 'Make it readable', changes: [] } });
+    return list;
+  });
+
+  healthIssues = $derived(this.healthAll.filter((i) => !(this.healthIgnored[this.project?.dir ?? ''] ?? []).includes(i.key)));
+
+  /** Hides an issue for this theme (or shows it again), remembered on this PC. */
+  ignoreHealth(issue: HealthIssue, on = true) {
+    const dir = this.project?.dir;
+    if (!dir) return;
+    const had = (this.healthIgnored[dir] ?? []).filter((k) => k !== issue.key);
+    this.healthIgnored = { ...this.healthIgnored, [dir]: on ? [...had, issue.key] : had };
+    writePref('ccs.healthIgnore', JSON.stringify(this.healthIgnored));
+  }
+
+  /** Shows every ignored issue of this theme again. */
+  unignoreHealth() {
+    const dir = this.project?.dir;
+    if (!dir) return;
+    const { [dir]: _, ...rest } = this.healthIgnored;
+    this.healthIgnored = rest;
+    writePref('ccs.healthIgnore', JSON.stringify(rest));
+  }
+
   /** The featured-game choices and pairs saved in this theme. */
   get featured(): FeaturedState {
     this.rev;
@@ -1121,9 +1174,9 @@ export class Editor {
     this.showSource = true;
   }
 
-  notify(text: string, kind: Toast['kind'] = 'info', ms?: number) {
+  notify(text: string, kind: Toast['kind'] = 'info', ms?: number, action?: Toast['action']) {
     clearTimeout(this.toastTimer);
-    this.toast = { text, kind, id: Date.now(), ms };
+    this.toast = { text, kind, id: Date.now(), ms, action };
     this.toastTimer = setTimeout(() => (this.toast = null), ms ?? (kind === 'error' ? 8000 : 2800));
   }
 }
@@ -1131,7 +1184,7 @@ export class Editor {
 // Parts of the editor kept in their own files: each function there is a method of Editor.
 type Methods<T> = { [K in keyof T]: T[K] extends (this: Editor, ...args: infer A) => infer R ? (...args: A) => R : never };
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Editor extends Methods<typeof look>, Methods<typeof parts>, Methods<typeof gameLook>, Methods<typeof assets>, Methods<typeof saving>, Methods<typeof restyle>, Methods<typeof themeOptions> {}
-Object.assign(Editor.prototype, look, parts, gameLook, assets, saving, restyle, themeOptions);
+export interface Editor extends Methods<typeof look>, Methods<typeof parts>, Methods<typeof gameLook>, Methods<typeof assets>, Methods<typeof saving>, Methods<typeof restyle>, Methods<typeof themeOptions>, Methods<typeof health> {}
+Object.assign(Editor.prototype, look, parts, gameLook, assets, saving, restyle, themeOptions, health);
 
 export const ed = new Editor();

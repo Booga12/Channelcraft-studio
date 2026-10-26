@@ -121,6 +121,8 @@ pub fn run() {
             commands::read_themesettings,
             commands::set_active_theme,
             commands::launch_retrobat,
+            commands::retrobat_running,
+            commands::close_retrobat,
             intro::read_intro,
             intro::write_intro,
             storage::open_project,

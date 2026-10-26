@@ -165,6 +165,10 @@ export const api = {
   problemLogPath: () => invoke<string>('problem_log_path'),
   clearProblemLog: () => invoke<void>('clear_problem_log'),
   launchRetrobat: () => invoke<void>('launch_retrobat'),
+  /** Whether RetroBat's menus (EmulationStation) are open. */
+  retrobatRunning: () => invoke<boolean>('retrobat_running'),
+  /** Closes RetroBat the gentle way and waits for it; fails if it stays open. */
+  closeRetrobat: () => invoke<void>('close_retrobat'),
   readIntro: () => invoke<IntroInfo>('read_intro'),
   /** Writes the intro settings into retrobat.ini (backed up the first time). */
   writeIntro: (settings: IntroSettings) => invoke<IntroInfo>('write_intro', { settings }),

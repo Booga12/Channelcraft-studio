@@ -9,7 +9,8 @@
     const t = ed.toast;
     if (!t || t === shown) return;
     shown = t;
-    const opts = { id: 'editor', duration: t.ms ?? (t.kind === 'error' ? 8000 : 2800), closeButton: true };
+    const action = t.action;
+    const opts = { id: 'editor', duration: t.ms ?? (t.kind === 'error' ? 8000 : 2800), closeButton: true, action: action ? { label: action.label, onClick: () => action.run() } : undefined };
     if (t.kind === 'error') toast.error(t.text, opts);
     else toast(t.text, opts);
   });

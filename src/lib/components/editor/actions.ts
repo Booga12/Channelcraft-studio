@@ -37,3 +37,9 @@ export async function reloadFromDisk() {
 }
 
 export const isActiveTheme = () => !!ed.project && ed.root?.activeTheme?.toLowerCase() === ed.project.name.toLowerCase();
+
+/** Try it on the TV, after the health check when it found something. */
+export const tryInRetroBat = () => ed.checkFirst('Try it anyway', () => ed.tryInRetroBat());
+
+/** Export as zip, after the health check when it found something. */
+export const exportTheme = () => ed.checkFirst('Export anyway', () => ed.exportZip());

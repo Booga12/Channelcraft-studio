@@ -703,6 +703,55 @@ pub fn launch_retrobat(roots: State<Roots>) -> CmdResult<()> {
     Ok(())
 }
 
+/// RetroBat's menus run in EmulationStation; this is the program that has to close for a new
+/// theme setting to stick (it writes its settings back when it quits).
+const ES_EXE: &str = "emulationstation.exe";
+
+/// A Windows tool run without flashing a console window.
+fn quiet(program: &str) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut c = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    c
+}
+
+fn es_running() -> bool {
+    quiet("tasklist")
+        .args(["/FI", &format!("IMAGENAME eq {ES_EXE}"), "/NH", "/FO", "CSV"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_ascii_lowercase().contains(ES_EXE))
+        .unwrap_or(false)
+}
+
+/// Whether RetroBat (its EmulationStation) is open.
+#[tauri::command(async)]
+pub fn retrobat_running() -> bool {
+    es_running()
+}
+
+/// Asks RetroBat to close the way its own Quit does (it saves its settings first), and waits
+/// up to 15 seconds for it. Never forces it: a game that is still running keeps it open.
+#[tauri::command(async)]
+pub fn close_retrobat() -> CmdResult<()> {
+    if !es_running() {
+        return Ok(());
+    }
+    quiet("taskkill").args(["/IM", ES_EXE]).output().map_err(err)?;
+    for _ in 0..60 {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        if !es_running() {
+            // Give it a moment to finish writing es_settings.cfg.
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            return Ok(());
+        }
+    }
+    Err("RetroBat didn't close. If a game is running, quit it first, then try again.".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -86,6 +86,9 @@
 {#if ed.showMenuOptions && ed.project}
   {#await import('$lib/components/MenuOptionsDialog.svelte') then m}<m.default />{/await}
 {/if}
+{#if ed.showHealth && ed.project}
+  {#await import('$lib/components/HealthDialog.svelte') then m}<m.default />{/await}
+{/if}
 {#if ed.showMediaCheck && ed.project}
   {#await import('$lib/components/MediaCheckDialog.svelte') then m}<m.default />{/await}
 {/if}
