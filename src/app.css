@@ -199,11 +199,13 @@
   color-scheme: dark;
 }
 
-/* Animations and transitions stop for people who ask their system for less motion. */
+/* Animations and transitions stop for people who ask their system for less motion. The theme
+   preview (.stage) and animation samples (.motion-ok) still play: they show what the theme does
+   in RetroBat, and the preview has its own Animations on/off button. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
+  :where(*):not(.stage, .stage *, .motion-ok, .motion-ok *),
+  :where(*):not(.stage, .stage *, .motion-ok, .motion-ok *)::before,
+  :where(*):not(.stage, .stage *, .motion-ok, .motion-ok *)::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
