@@ -118,6 +118,8 @@ export const api = {
   makeThemeDirs: (themeDir: string, rels: string[]) => invoke<number>('make_theme_dirs', { themeDir, rels }),
   /** Saves a .csv report where the user chose. */
   writeReport: (path: string, text: string) => invoke<void>('write_report', { path, text }),
+  /** Saves a shared design (.ccdesign) where the user chose. */
+  writeDesignFile: (path: string, text: string) => invoke<void>('write_design_file', { path, text }),
   listBackups: (dir: string) => invoke<BackupInfo[]>('list_backups', { dir }),
   /** Restores a backup exactly; returns the backup made of the current state first. */
   restoreBackup: (dir: string, zip: string) => invoke<string>('restore_backup', { dir, zip }),

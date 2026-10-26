@@ -4,7 +4,8 @@
 
   let { group = $bindable<DesignGroup | 'all'>('all') }: { group?: DesignGroup | 'all' } = $props();
 
-  const chips = [{ id: 'all' as const, label: 'All', count: DESIGNS.length }, ...DESIGN_GROUPS.map((g) => ({ ...g, count: DESIGNS.filter((d) => d.group === g.id).length }))];
+  // Follows the list: "My designs" shows up once you save one.
+  const chips = $derived([{ id: 'all' as const, label: 'All', count: DESIGNS.length }, ...DESIGN_GROUPS.map((g) => ({ ...g, count: DESIGNS.filter((d) => d.group === g.id).length }))]);
 </script>
 
 <div class="chips" role="radiogroup" aria-label="Design style">

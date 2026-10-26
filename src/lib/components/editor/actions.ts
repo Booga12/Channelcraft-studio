@@ -43,3 +43,6 @@ export const tryInRetroBat = () => ed.checkFirst('Try it anyway', () => ed.tryIn
 
 /** Export as zip, after the health check when it found something. */
 export const exportTheme = () => ed.checkFirst('Export anyway', () => ed.exportZip());
+
+/** Share the theme as one .zip with its preview, after the health check when it found something. */
+export const shareTheme = () => ed.checkFirst('Share anyway', () => ed.shareTheme());

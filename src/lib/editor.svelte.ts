@@ -32,6 +32,7 @@ import * as saving from './editor/saving';
 import * as restyle from './editor/restyle';
 import * as themeOptions from './editor/themeOptions';
 import * as health from './editor/health';
+import * as sharing from './editor/sharing';
 import { checkTheme, type HealthIssue } from './theme/health';
 import { splashTemplate } from './theme/splash';
 
@@ -955,6 +956,8 @@ export class Editor {
   // ---- theme health check (editor/health.ts) ----
 
   showHealth = $state(false);
+  /** The Save as my design dialog. */
+  showSaveDesign = $state(false);
   /** What the check opened before (Try it in RetroBat, Export), to carry on with. */
   healthThen = $state.raw<{ label: string; run: () => void } | null>(null);
   /** Issues ignored on purpose, by theme folder. */
@@ -1196,7 +1199,7 @@ export class Editor {
 // Parts of the editor kept in their own files: each function there is a method of Editor.
 type Methods<T> = { [K in keyof T]: T[K] extends (this: Editor, ...args: infer A) => infer R ? (...args: A) => R : never };
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Editor extends Methods<typeof look>, Methods<typeof parts>, Methods<typeof gameLook>, Methods<typeof assets>, Methods<typeof saving>, Methods<typeof restyle>, Methods<typeof themeOptions>, Methods<typeof health> {}
-Object.assign(Editor.prototype, look, parts, gameLook, assets, saving, restyle, themeOptions, health);
+export interface Editor extends Methods<typeof look>, Methods<typeof parts>, Methods<typeof gameLook>, Methods<typeof assets>, Methods<typeof saving>, Methods<typeof restyle>, Methods<typeof themeOptions>, Methods<typeof health>, Methods<typeof sharing> {}
+Object.assign(Editor.prototype, look, parts, gameLook, assets, saving, restyle, themeOptions, health, sharing);
 
 export const ed = new Editor();

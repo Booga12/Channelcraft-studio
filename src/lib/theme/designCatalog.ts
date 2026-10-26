@@ -15,7 +15,7 @@ export const DESIGN_GROUPS: { id: DesignGroup; label: string }[] = [
   { id: 'mood', label: 'Moods' },
 ];
 
-export const DESIGNS: Design[] = [
+export const BUILT_IN_DESIGNS: Design[] = [
   // ---- professional ----
   {
     id: 'cinema',

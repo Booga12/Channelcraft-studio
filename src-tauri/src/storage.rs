@@ -831,6 +831,19 @@ pub fn write_report(path: String, text: String) -> CmdResult<()> {
     write_atomic(&p, &with_bom(&text, true))
 }
 
+/// Saves a shared design (a small .ccdesign text file) where the user chose.
+#[tauri::command(async)]
+pub fn write_design_file(path: String, text: String) -> CmdResult<()> {
+    let p = PathBuf::from(&path);
+    if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("ccdesign")) {
+        return Err("Designs are saved as .ccdesign files.".into());
+    }
+    if text.len() > 64 * 1024 {
+        return Err("That design is too big to save.".into());
+    }
+    write_atomic(&p, text.as_bytes())
+}
+
 // ---- game media copied into a theme --------------------------------------------------------
 
 /// Which of these files exist (game media named in gamelists often doesn't).

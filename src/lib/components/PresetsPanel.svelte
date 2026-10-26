@@ -12,6 +12,8 @@
   import { DESIGNS, DESIGN_GROUPS, type Design, type DesignGroup } from '$lib/theme/designs';
   import DesignGroupChips from './DesignGroupChips.svelte';
   import { backgroundSvg } from '$lib/theme/designArt';
+  import { removeMyDesign } from '$lib/theme/designList.svelte';
+  import { ask } from '@tauri-apps/plugin-dialog';
 
   const GAME_LISTS = ['basic', 'detailed', 'video'];
 
@@ -126,6 +128,13 @@
     ed.notify(`“${l.label}” applied to ${targets.map((v) => viewLabel(v)).join(', ')}. Press Ctrl+Z to undo.`);
   }
 
+  const canSave = $derived(ed.canSaveDesign());
+
+  async function removeDesign(d: Design) {
+    const ok = await ask(`Delete “${d.label}” from My designs? Themes made with it keep their look.`, { title: 'Delete design', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Keep it' });
+    if (ok) removeMyDesign(d.id);
+  }
+
   function palette(id: string) {
     const p = PALETTES.find((x) => x.id === id)!;
     const n = ed.applyPalette(p);
@@ -152,14 +161,26 @@
     <DesignGroupChips bind:group={designGroup} />
     <div class="designs">
       {#each DESIGNS.filter((d) => designGroup === 'all' || d.group === designGroup) as d (d.id)}
-        <button class="dcard" class:on={current === `design-${d.id}`} onclick={() => applyDesign(d)} title={d.description} disabled={applying}>
-          <DesignThumb design={d} />
-          <span class="name">
-            {#if current === `design-${d.id}`}<Icon name="check" size={12} />{/if}
-            {d.label}
-          </span>
-        </button>
+        <div class="dwrap">
+          <button class="dcard" class:on={current === `design-${d.id}`} onclick={() => applyDesign(d)} title={d.description} disabled={applying}>
+            <DesignThumb design={d} />
+            <span class="name">
+              {#if current === `design-${d.id}`}<Icon name="check" size={12} />{/if}
+              {d.label}
+            </span>
+          </button>
+          {#if d.group === 'mine'}
+            <div class="mine">
+              <button class="link small" onclick={() => ed.shareMyDesign(d.id)} title="Save it as a .ccdesign file to send to someone">Share</button>
+              <button class="link small" onclick={() => removeDesign(d)} title="Remove it from My designs (themes made with it keep their look)">Delete</button>
+            </div>
+          {/if}
+        </div>
       {/each}
+    </div>
+    <div class="mytools">
+      <button class="secondary small" onclick={() => (ed.showSaveDesign = true)} disabled={!canSave} title={canSave ? 'Keep this theme’s colours, depth, layouts and fonts as a design of your own' : 'Pick a design first: only themes made from one can be saved as one'}>Save as my design</button>
+      <button class="ghost small" onclick={() => ed.importMyDesign()} title="Add a design someone shared with you (.ccdesign file)">Import a design</button>
     </div>
   </section>
 
@@ -426,6 +447,22 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+  }
+  .dwrap {
+    display: grid;
+    gap: 2px;
+    align-content: start;
+  }
+  .mine {
+    display: flex;
+    gap: 10px;
+    padding: 0 4px;
+  }
+  .mytools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
   }
   .dcard {
     display: grid;

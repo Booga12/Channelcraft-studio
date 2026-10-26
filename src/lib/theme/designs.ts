@@ -24,7 +24,7 @@ export interface Palette6 {
 }
 
 /** Style groups designs are filed under (the filter in New theme and Presets). */
-export type DesignGroup = 'professional' | 'gaming' | 'cute' | 'tech' | 'anime' | 'retro' | 'mood';
+export type DesignGroup = 'professional' | 'gaming' | 'cute' | 'tech' | 'anime' | 'retro' | 'mood' | 'mine';
 
 export interface Design {
   id: string;
@@ -40,6 +40,8 @@ export interface Design {
   radius: number;
   /** How the design lays out game screens (any layout in GAME_LAYOUTS works too). */
   game: GameArchetype;
+  /** A game layout of its own (an id in GAME_LAYOUTS) instead of the one for `game`: designs you save keep yours. */
+  gameLayout?: string;
   /** Id of the system screen layout the design comes with (any layout in SYSTEM_LAYOUTS works). */
   system: string;
   glow?: boolean;
@@ -71,7 +73,7 @@ export function recoloured(d: Design, palette: Palette6): Design {
   return { ...d, palette, accent2: undefined, decoColors: undefined };
 }
 
-export { DESIGNS, DESIGN_GROUPS } from './designCatalog';
+export { DESIGNS, DESIGN_GROUPS } from './designList.svelte';
 
 // ---- artwork ------------------------------------------------------------------------------
 
@@ -738,7 +740,7 @@ export function designElements(d: Design, c: DesignContext, view: string, system
     return withMotion(withDepth(systemScreen(d, c, l), depthOf(d, c), 'system', { floor: !!l.floor, oneRow }), c);
   }
   if (GAME_VIEWS.includes(view)) {
-    const gl = gameLayout(gameLayoutId) ?? defaultGameLayout(d.game);
+    const gl = gameLayout(gameLayoutId) ?? gameLayout(d.gameLayout) ?? defaultGameLayout(d.game);
     let els = settled(gameScreen(d, c, view, gl.archetype));
     if (gl.mirror && LIST_VIEWS.includes(view)) els = mirrored(els);
     for (const n of LABELS_AND_EXTRAS) els.push({ type: n === 'md_lastplayed' ? 'datetime' : 'text', name: n, props: { visible: 'false' } });
@@ -756,7 +758,7 @@ const TURNING = new Set(['swing-in', 'tilt-in', 'sway', 'swing', 'spin']);
 const settled = (els: DesignEl[]): DesignEl[] => els.map((e) => (e.props.rotation && e.anim && TURNING.has(e.anim) ? { ...e, anim: 'pop' } : e));
 
 /** The game layout a design comes with. */
-export const designGameLayout = (d: Design): string => defaultGameLayout(d.game).id;
+export const designGameLayout = (d: Design): string => (gameLayout(d.gameLayout) ?? defaultGameLayout(d.game)).id;
 
 /** The theme's motion feel on every animation that doesn't have its own size and speed. */
 function withMotion(els: DesignEl[], c: DesignContext): DesignEl[] {
