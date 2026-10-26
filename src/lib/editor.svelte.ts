@@ -16,7 +16,8 @@ import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, presetOf, retune, screenOf, 
 import { DEPTH_VAR, depthLevel, FRAMED, MOTION_FEELS, MOTION_VAR, PARALLAX, PARALLAX_ANIM, SCREEN_FX_VAR, screenFxOf, SHADOWED, type Depth, type ScreenFx } from './theme/depth';
 import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type XElement } from './xml/cst';
-import { shaderOf, shadowXml } from './theme/shadow';
+import { SHADOW_TYPES, shaderOf, shadowXml } from './theme/shadow';
+import { glowProps, hex8, snapPos, type Glow, type PictureLook, type SnapX, type SnapY, type TextLook } from './theme/simpleProps';
 import { frameOf, frameXml, type Frame } from './theme/frame';
 
 /** A number with at most four decimals, as theme files write them. */
@@ -1345,6 +1346,116 @@ class Editor {
     if (!changes.length) return;
     this.commit(opts.all ? `motion of every “${mine.preset.label}”` : `motion of ${elementLabel(name)}`, changes, opts.coalesce);
     this.playAnimations = true;
+  }
+
+  /** When an element's entrance starts, in milliseconds after it shows (each animation's `begin`). */
+  setAnimationDelay(name: string, ms: number) {
+    const el = this.currentView?.elements.get(name);
+    const t = el ? tuningOf(el, screenOf(this.view)) : null;
+    if (!el || !t || t.preset.kind !== 'entrance') return;
+    const changes: Change[] = [];
+    t.animations.forEach((list, i) => {
+      const def = el.complex.find((c) => c.node === t.storyboards[i]);
+      if (!def) return;
+      for (const a of list) {
+        const has = attr(a, 'begin') !== undefined;
+        if (ms > 0) changes.push({ file: def.file, patch: patchSetAttr(def.file.doc, a, 'begin', String(Math.round(ms))) });
+        else if (has) {
+          const patch = patchRemoveAttr(def.file.doc, a, 'begin');
+          if (patch) changes.push({ file: def.file, patch });
+        }
+      }
+    });
+    if (!changes.length) return;
+    this.commit(`start time of ${elementLabel(name)}`, changes);
+    this.replayAnimations();
+  }
+
+  /**
+   * Gives every part of the same kind on this screen (texts, or pictures and videos) the animation
+   * of `name`, starting one after another from the top down. One undo step.
+   */
+  animateAllLike(name: string): number {
+    const view = this.currentView;
+    const el = view?.elements.get(name);
+    const t = el ? tuningOf(el, screenOf(this.view)) : null;
+    if (!view || !el || !t) return 0;
+    const textish = (e: ResolvedElement) => ['text', 'datetime', 'clock'].includes(e.type);
+    const pictureish = (e: ResolvedElement) => e.type === 'image' || e.type === 'video';
+    const same = textish(el) ? textish : pictureish(el) ? pictureish : (e: ResolvedElement) => e.type === el.type;
+    const y = (e: ResolvedElement) => this.rects[e.name]?.y ?? parsePair(e.props.get('pos')?.value)?.[1] ?? 0;
+    const names = [...view.elements.values()]
+      // Full-screen backgrounds and hidden or locked parts stay as they are.
+      .filter((e) => same(e) && !this.locked[e.name] && !(this.rects[e.name]?.w > 0.98 && this.rects[e.name]?.h > 0.98) && this.rects[e.name])
+      .sort((a, b) => y(a) - y(b))
+      .map((e) => e.name);
+    if (names.length < 2) return 0;
+    const step = 150;
+    this.group(`animation “${t.preset.label}” on ${names.length} parts`, () => {
+      names.forEach((n, i) => {
+        if (n !== name || presetOf(el, screenOf(this.view)) !== t.preset.id) this.setAnimation(n, t.preset.id);
+        const mine = this.currentView?.elements.get(n);
+        const tn = mine ? tuningOf(mine, screenOf(this.view)) : null;
+        if (tn && (Math.abs(tn.speed - t.speed) > 0.01 || Math.abs(tn.amount - t.amount) > 0.01)) this.tuneAnimation(n, t.amount, t.speed);
+        if (t.preset.kind === 'entrance') this.setAnimationDelay(n, Math.min(i, 6) * step);
+      });
+    });
+    this.replayAnimations();
+    return names.length;
+  }
+
+  /** Moves an element so its box sits at a spot on the screen (a little in from the edges). */
+  snapTo(name: string, sx: SnapX, sy: SnapY) {
+    const el = this.currentView?.elements.get(name);
+    const rect = this.rects[name];
+    if (!el || !rect || this.locked[name]) return;
+    const pos = parsePair(el.props.get('pos')?.value) ?? [0, 0];
+    const [x, y] = snapPos(rect, pos, sx, sy);
+    this.setProp(name, 'pos', `${fmtNum(x)} ${fmtNum(y)}`);
+  }
+
+  /** Gives a text a glow or a shadow (or none), in its own colour. */
+  setGlow(name: string, glow: Glow) {
+    const el = this.currentView?.elements.get(name);
+    if (!el) return;
+    const props = glowProps(glow, hex8(el.props.get('color')?.value) ?? 'FFFFFFFF', el.props.has('glowOffset'));
+    this.setProps(name, props);
+  }
+
+  /** A one-click look for a text: a free font (downloaded), capitals and a glow. One undo step. */
+  async applyTextLook(name: string, look: TextLook) {
+    const font = await this.ensureFont(look.font);
+    const el = this.currentView?.elements.get(name);
+    if (!el) return;
+    const props: Record<string, string> = {
+      forceUppercase: look.caps ? 'true' : 'false',
+      ...glowProps(look.glow, hex8(el.props.get('color')?.value) ?? 'FFFFFFFF', el.props.has('glowOffset')),
+    };
+    if (font) props.fontPath = this.relativeAssetPath(name, 'fontPath', join(this.project!.dir, font));
+    const label = `look “${look.label}” on ${elementLabel(name)}`;
+    if (this.gameEditing) this.gameSetMany(label, { [name]: props });
+    else this.commit(label, this.propChanges(name, props));
+    if (!font) this.notify('The font could not be downloaded (offline?), so only the rest of the look was used.');
+  }
+
+  /** A one-click look for a picture: corners, shadow and see-through. One undo step. */
+  applyPictureLook(name: string, look: PictureLook) {
+    const el = this.currentView?.elements.get(name);
+    if (!el) return;
+    this.group(`look “${look.label}” on ${elementLabel(name)}`, () => {
+      this.setCorners(name, look.corners);
+      if (SHADOW_TYPES.has(el.type) && !frameOf(el)) {
+        const sh = shaderOf(el);
+        if (!sh || sh.shadow) this.setShadow(name, look.shadow);
+      }
+      const now = parseFloat(el.props.get('opacity')?.value ?? '1');
+      if (Math.abs(now - look.opacity) > 0.001) this.setProp(name, 'opacity', fmtNum(look.opacity));
+    });
+  }
+
+  /** The theme's design background colour (RRGGBB), when it has one. */
+  get designBackground(): string | null {
+    return this.designColours()?.bg.slice(0, 6) ?? null;
   }
 
   // ---- history ----

@@ -457,6 +457,12 @@ export function tuningOf(el: ResolvedElement, screen: Screen = 'list'): AnimTuni
   return null;
 }
 
+/** When an entrance starts, in milliseconds (its first animation's `begin`). */
+export function entranceDelay(t: AnimTuning): number {
+  const b = num(t.animations[0]?.[0] ? attr(t.animations[0][0], 'begin') : undefined);
+  return Number.isFinite(b) && b > 0 ? b : 0;
+}
+
 /** Which preset an element's storyboards came from, for the UI. */
 export function presetOf(el: ResolvedElement, screen: Screen = 'list'): string | null {
   if (!mainBoards(el).length) return null;

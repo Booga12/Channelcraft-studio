@@ -7,6 +7,7 @@
   import { TYPE_ICON } from '$lib/render';
   import { lineOf } from '$lib/xml/cst';
   import PropRow from './PropRow.svelte';
+  import SimpleProperties from './cards/SimpleProperties.svelte';
   import { ANIMATIONS, EXITS, exitOf, misplayed, presetOf, screenOf, STILL_TYPES, tuningOf } from '$lib/theme/animations';
   import { parsePair } from '$lib/theme/schema';
   import { SHADOW_DEFAULT, SHADOW_TYPES, shaderOf } from '$lib/theme/shadow';
@@ -138,6 +139,8 @@
       </p>
     {/if}
   </div>
+{:else if ed.simple}
+  <SimpleProperties {el} {inInspector} onremove={remove} />
 {:else}
   <div class="head">
     <div class="title" class:hide={inInspector}>

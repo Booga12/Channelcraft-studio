@@ -1,0 +1,73 @@
+/* Shared pieces of Simple mode's property cards (inside .cards-panel). */
+.cards-panel .row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.cards-panel .lbl {
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.cards-panel .lbl b {
+  font-weight: 500;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cards-panel .note {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 0;
+}
+.cards-panel .warn {
+  font-size: 12px;
+  color: var(--warn);
+  margin: 0;
+}
+.cards-panel .alert {
+  display: grid;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+}
+.cards-panel .alert b {
+  color: var(--warn);
+}
+.cards-panel .alert .two {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cards-panel .alert button {
+  justify-self: start;
+}
+.cards-panel .switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.cards-panel .switch input {
+  accent-color: var(--brand);
+  width: 16px;
+  height: 16px;
+}
+.cards-panel input[type='range'] {
+  width: 100%;
+  accent-color: var(--brand);
+  margin: 0;
+}
+.cards-panel input[type='text'] {
+  width: 100%;
+}

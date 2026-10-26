@@ -15,7 +15,13 @@ export interface PreviewSettings {
   verticalScreen: boolean;
   helpPrompts: boolean;
   cheevos: boolean;
+  /** Preview only: long sample names, to check that text still fits. */
+  longNames?: boolean;
 }
+
+/** Long names the preview shows with `longNames`, to test that text fits. */
+export const LONG_SYSTEM_NAME = 'Nintendo Entertainment System';
+export const LONG_GAME_NAME = 'The Legend of Zelda: A Link to the Past';
 
 export interface Environment {
   settings: PreviewSettings;
@@ -49,7 +55,7 @@ export function builtinVar(name: string, env: Environment, themeDir: string, sub
     case 'system.theme':
       return sys.theme;
     case 'system.fullName':
-      return sys.fullName;
+      return s.longNames ? LONG_SYSTEM_NAME : sys.fullName;
     case 'system.manufacturer':
       return sys.manufacturer;
     case 'system.releaseYear':
@@ -131,6 +137,7 @@ export function bindingValue(name: string, env: Environment, subsets: Map<string
     case 'game': {
       // {game:system:theme} and friends: the game's own console (the same one in the preview).
       if (key.toLowerCase().startsWith('system.')) return bindingValue(`system:${key.slice(7)}`, env, subsets);
+      if (s.longNames && /^(name|namenoextra|fullnamenotags|nameshort)$/i.test(key)) return LONG_GAME_NAME;
       if (env.game) {
         const v = gameBinding(env.game, key);
         return v === undefined ? '' : v;
