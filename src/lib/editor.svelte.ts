@@ -169,6 +169,7 @@ class Editor {
   showSettings = $state(false);
   showRestore = $state(false);
   showShortcuts = $state(false);
+  showReport = $state(false);
   showSearch = $state(false);
 
   /** Bumped whenever a panel is asked for, so asking twice still brings it forward. */

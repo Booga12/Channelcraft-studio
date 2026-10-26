@@ -11,6 +11,8 @@
   import Guide from '$lib/components/Guide.svelte';
   import SettingsDialog from '$lib/components/SettingsDialog.svelte';
   import ShortcutsDialog from '$lib/components/ShortcutsDialog.svelte';
+  import ReportDialog from '$lib/components/ReportDialog.svelte';
+  import { installErrorLog } from '$lib/problems';
   import SearchPalette from '$lib/components/SearchPalette.svelte';
   import RestoreDialog from '$lib/components/RestoreDialog.svelte';
   import FeaturedDialog from '$lib/components/FeaturedDialog.svelte';
@@ -30,6 +32,8 @@
       });
       return;
     }
+    // Errors in the pages go to the problem log on this PC ("Report a problem" can include it).
+    installErrorLog(api.logProblem);
     ed.init();
     const win = getCurrentWindow();
     const unlisten = win.onCloseRequested(async (event) => {
@@ -82,6 +86,9 @@
 {/if}
 {#if ed.showShortcuts}
   <ShortcutsDialog />
+{/if}
+{#if ed.showReport}
+  <ReportDialog />
 {/if}
 {#if ed.showMenuOptions && ed.project}
   <MenuOptionsDialog />

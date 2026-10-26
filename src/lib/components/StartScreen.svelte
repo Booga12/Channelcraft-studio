@@ -15,6 +15,7 @@
   import SparklesIcon from '@lucide/svelte/icons/sparkles';
   import CopyIcon from '@lucide/svelte/icons/copy';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+  import MessageSquareWarningIcon from '@lucide/svelte/icons/message-square-warning';
   import SearchIcon from '@lucide/svelte/icons/search';
   import Trash2Icon from '@lucide/svelte/icons/trash-2';
   import { Button } from '$lib/components/ui/button';
@@ -132,6 +133,7 @@
       <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => ed.refreshThemes()} disabled={!ed.root}><RefreshCwIcon data-icon="inline-start" />Refresh themes</Button>
       <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => (ed.showSettings = true)}><SettingsIcon data-icon="inline-start" />Settings</Button>
       <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => (ed.showShortcuts = true)}><KeyboardIcon data-icon="inline-start" />Keyboard shortcuts</Button>
+      <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => (ed.showReport = true)}><MessageSquareWarningIcon data-icon="inline-start" />Report a problem</Button>
     </nav>
     <div class="flex-1"></div>
     <ModeToggle side="top" />

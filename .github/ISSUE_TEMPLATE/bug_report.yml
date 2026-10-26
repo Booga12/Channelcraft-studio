@@ -1,0 +1,39 @@
+# "Report a problem" in the app opens this form with the fields filled in (by their ids).
+name: Report a problem
+description: Something in ChannelCraft Studio didn't work, or looked wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for telling us! Everything here is public, so leave out anything private.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead. A screenshot helps a lot (paste it here).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we make it happen?
+      description: The steps that lead to it, if you know them.
+      placeholder: |
+        1. Open a theme
+        2. Click …
+  - type: input
+    id: version
+    attributes:
+      label: ChannelCraft Studio version
+      placeholder: "0.2.1"
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11
+  - type: textarea
+    id: log
+    attributes:
+      label: Problem log
+      description: Recent errors, if you chose to include them. Your user name and home folder are already hidden.
+      render: text

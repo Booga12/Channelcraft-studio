@@ -158,6 +158,12 @@ export const api = {
   removeLibraryAsset: (path: string) => invoke<void>('remove_library_asset', { path }),
   readThemesettings: (theme: string) => invoke<string>('read_themesettings', { theme }),
   setActiveTheme: (theme: string) => invoke<void>('set_active_theme', { theme }),
+  /** Adds an error to the problem log on this PC (see problems.rs). */
+  logProblem: (text: string) => invoke<void>('log_problem', { text }),
+  /** The newest part of the problem log ("" when there is none). */
+  readProblemLog: () => invoke<string>('read_problem_log'),
+  problemLogPath: () => invoke<string>('problem_log_path'),
+  clearProblemLog: () => invoke<void>('clear_problem_log'),
   launchRetrobat: () => invoke<void>('launch_retrobat'),
   readIntro: () => invoke<IntroInfo>('read_intro'),
   /** Writes the intro settings into retrobat.ini (backed up the first time). */

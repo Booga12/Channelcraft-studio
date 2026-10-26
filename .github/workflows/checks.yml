@@ -1,0 +1,58 @@
+# Runs the type checks and every test on each push and pull request, so problems show up before a
+# release. Windows, like the app. Tests that read themes from a local RetroBat install skip here.
+
+name: Checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Type checks and tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type checks
+        run: pnpm check
+
+      - name: App tests
+        run: pnpm exec vitest run
+
+      # The Rust side needs the built pages to compile.
+      - name: Build the pages
+        run: pnpm build
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Open-source licences are all allowed
+        run: node scripts/third-party-notices.mjs --check

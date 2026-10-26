@@ -3,12 +3,13 @@ mod storage;
 mod importing;
 mod assets;
 mod intro;
+mod problems;
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Must match "identifier" in tauri.conf.json (a test checks).
-const APP_ID: &str = "com.channelcraft.studio";
+pub(crate) const APP_ID: &str = "com.channelcraft.studio";
 
 /// Earlier versions used an app id with a personal name in it (com.<name>.channelcraft-studio), so
 /// their backups, settings and preferences live in folders of that name. On the first start with
@@ -73,6 +74,7 @@ fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    problems::install_panic_hook();
     copy_old_data();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -138,6 +140,10 @@ pub fn run() {
             assets::list_library_assets,
             assets::add_library_assets,
             assets::remove_library_asset,
+            problems::log_problem,
+            problems::read_problem_log,
+            problems::problem_log_path,
+            problems::clear_problem_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

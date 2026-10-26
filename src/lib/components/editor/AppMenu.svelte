@@ -108,6 +108,8 @@
         { label: 'Getting started', action: () => (ed.showGuide = true) },
         { label: 'Keyboard shortcuts', shortcut: '?', action: () => (ed.showShortcuts = true) },
         { label: 'Search for anything', shortcut: 'Ctrl+K', action: () => (ed.showSearch = true) },
+        'sep',
+        { label: 'Report a problem…', action: () => (ed.showReport = true) },
       ],
     },
   ]);

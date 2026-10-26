@@ -85,6 +85,7 @@
       cmd(`Where changes go: only ${ed.consoleName}`, 'monitor', () => ((ed.consoleOnly = true), (ed.gameOnly = false))),
       cmd('Settings', 'settings', () => (ed.showSettings = true), 'Ctrl+,'),
       cmd('Keyboard shortcuts', 'help', () => (ed.showShortcuts = true), '?'),
+      cmd('Report a problem', 'help', () => (ed.showReport = true)),
       cmd('Getting started', 'help', () => (ed.showGuide = true)),
       cmd('Close theme', 'folder', closeTheme),
     ];
