@@ -209,8 +209,10 @@ export class Editor {
   zoom = $state<'fit' | number>('fit');
   /** Simple hides file names, line numbers and rarely used settings. */
   mode = $state<'simple' | 'advanced'>(readPref('ccs.mode') === 'advanced' ? 'advanced' : 'simple');
-  /** Whether the getting-started guide is open. */
-  showGuide = $state(readPref('ccs.guideDone') !== '1');
+  /** Whether the getting-started guide is open (Help; the tour introduces the editor itself). */
+  showGuide = $state(false);
+  /** Whether the first-run tour is showing. */
+  showTour = $state(false);
   /** Ask before editing an original theme instead of a copy. */
   askCopy = $state(readPref('ccs.askCopy') !== '0');
 
@@ -224,6 +226,16 @@ export class Editor {
   closeGuide() {
     this.showGuide = false;
     writePref('ccs.guideDone', '1');
+  }
+
+  /** Shows the tour the first time the editor opens. */
+  firstTour() {
+    if (readPref('ccs.tourDone') !== '1') this.showTour = true;
+  }
+
+  closeTour() {
+    this.showTour = false;
+    writePref('ccs.tourDone', '1');
   }
 
   setAskCopy(v: boolean) {

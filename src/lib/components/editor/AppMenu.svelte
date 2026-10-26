@@ -107,6 +107,7 @@
     {
       label: 'Help',
       items: [
+        { label: 'Take the tour', action: () => (ed.showTour = true) },
         { label: 'Getting started', action: () => (ed.showGuide = true) },
         { label: 'Keyboard shortcuts', shortcut: '?', action: () => (ed.showShortcuts = true) },
         { label: 'Search for anything', shortcut: 'Ctrl+K', action: () => (ed.showSearch = true) },

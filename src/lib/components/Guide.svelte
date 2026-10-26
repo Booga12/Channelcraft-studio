@@ -18,7 +18,7 @@
     },
     {
       title: 'Save and try it',
-      text: 'Press the blue Save button. A backup of the whole theme is made first. Then “Use in RetroBat” and “Launch” to see it for real.',
+      text: 'Press the blue Save button. A backup of the whole theme is made first. Then “Try in RetroBat” to see it for real on your TV.',
     },
   ];
 
@@ -38,6 +38,7 @@
 >
   {#snippet footer()}
     <span class="mr-auto self-center text-xs text-muted-foreground">Want every setting, file names and the XML? Switch to <em>Advanced</em> in the top bar.</span>
+    {#if ed.project}<Button variant="outline" onclick={() => (ed.closeGuide(), (ed.showTour = true))}>Take the tour</Button>{/if}
     <Button onclick={() => ed.closeGuide()}>Got it</Button>
   {/snippet}
 

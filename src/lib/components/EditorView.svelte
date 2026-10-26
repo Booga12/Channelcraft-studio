@@ -1,7 +1,7 @@
 <script lang="ts">
   // The editor: one bar on top, and the preview filling the rest with floating tools over it
   // (the dock and its panel on the left, the inspector on the right when something is selected).
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { ed } from '$lib/editor.svelte';
@@ -24,6 +24,13 @@
   import AssetDragLayer from './AssetDragLayer.svelte';
   import PresetsPanel from './PresetsPanel.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
+
+  // The first time a theme is open, a short tour of the editor (after the layout has settled, and
+  // not over a dialog such as recovering unsaved edits; then it waits for the next time).
+  onMount(() => {
+    const t = setTimeout(() => !document.querySelector('[role="dialog"], [role="alertdialog"]') && ed.firstTour(), 700);
+    return () => clearTimeout(t);
+  });
 
   /** The dock panel that is open, if any. */
   let open = $state<PanelId | null>(null);
@@ -70,7 +77,7 @@
 
   /** Ctrl+V: a picture on the clipboard becomes a new layer; otherwise copied parts are pasted. */
   function onpaste(e: ClipboardEvent) {
-    if (inField(e.target) || !ed.project || ed.showSearch || ed.showSettings || ed.showShortcuts || ed.showGuide) return;
+    if (inField(e.target) || !ed.project || ed.showSearch || ed.showSettings || ed.showShortcuts || ed.showGuide || ed.showTour) return;
     pasteWaiting = false;
     const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
     e.preventDefault();
@@ -79,7 +86,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (ed.showSearch || ed.showSettings || ed.showShortcuts || ed.showGuide) return;
+    if (ed.showSearch || ed.showSettings || ed.showShortcuts || ed.showGuide || ed.showTour) return;
     // A menu or popover handles its own keys (an Escape there closes only it).
     if (document.querySelector('[data-slot$="-content"][data-state="open"]')) return;
     if ((e.target as HTMLElement | null)?.closest?.('[data-slot$="-content"]')) return;

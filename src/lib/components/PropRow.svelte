@@ -53,6 +53,9 @@
     if (varDef) return relative(dirname(varDef.file.abs), abs);
     return ed.relativeAssetPath(el.name, spec.name, abs);
   }
+  // "What's this?": the plain-words help, always shown in Simple mode, one click away in Advanced.
+  const help = $derived(propHelp(spec.name) ?? spec.hint);
+  let showHelp = $state(false);
 </script>
 
 <div class="row" data-asset-prop={assetKind ? spec.name : undefined} data-asset-element={assetKind ? el.name : undefined}>
@@ -61,6 +64,7 @@
       <span class="name" title={spec.name}>{propLabel(spec.name)}</span>
     {:else}
       <span class="name" title={spec.hint ?? propLabel(spec.name)}>{spec.name}</span>
+      {#if help}<button class="ghost small what" aria-expanded={showHelp} aria-label="What's this?" title="What's this?" onclick={() => (showHelp = !showHelp)}>?</button>{/if}
       {#if def.conditional}<span class="badge" title="This value only applies under a condition">if</span>{/if}
       {#if history.length > 1}<span class="badge" title="Set {history.length} times for this element; this is the value that wins">×{history.length}</span>{/if}
     {/if}
@@ -78,8 +82,8 @@
       <button class="ghost small x" title="Remove this property from the file" onclick={() => ed.removeProp(el.name, spec.name)}>✕</button>
     {/if}
   </div>
-  {#if ed.simple && (propHelp(spec.name) ?? spec.hint)}
-    <p class="help">{propHelp(spec.name) ?? spec.hint}</p>
+  {#if help && (ed.simple || showHelp)}
+    <p class="help">{#if !ed.simple}<b>{propLabel(spec.name)}.</b> {/if}{help}</p>
   {/if}
 
   {#if varDef}
@@ -179,6 +183,20 @@
   }
   .spacer {
     flex: 1;
+  }
+  .what {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    opacity: 0.6;
+  }
+  .what:hover,
+  .what[aria-expanded='true'] {
+    opacity: 1;
   }
   .help {
     margin: -2px 0 2px;

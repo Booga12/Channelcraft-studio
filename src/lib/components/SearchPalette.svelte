@@ -88,6 +88,7 @@
       cmd('Settings', 'settings', () => (ed.showSettings = true), 'Ctrl+,'),
       cmd('Keyboard shortcuts', 'help', () => (ed.showShortcuts = true), '?'),
       cmd('Report a problem', 'help', () => (ed.showReport = true)),
+      cmd('Take the tour', 'help', () => (ed.showTour = true)),
       cmd('Getting started', 'help', () => (ed.showGuide = true)),
       cmd('Close theme', 'folder', closeTheme),
     ];

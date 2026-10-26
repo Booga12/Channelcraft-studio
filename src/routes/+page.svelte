@@ -71,6 +71,9 @@
 {:else}
   <StartScreen />
 {/if}
+{#if ed.showTour && ed.project}
+  {#await import('$lib/components/Tour.svelte') then m}<m.default />{/await}
+{/if}
 {#if ed.showGuide}
   {#await import('$lib/components/Guide.svelte') then m}<m.default />{/await}
 {/if}

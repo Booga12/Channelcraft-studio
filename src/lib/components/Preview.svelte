@@ -613,7 +613,7 @@
   const slide = $derived({ by: ed.view === 'system' ? scroll.current : 0, axis: slideAxis, mode: ed.transition });
 </script>
 
-<div class="canvas-area">
+<div class="canvas-area" data-tour="preview">
   {#if ed.contactSheet}
     <ContactSheet />
   {:else}

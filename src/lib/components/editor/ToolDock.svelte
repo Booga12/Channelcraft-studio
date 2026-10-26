@@ -74,7 +74,7 @@
   const on = 'bg-primary/12 font-semibold text-primary hover:bg-primary/18 hover:text-primary';
 </script>
 
-<nav class="ui-new flex max-h-full w-16 flex-col items-center gap-0.5 overflow-y-auto rounded-2xl bg-card/90 p-1 text-card-foreground shadow-elev-3 ring-1 ring-foreground/8 backdrop-blur-xl [scrollbar-width:none]" aria-label="Tools">
+<nav data-tour="dock" class="ui-new flex max-h-full w-16 flex-col items-center gap-0.5 overflow-y-auto rounded-2xl bg-card/90 p-1 text-card-foreground shadow-elev-3 ring-1 ring-foreground/8 backdrop-blur-xl [scrollbar-width:none]" aria-label="Tools">
   <DropdownMenu.Root>
     <Tooltip.Root>
       <Tooltip.Trigger>
@@ -128,7 +128,7 @@
     <Tooltip.Root>
       <Tooltip.Trigger>
         {#snippet child({ props })}
-          <button {...mergeProps(props, { onclick: () => (open = open === p.id ? null : p.id) })} class={cn(item, open === p.id && on)} aria-pressed={open === p.id}>
+          <button {...mergeProps(props, { onclick: () => (open = open === p.id ? null : p.id) })} data-tour="panel-{p.id}" class={cn(item, open === p.id && on)} aria-pressed={open === p.id}>
             <p.icon />
             <span class="max-w-full truncate">{label(p)}</span>
             {#if counts[p.id]}

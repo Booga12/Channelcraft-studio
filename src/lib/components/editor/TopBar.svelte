@@ -55,6 +55,7 @@
     <button
       class="flex h-8 items-center gap-2 rounded-lg border bg-muted/50 px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       onclick={() => (ed.showSearch = true)}
+      data-tour="search"
       title="Find any command, element or setting"
     >
       <SearchIcon class="size-3.5" />
@@ -68,7 +69,7 @@
     <ModeToggle />
     <Separator orientation="vertical" class="mx-1 !h-5" />
     <Button variant="outline" size="sm" onclick={tryInRetroBat} data-tour="try" title="Save, make this RetroBat's theme and start RetroBat to see it for real (RetroBat's settings are backed up first)"><PlayIcon data-icon="inline-start" />Try in RetroBat</Button>
-    <Button size="sm" class="min-w-20 shadow-elev-1" onclick={() => ed.save()} disabled={ed.dirtyCount === 0 || ed.busy} title="Save your changes (Ctrl+S). A backup is made first.">
+    <Button size="sm" data-tour="save" class="min-w-20 shadow-elev-1" onclick={() => ed.save()} disabled={ed.dirtyCount === 0 || ed.busy} title="Save your changes (Ctrl+S). A backup is made first.">
       {#if ed.busy}
         <Spinner data-icon="inline-start" />Saving
       {:else if ed.dirtyCount}
