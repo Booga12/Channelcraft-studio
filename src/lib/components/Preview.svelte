@@ -132,6 +132,17 @@
   const splash = $derived(ed.screenFile !== 'theme.xml' && ed.project?.entry ? splashScene(ed.currentView, ed.project.entry, join(ed.root?.resourcesDir ?? '', 'splash.svg')) : null);
   const bar = $derived(splash?.bar);
 
+  /**
+   * RetroBat's own clock, drawn over every screen when its "Show clock" setting is on: where the
+   * theme's Screen overlay puts it, or RetroBat's default spot at the bottom right.
+   */
+  const esClock = $derived.by(() => {
+    if (ed.root?.es?.drawClock === false || ed.view === 'screen' || ed.view === 'menu' || ed.screenFile !== 'theme.xml') return null;
+    const el = ed.res?.views.get('screen')?.elements.get('clock');
+    return el && isVisible(el) ? el : 'default';
+  });
+  /** Parts hidden in the preview only (the eye in Layers) that RetroBat still draws on this screen. */
+  const hiddenHere = $derived(ed.currentView ? [...ed.currentView.elements.values()].filter((e) => ed.hidden[e.name] && isVisible(e)).map((e) => e.name) : []);
   /** Pictures and videos on the console screen that use the current game's data (none there in RetroBat). */
   const emptyOnConsoles = $derived(ed.view === 'system' && ed.currentView ? [...ed.currentView.elements.values()].filter((e) => (e.type === 'image' || e.type === 'video') && usesGameData(e.props.get('path')?.value) && isVisible(e)) : []);
 
@@ -689,6 +700,13 @@
                   {slide}
                 />
               {/each}
+              {#if esClock === 'default'}
+                <span class="esclock" style:font-size="{dims.height * 0.03}px" title="RetroBat's own clock (its “Show clock” setting). This theme doesn't place it, so RetroBat puts it here.">{ed.root?.es?.clock12 ? '08:15 PM' : '20:15'}</span>
+              {:else if esClock}
+                <div class="esclock-el" title="RetroBat's own clock: move or restyle it on the Screen overlay screen.">
+                  <PreviewElement z={3000} el={esClock} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
+                </div>
+              {/if}
               {#if menu}
                 <div class="menu-mock">
                   <div class="mtitle">MAIN MENU</div>
@@ -756,6 +774,11 @@
         <TriangleAlertIcon />{emptyOnConsoles.length} will be empty in RetroBat
       </button>
     {/if}
+    {#if hiddenHere.length}
+      <button class="pill warn-note" title="Hidden here with the eye button in Layers: {hiddenHere.join(', ')}. The theme isn't changed, so RetroBat still shows them. Click to show them here again." onclick={() => { for (const n of hiddenHere) ed.hidden[n] = false; }}>
+        <TriangleAlertIcon />{hiddenHere.length} hidden here only, RetroBat still shows {hiddenHere.length === 1 ? 'it' : 'them'}
+      </button>
+    {/if}
     {#if splash?.ignored.length}
       <span class="pill warn-note" title="On a loading screen RetroBat only draws its background, label and progress bar, plus elements marked extra=&quot;true&quot;. Not drawn: {splash.ignored.join(', ')}">
         <TriangleAlertIcon />{splash.ignored.length} RetroBat won't draw here
@@ -785,6 +808,18 @@
 {/if}
 
 <style>
+  .esclock {
+    position: absolute;
+    right: 2%;
+    bottom: 2.5%;
+    z-index: 2000;
+    color: rgba(255, 255, 255, 0.7);
+    pointer-events: none;
+  }
+  .esclock-el {
+    display: contents;
+    pointer-events: none;
+  }
   .canvas-area {
     position: relative;
     display: flex;

@@ -131,6 +131,9 @@ export const SIMPLE_PROPS = new Set([
 /** Names of the parts ChannelCraft designs add. */
 const DESIGN_NAMES: Record<string, string> = {
   ccs_background: 'Background',
+  staticBackground: 'Background',
+  staticBackgroundMoving: 'Moving background',
+  ccs_movingbg: 'Moving background',
   ccs_fanart: 'Fan art',
   ccs_fade: 'Fade',
   ccs_boxart: 'Box art',

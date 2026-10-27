@@ -4,7 +4,7 @@
 // and can be swapped for another preset later.
 
 import { attr, elements, patchInsertChild, patchReplaceSpan, type XElement, type XNode } from '../xml/cst';
-import { DESIGNS, designElements, designGameLayout, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext, type DesignEl, type DesignVar, type Palette6 } from './designs';
+import { DESIGNS, designClock, designElements, designGameLayout, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext, type DesignEl, type DesignVar, type Palette6 } from './designs';
 import type { Change } from './edits';
 import { DEPTH_VAR, MOTION_VAR, type Depth } from './depth';
 import type { ThemeProject } from './project';
@@ -429,6 +429,8 @@ export function designChanges(project: ThemeProject, res: Resolution, design: De
     const title = view === 'system' ? `design ${design.label} [design-${design.id}], layout ${layout.label} [layout:${layout.id}]` : `design ${design.label} [design-${design.id}], game layout ${game.label} [game:${game.id}]`;
     out.push(blockChange(project, res, view, title, body));
   }
+  // One clock for every screen: RetroBat's own, where the design puts it.
+  if (out.length) out.push(blockChange(project, res, 'screen', `clock of design ${design.label}`, elementsMarkup([designClock(design, ctx)], new Set(), 'screen')));
   return out;
 }
 
@@ -451,7 +453,7 @@ export function hidesOwn(project: ThemeProject, res: Resolution, views: string[]
 }
 
 /** RetroBat's own element names (a design places these; they're never "yours"). */
-const isNativeName = (n: string) => n in NATIVE_TYPES || n.startsWith('md_') || n === 'help' || n === 'logoText';
+const isNativeName = (n: string) => n in NATIVE_TYPES || n.startsWith('md_') || n.startsWith('staticBackground') || n === 'help' || n === 'logoText';
 
 /** Parts whose animation comes from the depth setting. */
 const DEPTH_ANIMATED = ['ccs_fanart', 'ccs_systemart', 'ccs_deco'];

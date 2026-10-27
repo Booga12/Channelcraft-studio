@@ -11,6 +11,7 @@
   import type { Environment } from '$lib/theme/context';
   import { animationCss, screenOf } from '$lib/theme/animations';
   import { shaderOf, shadowCss, SHADOW_TYPES } from '$lib/theme/shadow';
+  import { glowCss as textGlowCss, textFxOf } from '$lib/theme/simpleProps';
   import { frameOf, FRAME_TYPES, roundPx, shaderPx } from '$lib/theme/frame';
 
   function relativeDate(iso: string): string {
@@ -213,16 +214,14 @@
   }
 
   /**
-   * RetroBat's text glow as a CSS text-shadow: glowSize spreads it, glowOffset (in pixels) moves it,
-   * which is how themes give text a drop shadow.
+   * RetroBat's text glow as a CSS text-shadow, drawn its way: a sharp copy of the text at every
+   * pixel offset up to glowSize, moved by glowOffset (no blur).
    */
   const glowCss = $derived.by(() => {
     const glow = val('glowColor');
-    const size = num('glowSize', 0);
-    if (!glow || size <= 0) return '';
-    const off = (val('glowOffset') ?? '').trim().split(/\s+/).map(Number).filter(Number.isFinite);
-    const [ox, oy] = off.length ? [off[0], off[1] ?? off[0]] : [0, 0];
-    return ox || oy ? `${ox}px ${oy}px ${size * 1.5}px ${cssColor(glow)}` : `0 0 ${size * 2}px ${cssColor(glow)}`;
+    if (!glow) return '';
+    const fx = textFxOf(glow, val('glowSize'), val('glowOffset'));
+    return textGlowCss(fx, cssColor(glow), H / 1080);
   });
 
   /** RetroBat's mirror reflection under a picture: `reflexion` is its strength at the top and at the bottom. */
@@ -282,7 +281,7 @@
     }
     const b = shaderPx(f.border, h, H);
     const sh = shaderPx(f.shadow, h, H);
-    const shadow = [b ? `0 0 0 ${b}px ${colour(f.borderColor)}` : '', sh ? `0 ${sh * 0.25}px ${sh}px ${sh * 0.2}px ${colour(f.shadowColor)}` : ''].filter(Boolean).join(', ');
+    const shadow = [b ? `0 0 0 ${b}px ${colour(f.borderColor)}` : '', sh ? `0 0 ${sh}px ${sh * 0.3}px ${colour(f.shadowColor)}` : ''].filter(Boolean).join(', ');
     return { radius: `${shaderPx(f.corners, h, H)}px`, shadow };
   });
 

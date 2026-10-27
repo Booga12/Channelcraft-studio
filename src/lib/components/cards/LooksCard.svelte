@@ -36,7 +36,7 @@
       busy = false;
     }
   }
-  const glowCss = (g: TextLook['glow']) => ({ none: 'none', soft: '0 0 5px #fff9', strong: '0 0 2px #fff, 0 0 9px #fffc', shadow: '1px 2px 2px #000d' })[g];
+  const glowCss = (g: TextLook['glow']) => ({ none: 'none', soft: '0 0 5px #fff9', strong: '0 0 2px #fff, 0 0 9px #fffc', shadow: '1px 2px 2px #000d', outline: '0 0 0 #000, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000' })[g];
   const shadowCss = (l: PictureLook) => (l.shadow === null ? 'none' : l.shadow < 10 ? 'drop-shadow(2px 2px 2px #0009)' : 'drop-shadow(3px 4px 4px #000c)');
 </script>
 

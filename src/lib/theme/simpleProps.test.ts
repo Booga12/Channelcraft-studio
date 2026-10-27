@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { animDemo, cardMatches, delayName, glowOf, glowProps, hex8, resized, sizeName, snapPos, snappedAt, speedName, textKind } from './simpleProps';
+import { animDemo, cardMatches, delayName, glowCss, glowOf, glowProps, hex8, shadowDir, textFxOf, textFxProps, resized, sizeName, snapPos, snappedAt, speedName, textKind } from './simpleProps';
 
 describe('what a text says', () => {
   it('knows the sources RetroBat fills in', () => {
@@ -24,20 +24,48 @@ describe('what a text says', () => {
 });
 
 describe('glow', () => {
-  it('reads the glow a text has', () => {
+  it('reads the effect a text has', () => {
     expect(glowOf(undefined, undefined, undefined)).toBe('none');
-    expect(glowOf('FFFFFF80', '2', undefined)).toBe('soft');
-    expect(glowOf('FFFFFFCC', '6', '0 0')).toBe('strong');
-    expect(glowOf('000000B4', '1', '2 2')).toBe('shadow');
     expect(glowOf('FFFFFF00', '4', undefined)).toBe('none');
+    // A strong colour all round is what RetroBat draws as an outline.
+    expect(textFxOf('000000FF', '2', undefined).kind).toBe('outline');
+    expect(textFxOf('FFFFFF10', '3', '0 0').kind).toBe('glow');
+    expect(textFxOf('000000B4', '1', '2 2')).toMatchObject({ kind: 'shadow', dx: 2, dy: 2 });
   });
 
   it('writes glows that read back the same', () => {
-    for (const g of ['none', 'soft', 'strong', 'shadow'] as const) {
+    for (const g of ['none', 'soft', 'strong', 'shadow', 'outline'] as const) {
       const p = glowProps(g, 'f2c14eff', true);
-      expect(glowOf(p.glowColor ?? 'FFFFFF80', p.glowSize, p.glowOffset)).toBe(g);
+      expect(glowOf(p.glowColor ?? 'FFFFFF80', p.glowSize, p.glowOffset), g).toBe(g);
     }
-    expect(glowProps('soft', 'f2c14eff', false)).toEqual({ glowColor: 'F2C14E80', glowSize: '2' });
+  });
+
+  it('keeps glows faint per copy, so RetroBat builds them up softly instead of drawing a hard outline', () => {
+    const p = textFxProps({ kind: 'glow', color: 'F2C14E', size: 4, strength: 0.65, dx: 0, dy: 0 }, false);
+    expect(p.glowSize).toBe('4');
+    expect(parseInt(p.glowColor.slice(6), 16)).toBeLessThan(0x20);
+    // Stronger and bigger glows still read back as what was asked for.
+    for (const [size, strength] of [[1, 0.3], [3, 0.5], [6, 0.85], [10, 0.95]]) {
+      const back = textFxOf(textFxProps({ kind: 'glow', color: 'FFFFFF', size, strength, dx: 0, dy: 0 }, false).glowColor, String(size), undefined);
+      expect(back.kind).toBe('glow');
+      expect(Math.abs(back.strength - strength), `${size} ${strength}`).toBeLessThan(0.08);
+    }
+  });
+
+  it('points a shadow any way and keeps its distance', () => {
+    const p = textFxProps({ kind: 'shadow', color: '000000', size: 2, strength: 0.7, dx: -5, dy: 5 }, false);
+    expect(p.glowOffset).toBe('-5 5');
+    expect(shadowDir(-5, 5)).toEqual({ dir: 'sw', distance: 5 });
+    expect(textFxProps({ kind: 'none', color: '000000', size: 1, strength: 0, dx: 0, dy: 0 }, true)).toEqual({ glowSize: '0', glowOffset: '0 0' });
+  });
+
+  it('previews the glow the way RetroBat draws it: sharp copies, no blur', () => {
+    const css = glowCss({ kind: 'shadow', color: '000000', size: 1, strength: 0.5, dx: 2, dy: 2 }, 'black', 1);
+    const parts = css.split(', ');
+    expect(parts).toHaveLength(9);
+    expect(parts).toContain('1.00px 1.00px 0 black');
+    expect(parts).toContain('3.00px 3.00px 0 black');
+    expect(parts.every((x) => x.endsWith(' 0 black'))).toBe(true);
   });
 });
 

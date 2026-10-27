@@ -54,8 +54,133 @@ export function sizeName(v: number): FontSizeName | null {
 }
 
 // ---- glow and shadow ---------------------------------------------------------------------------
+//
+// RetroBat has no blur for text. It draws a text's glow by drawing the text again in glowColor at
+// every pixel offset from -glowSize to +glowSize across and down, moved by glowOffset, under the
+// text. Where those copies overlap their colour builds up, so a glow written like a CSS glow (a
+// strong colour) comes out as a thick hard outline. A soft glow needs a faint colour that builds
+// up near the letters and fades further out: the strength below is how solid it gets next to the
+// letters, and the colour's alpha is worked out from it and the size.
 
-export type Glow = 'none' | 'soft' | 'strong' | 'shadow';
+export type TextFxKind = 'none' | 'glow' | 'shadow' | 'outline';
+
+export interface TextFx {
+  kind: TextFxKind;
+  /** RRGGBB */
+  color: string;
+  /** How far it spreads, in pixels of a 1080-line screen (glowSize). */
+  size: number;
+  /** 0 to 1: how solid it is next to the letters. */
+  strength: number;
+  /** Where a shadow falls, in pixels (glowOffset). */
+  dx: number;
+  dy: number;
+}
+
+export const TEXT_FX_KINDS: { id: TextFxKind; label: string; title: string }[] = [
+  { id: 'none', label: 'None', title: 'Just the letters' },
+  { id: 'glow', label: 'Glow', title: 'Soft light all around the letters' },
+  { id: 'shadow', label: 'Shadow', title: 'A shadow falling to one side' },
+  { id: 'outline', label: 'Outline', title: 'A clean line around the letters' },
+];
+
+/** How many copies overlap next to the letters, roughly, for a size. */
+const overlap = (size: number) => Math.max(1, (2 * size + 1) ** 2 / 2);
+
+/** The alpha (0 to 1) each copy needs for a strength. */
+export function copyAlpha(strength: number, size: number): number {
+  return 1 - Math.pow(1 - Math.min(0.999, Math.max(0, strength)), 1 / overlap(size));
+}
+
+const strengthOf = (alpha: number, size: number) => 1 - Math.pow(1 - alpha, overlap(size));
+const hex2 = (a: number) =>
+  Math.max(1, Math.min(255, Math.round(a * 255)))
+    .toString(16)
+    .padStart(2, '0')
+    .toUpperCase();
+
+/** The effect a text has, from RetroBat's glowColor, glowSize and glowOffset. */
+export function textFxOf(color: string | undefined, size: string | undefined, offset: string | undefined): TextFx {
+  const c = (color ?? '').trim();
+  const rgb = COLOR_RE.test(c) ? c.slice(0, 6).toUpperCase() : 'FFFFFF';
+  const alpha = COLOR_RE.test(c) && c.length === 8 ? parseInt(c.slice(6), 16) / 255 : 1;
+  const s = Math.max(0, Math.round(parseFloat(size ?? '') || 0));
+  const off = parsePair(offset) ?? [0, 0];
+  const base = { color: rgb, size: s, dx: off[0], dy: off[1] };
+  if (s <= 0 || alpha <= 0) return { ...base, kind: 'none', strength: 0, size: Math.max(1, s) };
+  if (off[0] || off[1]) return { ...base, kind: 'shadow', strength: strengthOf(alpha, s) };
+  if (alpha >= 0.85) return { ...base, kind: 'outline', strength: alpha };
+  return { ...base, kind: 'glow', strength: strengthOf(alpha, s) };
+}
+
+/** The properties for an effect. `hasOffset`: the text has a glowOffset, which then goes back to 0 0. */
+export function textFxProps(fx: TextFx, hasOffset: boolean): Record<string, string> {
+  const still: Record<string, string> = hasOffset ? { glowOffset: '0 0' } : {};
+  const size = Math.max(1, Math.round(fx.size));
+  if (fx.kind === 'none') return { glowSize: '0', ...still };
+  if (fx.kind === 'outline') return { glowColor: `${fx.color}${hex2(Math.max(0.85, fx.strength))}`, glowSize: String(size), ...still };
+  const color = `${fx.color}${hex2(copyAlpha(Math.min(0.95, fx.strength), size))}`;
+  if (fx.kind === 'glow') return { glowColor: color, glowSize: String(size), ...still };
+  const dx = Math.round(fx.dx);
+  const dy = Math.round(fx.dy);
+  return { glowColor: color, glowSize: String(size), glowOffset: dx || dy ? `${dx} ${dy}` : '2 2' };
+}
+
+/** One-click starting points for each effect (the colour is filled in by the caller). */
+export const TEXT_FX_PRESETS: Record<Exclude<TextFxKind, 'none'>, { id: string; label: string; fx: Omit<TextFx, 'kind' | 'color'> }[]> = {
+  glow: [
+    { id: 'soft', label: 'Soft', fx: { size: 3, strength: 0.45, dx: 0, dy: 0 } },
+    { id: 'medium', label: 'Medium', fx: { size: 4, strength: 0.65, dx: 0, dy: 0 } },
+    { id: 'strong', label: 'Strong', fx: { size: 6, strength: 0.85, dx: 0, dy: 0 } },
+    { id: 'neon', label: 'Neon', fx: { size: 8, strength: 0.95, dx: 0, dy: 0 } },
+  ],
+  shadow: [
+    { id: 'subtle', label: 'Subtle', fx: { size: 1, strength: 0.5, dx: 2, dy: 2 } },
+    { id: 'medium', label: 'Medium', fx: { size: 2, strength: 0.7, dx: 3, dy: 3 } },
+    { id: 'deep', label: 'Deep', fx: { size: 3, strength: 0.85, dx: 5, dy: 5 } },
+    { id: 'long', label: 'Long', fx: { size: 1, strength: 0.6, dx: 8, dy: 8 } },
+  ],
+  outline: [
+    { id: 'thin', label: 'Thin', fx: { size: 1, strength: 1, dx: 0, dy: 0 } },
+    { id: 'bold', label: 'Bold', fx: { size: 2, strength: 1, dx: 0, dy: 0 } },
+    { id: 'heavy', label: 'Heavy', fx: { size: 3, strength: 1, dx: 0, dy: 0 } },
+  ],
+};
+
+/** The 8 directions a shadow can fall, as offsets of 1. */
+export const SHADOW_DIRS: { id: string; label: string; x: number; y: number }[] = [
+  { id: 'nw', label: 'Up and left', x: -1, y: -1 },
+  { id: 'n', label: 'Up', x: 0, y: -1 },
+  { id: 'ne', label: 'Up and right', x: 1, y: -1 },
+  { id: 'w', label: 'Left', x: -1, y: 0 },
+  { id: 'e', label: 'Right', x: 1, y: 0 },
+  { id: 'sw', label: 'Down and left', x: -1, y: 1 },
+  { id: 's', label: 'Down', x: 0, y: 1 },
+  { id: 'se', label: 'Down and right', x: 1, y: 1 },
+];
+
+/** A shadow's direction (one of SHADOW_DIRS) and distance, from its offset. */
+export function shadowDir(dx: number, dy: number): { dir: string; distance: number } {
+  const sx = Math.sign(Math.round(dx));
+  const sy = Math.sign(Math.round(dy));
+  return { dir: SHADOW_DIRS.find((d) => d.x === sx && d.y === sy)?.id ?? 'se', distance: Math.max(Math.abs(dx), Math.abs(dy)) || 2 };
+}
+
+/**
+ * RetroBat's text glow drawn the way it does it, as a CSS text-shadow: one sharp copy at each
+ * pixel offset, no blur. `colour` is the glow colour as CSS; `scale` is preview pixels per pixel
+ * of a 1080-line screen.
+ */
+export function glowCss(fx: TextFx, colour: string, scale: number): string {
+  if (fx.kind === 'none') return '';
+  const s = Math.min(10, Math.max(1, Math.round(fx.size)));
+  const out: string[] = [];
+  for (let x = -s; x <= s; x++) for (let y = -s; y <= s; y++) out.push(`${((x + fx.dx) * scale).toFixed(2)}px ${((y + fx.dy) * scale).toFixed(2)}px 0 ${colour}`);
+  return out.join(', ');
+}
+
+// Presets used by the one-click looks and readability fixes.
+export type Glow = 'none' | 'soft' | 'strong' | 'shadow' | 'outline';
 export const GLOWS: { id: Glow; label: string }[] = [
   { id: 'none', label: 'None' },
   { id: 'soft', label: 'Soft' },
@@ -63,15 +188,11 @@ export const GLOWS: { id: Glow; label: string }[] = [
   { id: 'shadow', label: 'Shadow' },
 ];
 
-/** Which glow a text has, from RetroBat's glowColor, glowSize and glowOffset. */
+/** Which preset a text's glow is closest to. */
 export function glowOf(color: string | undefined, size: string | undefined, offset: string | undefined): Glow {
-  const s = parseFloat(size ?? '') || 0;
-  const c = (color ?? '').trim();
-  const alpha = COLOR_RE.test(c) && c.length === 8 ? parseInt(c.slice(6), 16) : 255;
-  if (s <= 0 || alpha === 0) return 'none';
-  const off = parsePair(offset);
-  if (off && (off[0] !== 0 || off[1] !== 0)) return 'shadow';
-  return s <= 3 ? 'soft' : 'strong';
+  const fx = textFxOf(color, size, offset);
+  if (fx.kind === 'glow') return fx.strength <= 0.6 ? 'soft' : 'strong';
+  return fx.kind;
 }
 
 /**
@@ -81,17 +202,12 @@ export function glowOf(color: string | undefined, size: string | undefined, offs
  */
 export function glowProps(g: Glow, textHex: string, hasOffset: boolean): Record<string, string> {
   const rgb = /^[0-9a-f]{6}/i.test(textHex) ? textHex.slice(0, 6).toUpperCase() : 'FFFFFF';
-  const still: Record<string, string> = hasOffset ? { glowOffset: '0 0' } : {};
-  switch (g) {
-    case 'none':
-      return { glowSize: '0', ...still };
-    case 'soft':
-      return { glowColor: `${rgb}80`, glowSize: '2', ...still };
-    case 'strong':
-      return { glowColor: `${rgb}CC`, glowSize: '5', ...still };
-    case 'shadow':
-      return { glowColor: '000000B4', glowSize: '1', glowOffset: '2 2' };
-  }
+  const preset = (kind: Exclude<TextFxKind, 'none'>, id: string, color: string) => textFxProps({ kind, color, ...TEXT_FX_PRESETS[kind].find((x) => x.id === id)!.fx }, hasOffset);
+  if (g === 'none') return textFxProps({ kind: 'none', color: rgb, size: 1, strength: 0, dx: 0, dy: 0 }, hasOffset);
+  if (g === 'soft') return preset('glow', 'soft', rgb);
+  if (g === 'strong') return preset('glow', 'strong', rgb);
+  if (g === 'shadow') return preset('shadow', 'medium', '000000');
+  return preset('outline', 'thin', '000000');
 }
 
 // ---- colours -----------------------------------------------------------------------------------

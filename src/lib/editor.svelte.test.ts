@@ -283,9 +283,19 @@ describe('editor operations (starter theme, in memory)', () => {
     const v = ed.currentView!.elements.get('ccs_featured_video')!;
     expect(v.props.get('visible')!.value).toBe('true');
     expect(v.props.get('path')!.value).toBe('./featured/mario.mp4');
+    // Tweaks made for every console go to the shared cover, not to the SNES-only block.
+    const featuredBefore = p.fileAt('_inc/ccs/featured.xml')!.src;
+    ed.setProps('ccs_featured_cover', { pos: '0.7 0.8' });
+    ed.setAnimation('ccs_featured_cover', 'float');
+    expect(p.fileAt('_inc/ccs/featured.xml')!.src).toBe(featuredBefore);
     ed.settings.system = { ...ed.settings.system, name: 'nes', theme: 'nes' };
     ed.rev++;
-    expect(ed.currentView!.elements.get('ccs_featured_cover')!.props.get('visible')!.value).toBe('false');
+    const cover = ed.currentView!.elements.get('ccs_featured_cover')!;
+    expect(cover.props.get('visible')!.value).toBe('false');
+    expect(cover.props.get('pos')!.value).toBe('0.7 0.8');
+    expect(cover.complex.some((c) => c.name === 'storyboard')).toBe(true);
+    ed.undo(true);
+    ed.undo(true);
     // A chosen game without both files is reported, and its saved pair is kept.
     respond = (cmd, args) => (cmd === 'existing_files' ? (args.paths as string[]).map(() => false) : cmd === 'list_theme_files' ? [] : null);
     expect((await ed.applyFeatured({ snes: './Mario.sfc' }))[0]).toContain('needs both a video and a cover');
@@ -381,7 +391,8 @@ describe('sound and music (starter theme, in memory)', () => {
     const rel = `${MOVING_DIR}/${movingFileName('bokeh', ed.designColours()!)}`;
     ed.project!.setAssets([...ed.project!.assets, { rel, kind: 'video', size: 0 }]);
     await ed.setMovingBg('bokeh');
-    const bg = (view: string) => (ed.themeRes ?? ed.res)!.views.get(view)?.elements.get('ccs_movingbg')?.props.get('path')?.value;
+    const { movingBgName } = await import('./theme/designs');
+    const bg = (view: string) => (ed.themeRes ?? ed.res)!.views.get(view)?.elements.get(movingBgName(view))?.props.get('path')?.value;
     expect(ed.movingBg()).toBe('bokeh');
     expect(bg('system')).toBe(`./${rel}`);
     expect(bg('detailed')).toBe(`./${rel}`);
@@ -390,6 +401,46 @@ describe('sound and music (starter theme, in memory)', () => {
     await ed.setMovingBg(null);
     expect(ed.movingBg()).toBeNull();
     expect(bg('system')).toBeUndefined();
+  });
+
+  it('places RetroBat’s own clock for every screen instead of adding a second one', async () => {
+    const { DESIGNS } = await import('./theme/designs');
+    await ed.applyDesign(DESIGNS[0]);
+    const res = (ed.themeRes ?? ed.res)!;
+    const clock = res.views.get('screen')?.elements.get('clock');
+    expect(clock?.type).toBe('clock');
+    expect(clock?.extra).toBeFalsy();
+    expect(clock?.props.get('pos')?.value).toBe('0.97 0.035');
+    for (const view of ['system', 'detailed']) expect(res.views.get(view)?.elements.has('ccs_clock'), view).toBe(false);
+    // Applying another design moves the same clock, it doesn't add one.
+    await ed.applyDesign(DESIGNS[3]);
+    expect(ed.project!.entry!.src.match(/<clock name="clock">/g)).toHaveLength(1);
+  });
+
+  it('finds your own full-screen pictures covering the moving background, and hides them in one step', async () => {
+    const { DESIGNS } = await import('./theme/designs');
+    const { movingFileName, MOVING_DIR } = await import('./theme/movingBg');
+    await ed.applyDesign(DESIGNS[0]);
+    const rel = `${MOVING_DIR}/${movingFileName('stars', ed.designColours()!)}`;
+    ed.project!.setAssets([...ed.project!.assets, { rel, kind: 'video', size: 0 }]);
+    await ed.setMovingBg('stars');
+    ed.view = 'system';
+    ed.addElement('image');
+    const sky = ed.selected!;
+    ed.setProps(sky, { pos: '0 0', size: '1 1', path: './_inc/images/sky.png', zIndex: '1' });
+    ed.addElement('image');
+    const small = ed.selected!;
+    ed.setProps(small, { pos: '0.7 0.2', size: '0.2 0.2', path: './_inc/images/sticker.png', zIndex: '1' });
+    expect(ed.movingBgCovers()).toEqual([{ view: 'system', names: [sky] }]);
+    const before = ed.history.done.length;
+    ed.hideMovingBgCovers();
+    expect(ed.history.done.length).toBe(before + 1);
+    expect(ed.movingBgCovers()).toEqual([]);
+    const el = (n: string) => (ed.themeRes ?? ed.res)!.views.get('system')?.elements.get(n);
+    expect(el(sky)?.props.get('visible')?.value).toBe('false');
+    expect(el(small)?.props.get('visible')).toBeUndefined();
+    ed.undo(true);
+    expect(ed.movingBgCovers()).toEqual([{ view: 'system', names: [sky] }]);
   });
 
   it('keeps the music and scroll sound when another design is applied', async () => {

@@ -6,7 +6,7 @@ import type { Editor } from '../editor.svelte';
 import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, presetOf, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from '../theme/animations';
 import { type Change, insertTarget, setTextChange } from '../theme/edits';
 import { type Frame, frameOf, frameXml } from '../theme/frame';
-import { type Glow, glowProps, hex8, type PictureLook, snapPos, type SnapX, type SnapY, type TextLook } from '../theme/simpleProps';
+import { type Glow, glowProps, hex8, textFxProps, type TextFx, type PictureLook, snapPos, type SnapX, type SnapY, type TextLook } from '../theme/simpleProps';
 import { type ResolvedElement } from '../theme/resolver';
 import { shaderOf, SHADOW_TYPES, shadowXml } from '../theme/shadow';
 import { type ThemeFile } from '../theme/project';
@@ -269,6 +269,13 @@ export function setGlow(this: Editor, name: string, glow: Glow) {
   if (!el) return;
   const props = glowProps(glow, hex8(el.props.get('color')?.value) ?? 'FFFFFFFF', el.props.has('glowOffset'));
   this.setProps(name, props);
+}
+
+/** Sets a text's glow, shadow or outline (see TextFx). */
+export function setTextFx(this: Editor, name: string, fx: TextFx, coalesce?: string) {
+  const el = this.currentView?.elements.get(name);
+  if (!el) return;
+  this.setProps(name, textFxProps(fx, el.props.has('glowOffset')), coalesce);
 }
 
 /** A one-click look for a text: a free font (downloaded), capitals and a glow. One undo step. */

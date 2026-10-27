@@ -22,7 +22,7 @@ export interface DepthLevel {
   /** Background art zooms slowly behind everything, and decorations drift the other way. */
   parallax: boolean;
   /** Drop shadow under text (RetroBat's glow, moved): which text, its size, offset in pixels and strength. */
-  textShadow: { on: 'titles' | 'all'; size: number; offset: number; alpha: string } | null;
+  textShadow: { on: 'titles' | 'all'; size: number; offset: number; strength: number } | null;
   /** A shadow panel under each panel so it floats: offset in screen fractions and strength. */
   panelShadow: { dx: number; dy: number; alpha: string } | null;
   /** Mirror reflections under logos standing on a shelf or floor, and under one-row tiles. */
@@ -33,8 +33,8 @@ export interface DepthLevel {
 
 export const DEPTHS: DepthLevel[] = [
   { id: 'off', label: 'Off', help: 'Flat: no shadows, the selected logo grows a little.', shadow: null, frameShadow: 6, logoScale: 1.15, bevel: 0, parallax: false, textShadow: null, panelShadow: null, reflect: 0, lift: 1 },
-  { id: 'subtle', label: 'Subtle', help: 'Soft shadows under art, titles and panels, a gentle bevel, and logos that lift when selected.', shadow: 5, frameShadow: 14, logoScale: 1.25, bevel: 0.6, parallax: false, textShadow: { on: 'titles', size: 2, offset: 2, alpha: '66' }, panelShadow: { dx: 0.003, dy: 0.005, alpha: '33' }, reflect: 0, lift: 1 },
-  { id: 'strong', label: 'Strong', help: 'Deep shadows under art, text and floating panels, mirror reflections, big lifts, and layers that drift at different distances.', shadow: 9, frameShadow: 24, logoScale: 1.4, bevel: 1, parallax: true, textShadow: { on: 'all', size: 3, offset: 3, alpha: '88' }, panelShadow: { dx: 0.005, dy: 0.009, alpha: '55' }, reflect: 0.22, lift: 1.06 },
+  { id: 'subtle', label: 'Subtle', help: 'Soft shadows under art, titles and panels, a gentle bevel, and logos that lift when selected.', shadow: 5, frameShadow: 14, logoScale: 1.25, bevel: 0.6, parallax: false, textShadow: { on: 'titles', size: 2, offset: 2, strength: 0.55 }, panelShadow: { dx: 0.003, dy: 0.005, alpha: '33' }, reflect: 0, lift: 1 },
+  { id: 'strong', label: 'Strong', help: 'Deep shadows under art, text and floating panels, mirror reflections, big lifts, and layers that drift at different distances.', shadow: 9, frameShadow: 24, logoScale: 1.4, bevel: 1, parallax: true, textShadow: { on: 'all', size: 3, offset: 3, strength: 0.7 }, panelShadow: { dx: 0.005, dy: 0.009, alpha: '55' }, reflect: 0.22, lift: 1.06 },
 ];
 
 export const DEPTH_VAR = 'designDepth';

@@ -19,9 +19,11 @@ import { shaderOf } from '../theme/shadow';
 import { sharedIn } from '../theme/consoles';
 import { svgToPngBase64 } from '../raster';
 import { task } from '../task.svelte';
-import { viewLabel } from '../friendly';
+import { elementLabel, viewLabel } from '../friendly';
 import { basename } from '../path';
-import { canMakeVideos, makeMovingBg, MOVING_BGS, MOVING_DIR, MOVING_VAR, movingFileName } from '../theme/movingBg';
+import { canMakeVideos, makeMovingBg, MOVING_BGS, MOVING_DIR, MOVING_VAR, MOVING_Z, movingFileName, movingIdOf } from '../theme/movingBg';
+import { isVisible, zOf } from '../render';
+import type { ResolvedElement } from '../theme/resolver';
 import { toBase64 } from '../theme/sounds';
 
 /**
@@ -376,7 +378,70 @@ export function movingBgPath(this: Editor): string | null {
 export function movingBg(this: Editor): string | null {
   void this.rev;
   const path = this.movingBgPath();
-  return path ? (MOVING_BGS.find((m) => basename(path).startsWith(`${m.id}-`))?.id ?? null) : null;
+  return path ? movingIdOf(basename(path)) : null;
+}
+
+/** Whether a picture or video fills (about) the whole screen. */
+function fillsScreen(e: ResolvedElement): boolean {
+  const nums = (prop: string) => (e.props.get(prop)?.value ?? '').trim().split(/\s+/).map(Number);
+  const [x = 0, y = 0] = nums('pos');
+  const sized = e.props.has('size') ? nums('size') : nums('maxSize');
+  const w = sized[0] || sized[1] || 0;
+  const h = sized[1] || sized[0] || 0;
+  const [ox = 0, oy = 0] = e.props.has('origin') ? nums('origin') : [0, 0];
+  const left = x - ox * w;
+  const top = y - oy * h;
+  return left <= 0.03 && top <= 0.03 && left + w >= 0.97 && top + h >= 0.97;
+}
+
+/**
+ * The theme's own full-screen pictures that RetroBat draws over the moving background, so it
+ * can't be seen, by screen. Design parts and pictures of the game (paths with {...}) don't count.
+ */
+export function movingBgCovers(this: Editor): { view: string; names: string[] }[] {
+  void this.rev;
+  const p = this.project;
+  const res = this.themeRes ?? this.res;
+  if (!p || !res || !this.movingBgPath()) return [];
+  const out: { view: string; names: string[] }[] = [];
+  for (const view of ['system', ...GAME_VIEWS].filter((v) => appliedDesign(p, v))) {
+    const v = res.views.get(view);
+    if (!v) continue;
+    const names = [...v.elements.values()]
+      .filter((e) => (e.type === 'image' || e.type === 'video') && !e.name.startsWith('ccs_') && !e.name.startsWith('staticBackground') && !e.name.startsWith('md_') && isVisible(e) && zOf(e) > MOVING_Z && !(e.props.get('path')?.value ?? '').includes('{') && fillsScreen(e))
+      .map((e) => e.name);
+    if (names.length) out.push({ view, names });
+  }
+  return out;
+}
+
+/** The names of the pictures covering the moving background, in words ("Image2, Picture and 3 more"). */
+export function movingBgCoverText(this: Editor): string {
+  const names = [...new Set(this.movingBgCovers().flatMap((c) => c.names))].map((n) => elementLabel(n));
+  if (names.length <= 3) return names.join(names.length === 2 ? ' and ' : ', ').replace(/, ([^,]*)$/, ' and $1');
+  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+}
+
+/** Hides (in RetroBat too) the pictures covering the moving background, on every screen. One undo step. */
+export function hideMovingBgCovers(this: Editor) {
+  const covers = this.movingBgCovers();
+  if (!covers.length) return;
+  const count = new Set(covers.flatMap((c) => c.names)).size;
+  const keep = { view: this.view, file: this.screenFile, consoleOnly: this.consoleOnly, selected: this.selected, selection: this.selection };
+  this.consoleOnly = false;
+  this.group(`hide ${count === 1 ? 'a picture' : `${count} pictures`} covering the moving background`, () => {
+    if (this.screenFile !== 'theme.xml') this.screenFile = 'theme.xml';
+    for (const { view, names } of covers) {
+      this.view = view;
+      for (const n of names) this.setProp(n, 'visible', 'false', { literal: true });
+    }
+  });
+  if (keep.file !== this.screenFile) this.screenFile = keep.file;
+  this.view = keep.view;
+  this.consoleOnly = keep.consoleOnly;
+  this.selection = keep.selection;
+  this.selected = keep.selected;
+  this.notify(`Hid ${count === 1 ? 'the picture' : `${count} pictures`} covering the moving background, so it shows in RetroBat now. Ctrl+Z brings them back.`);
 }
 
 /**
@@ -412,5 +477,9 @@ export async function setMovingBg(this: Editor, id: string | null) {
   const v = this.designVarChange(MOVING_VAR, path ? basename(path) : 'none');
   const wrote = await this.redesignAll(bg ? `moving background “${bg.label}”` : 'no moving background', { movingBg: path }, v ? [v] : []);
   if (wrote === null) return;
+  if (bg && this.movingBgCovers().length) {
+    this.notify(`Moving background “${bg.label}” is on, but ${this.movingBgCoverText()} cover${this.movingBgCovers().flatMap((c) => c.names).length === 1 ? 's' : ''} it, so RetroBat won't show it.`, 'info', 15000, { label: 'Hide them', run: () => this.hideMovingBgCovers() });
+    return;
+  }
   this.notify(bg ? `Moving background “${bg.label}” on every screen. RetroBat plays it; the preview here shows it too. Ctrl+Z to undo.` : 'The moving background is gone; the still one shows again.');
 }

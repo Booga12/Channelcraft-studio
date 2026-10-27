@@ -1,6 +1,7 @@
 import { applyPatch, attr, patchInsertChild, patchSetText, type Patch, type XElement } from '../xml/cst';
 import type { ThemeFile, ThemeProject } from './project';
 import { splitNames, type ResolvedElement, type Resolution, type Source } from './resolver';
+import { scopeOf } from './consoles';
 
 export interface Change {
   file: ThemeFile;
@@ -81,9 +82,14 @@ export function sharing(src: Source): { views: string[]; names: string[] } {
   return { views, names };
 }
 
-/** Where a new property for this element goes: the last definition used only by this element in this view, if any. */
+/**
+ * Where a new property for this element goes: the last definition used only by this element in
+ * this view, if any. Definitions limited to one console are skipped, so an edit made for every
+ * console reaches every console.
+ */
 export function insertTarget(el: ResolvedElement, view: string): Source | null {
-  const scored = el.defs.map((d, i) => {
+  const shared = el.defs.filter((d) => scopeOf(d.node) === null);
+  const scored = (shared.length ? shared : el.defs).map((d, i) => {
     const s = sharing(d);
     const solo = s.names.length <= 1;
     const viewOnly = s.views.length === 1 && s.views[0] === view;

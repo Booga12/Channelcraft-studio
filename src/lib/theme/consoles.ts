@@ -21,6 +21,19 @@ export function consoleOf(node: XElement): string | null {
   return cond ? (cond.match(COND_RE)?.[2] ?? null) : null;
 }
 
+/**
+ * The console a definition applies to: from its own condition, or from a block it sits in (like
+ * the featured games' <view name="system" if="${system.theme} == 'snes'">). Null when it applies
+ * to every console.
+ */
+export function scopeOf(node: XElement): string | null {
+  for (let n: XElement | null = node; n; n = n.parent) {
+    const c = consoleOf(n);
+    if (c) return c;
+  }
+  return null;
+}
+
 /** The definition limited to `theme`, if any, in a property's or variable's history. */
 export function overrideIn<T extends Source>(history: T[] | undefined, theme: string): T | undefined {
   return history?.findLast((d) => consoleOf(d.node) === theme);
@@ -28,7 +41,7 @@ export function overrideIn<T extends Source>(history: T[] | undefined, theme: st
 
 /** The last definition that applies to every console. */
 export function sharedIn<T extends Source>(history: T[] | undefined): T | undefined {
-  return history?.findLast((d) => consoleOf(d.node) === null);
+  return history?.findLast((d) => scopeOf(d.node) === null);
 }
 
 function escapeText(s: string): string {

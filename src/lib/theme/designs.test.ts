@@ -24,7 +24,7 @@ const env: Environment = {
 
 const ctx = (id: string, logos = false): DesignContext => ({ art: `./_inc/ccs/${id}`, font: './_inc/fonts/x.ttf', titleFont: null, logos: logos ? './_inc/systems/logos' : null, consoles: null });
 
-const GAME_DATA = ['md_image', 'ccs_boxart', 'md_marquee', 'ccs_fanart', 'ccs_title', 'md_description', 'md_rating', 'md_releasedate', 'md_genre', 'md_developer', 'md_players', 'ccs_favorite', 'gamelist', 'logo', 'help', 'ccs_clock'];
+const GAME_DATA = ['md_image', 'ccs_boxart', 'md_marquee', 'ccs_fanart', 'ccs_title', 'md_description', 'md_rating', 'md_releasedate', 'md_genre', 'md_developer', 'md_players', 'ccs_favorite', 'gamelist', 'logo', 'help'];
 const SYSTEM_DATA = ['ccs_console', 'ccs_systemname', 'ccs_systemmaker', 'ccs_systemcount', 'ccs_systemart', 'help'];
 
 describe('designs on the starter theme (in memory)', () => {
@@ -68,7 +68,7 @@ describe('designs on the starter theme (in memory)', () => {
       // Written the way RetroBat reads it: {random:...} art (not firstfile), the count as text, PNG backgrounds.
       expect(sys.get('ccs_systemart')!.props.get('path')!.value).toMatch(/^\{random:(fanart|image)\}$/);
       expect(renderText(sys.get('ccs_systemcount')!.props.get('text')!.value, { binding: (n) => (n === 'system:total' ? 2 : undefined), exists: () => false })).toBe('2 games');
-      expect(sys.get('ccs_background')!.props.get('path')!.value).toMatch(/background\.png$/);
+      expect(sys.get('staticBackground')!.props.get('path')!.value).toMatch(/background\.png$/);
       expect(p.entry!.src).not.toContain('{system:random');
       // Theme.xml stays a well-formed, lossless document.
       expect(print(parse(p.entry!.src))).toBe(p.entry!.src);

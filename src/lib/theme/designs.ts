@@ -12,6 +12,7 @@ import { shadowXml } from './shadow';
 import { depthLevel, DRIFT_ANIM, PARALLAX, PARALLAX_ANIM, screenFxOf, SHADOWED, TITLES, type Depth } from './depth';
 import { backgroundSvg, decoSvg, hex, svg as svgDoc, type Background, type Deco } from './designArt';
 import { defaultGameLayout, gameLayout, type GameArchetype } from './gameLayouts';
+import { copyAlpha, textFxProps } from './simpleProps';
 
 export interface Palette6 {
   bg: string;
@@ -222,7 +223,8 @@ export function designVars(p: Palette6): Record<DesignVar, string> {
     designDimText: `${p.dim}FF`.slice(0, 8),
     designAccent: col(p.accent),
     designSelectedText: col(p.accentText),
-    designGlow: `${p.accent}AA`.slice(0, 8),
+    // RetroBat builds a glow up from many faint copies (see simpleProps): a faint colour for size 2.
+    designGlow: `${p.accent.slice(0, 6)}${Math.round(copyAlpha(0.7, 2) * 255).toString(16).padStart(2, '0').toUpperCase()}`,
     designRatingOff: `${p.dim.slice(0, 6)}55`,
     designListPanel: `${p.bg.slice(0, 6)}B3`,
     designTile: col(faint ? `${p.text}22` : p.surface),
@@ -242,17 +244,22 @@ function panel(d: Design, c: DesignContext, name: string, pos: string, size: str
   return { type: 'ninepatch', name, props: { pos, size, path: `${c.art}/panel.svg`, cornerSize: `${corner} ${corner}`, color, zIndex: String(z) } };
 }
 
+/**
+ * The background's name on a screen. On the console screen RetroBat draws parts named
+ * staticBackground... once for all consoles, so they stay put (and the video keeps playing) while
+ * the consoles scroll; anything else there is drawn again for each console and slides with it.
+ */
+export const backgroundName = (view: string) => (view === 'system' ? 'staticBackground' : 'ccs_background');
+export const movingBgName = (view: string) => (view === 'system' ? 'staticBackgroundMoving' : 'ccs_movingbg');
+
 function common(d: Design, c: DesignContext, view: string): DesignEl[] {
   const p = d.palette;
   const out: DesignEl[] = [
-    { type: 'image', name: 'ccs_background', props: { pos: '0 0', size: '1 1', path: `${c.art}/background.png`, zIndex: '0' } },
+    { type: 'image', name: backgroundName(view), props: { pos: '0 0', size: '1 1', path: `${c.art}/background.png`, zIndex: '0' } },
     { type: 'helpsystem', name: 'help', props: { pos: '0.02 0.955', textColor: K(d, c, 'designDimText'), iconColor: K(d, c, 'designDimText'), ...(c.font ? { fontPath: c.font } : {}) } },
-    text(d, c, 'ccs_clock', { pos: '0.97 0.035', origin: '1 0', fontSize: '0.032' }, { dim: true }),
   ];
-  // RetroBat's clock has no format: 12 or 24 hours comes from its own ClockMode12 setting.
-  out[2].type = 'clock';
   // A moving background plays just above the still one, under everything else.
-  if (c.movingBg) out.push({ type: 'video', name: 'ccs_movingbg', props: { pos: '0 0', size: '1 1', path: c.movingBg, audio: 'false', zIndex: '0.5' } });
+  if (c.movingBg) out.push({ type: 'video', name: movingBgName(view), props: { pos: '0 0', size: '1 1', path: c.movingBg, audio: 'false', zIndex: '0.5' } });
   if (d.scanlines) out.push({ type: 'image', name: 'ccs_scanlines', props: { pos: '0 0', size: '1 1', path: `${c.art}/scanlines.svg`, tile: 'true', zIndex: '90' } });
   if (d.deco) out.push({ type: 'image', name: 'ccs_deco', props: { pos: '0 0', size: '1 1', path: `${c.art}/deco.png`, zIndex: '3' }, anim: 'hover' });
   // A screen effect over everything, drawn by one of RetroBat's own shaders.
@@ -775,7 +782,7 @@ function withMotion(els: DesignEl[], c: DesignContext): DesignEl[] {
   });
 }
 
-const NO_MIRROR = new Set(['ccs_clock', 'help']);
+const NO_MIRROR = new Set(['help']);
 const r3 = (n: number) => String(Math.round(n * 1000) / 1000);
 
 /** A screen flipped left to right: each element keeps its anchor, right-aligned text turns left. */
@@ -831,7 +838,7 @@ function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game', o: { 
     if (lv.parallax && e.name === PARALLAX[kind] && !e.anim) e = { ...e, anim: PARALLAX_ANIM };
     if (lv.parallax && e.name === 'ccs_deco') e = { ...e, anim: DRIFT_ANIM };
     // Text shadows: titles on Subtle, all text on Strong; text that glows keeps its glow.
-    if (ts && !hidden && TEXT_TYPES.has(e.type) && !e.props.glowColor && (ts.on === 'all' || TITLES.includes(e.name))) e = { ...e, props: { ...e.props, glowColor: `000000${ts.alpha}`, glowSize: String(ts.size), glowOffset: `${ts.offset} ${ts.offset}` } };
+    if (ts && !hidden && TEXT_TYPES.has(e.type) && !e.props.glowColor && (ts.on === 'all' || TITLES.includes(e.name))) e = { ...e, props: { ...e.props, ...textFxProps({ kind: 'shadow', color: '000000', size: ts.size, strength: ts.strength, dx: ts.offset, dy: ts.offset }, false) } };
     // Reflections: logos on a shelf or floor, and tiles in a single row.
     if (lv.reflect && kind === 'system' && o.floor && e.type === 'image' && e.name === 'logo') e = { ...e, props: { ...e.props, reflexion: `${lv.reflect} 0` } };
     if (lv.reflect && kind === 'system' && o.oneRow && e.type === 'gridtile') e = { ...e, props: { ...e.props, reflexion: `${r2(lv.reflect * 0.8)} 0` } };
@@ -873,6 +880,15 @@ export function elementsMarkup(els: DesignEl[], extraNames: Set<string>, view: s
 }
 
 /** Names in a design that are the design's own (not RetroBat's), so they get extra="true". */
+/**
+ * RetroBat's own clock, placed where the design wants it. It is one clock for every screen (the
+ * "screen" view), and RetroBat's "Show clock" setting turns it on and off; its 12 or 24 hours come
+ * from the ClockMode12 setting.
+ */
+export function designClock(d: Design, c: DesignContext): DesignEl {
+  return { type: 'clock', name: 'clock', props: { pos: '0.97 0.035', origin: '1 0', size: '0.3 0.05', alignment: 'right', color: K(d, c, 'designDimText'), ...(c.font ? { fontPath: c.font } : {}), fontSize: '0.032' } };
+}
+
 export function isDesignExtra(name: string): boolean {
   return name.startsWith('ccs_');
 }
