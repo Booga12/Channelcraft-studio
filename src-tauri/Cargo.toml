@@ -1,6 +1,6 @@
 [package]
 name = "channelcraft-studio"
-version = "0.2.3"
+version = "0.2.4"
 description = "Theme editor for RetroBat"
 authors = ["ChannelCraft Studio contributors"]
 license = "MIT"
