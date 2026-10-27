@@ -373,6 +373,25 @@ describe('sound and music (starter theme, in memory)', () => {
     expect(ed.themeScrollSound()).toBeNull();
   });
 
+  it('puts a moving background on every screen, keeps it through a depth change, and takes it off', async () => {
+    const { DESIGNS } = await import('./theme/designs');
+    const { movingFileName, MOVING_DIR } = await import('./theme/movingBg');
+    await ed.applyDesign(DESIGNS[0]);
+    // Making the video needs the app's window; here the file is taken to be made already.
+    const rel = `${MOVING_DIR}/${movingFileName('bokeh', ed.designColours()!)}`;
+    ed.project!.setAssets([...ed.project!.assets, { rel, kind: 'video', size: 0 }]);
+    await ed.setMovingBg('bokeh');
+    const bg = (view: string) => (ed.themeRes ?? ed.res)!.views.get(view)?.elements.get('ccs_movingbg')?.props.get('path')?.value;
+    expect(ed.movingBg()).toBe('bokeh');
+    expect(bg('system')).toBe(`./${rel}`);
+    expect(bg('detailed')).toBe(`./${rel}`);
+    await ed.setDepth('strong');
+    expect(bg('detailed')).toBe(`./${rel}`);
+    await ed.setMovingBg(null);
+    expect(ed.movingBg()).toBeNull();
+    expect(bg('system')).toBeUndefined();
+  });
+
   it('keeps the music and scroll sound when another design is applied', async () => {
     const { DESIGNS } = await import('./theme/designs');
     await ed.applyDesign(DESIGNS[0]);

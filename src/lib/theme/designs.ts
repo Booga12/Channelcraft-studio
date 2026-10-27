@@ -186,6 +186,8 @@ export interface DesignContext {
   motion?: { amount: number; speed: number };
   /** A RetroBat screen shader over every screen (see SCREEN_FX), or none. */
   screenFx?: string;
+  /** Theme-relative path of a moving background video (see movingBg.ts), played behind everything. */
+  movingBg?: string | null;
 }
 
 const LABELS_AND_EXTRAS = ['md_lbl_rating', 'md_lbl_releasedate', 'md_lbl_developer', 'md_lbl_publisher', 'md_lbl_genre', 'md_lbl_players', 'md_lbl_lastplayed', 'md_lbl_playcount', 'md_publisher', 'md_playcount', 'md_lastplayed'];
@@ -249,6 +251,8 @@ function common(d: Design, c: DesignContext, view: string): DesignEl[] {
   ];
   // RetroBat's clock has no format: 12 or 24 hours comes from its own ClockMode12 setting.
   out[2].type = 'clock';
+  // A moving background plays just above the still one, under everything else.
+  if (c.movingBg) out.push({ type: 'video', name: 'ccs_movingbg', props: { pos: '0 0', size: '1 1', path: c.movingBg, audio: 'false', zIndex: '0.5' } });
   if (d.scanlines) out.push({ type: 'image', name: 'ccs_scanlines', props: { pos: '0 0', size: '1 1', path: `${c.art}/scanlines.svg`, tile: 'true', zIndex: '90' } });
   if (d.deco) out.push({ type: 'image', name: 'ccs_deco', props: { pos: '0 0', size: '1 1', path: `${c.art}/deco.png`, zIndex: '3' }, anim: 'hover' });
   // A screen effect over everything, drawn by one of RetroBat's own shaders.

@@ -20,6 +20,9 @@ import { sharedIn } from '../theme/consoles';
 import { svgToPngBase64 } from '../raster';
 import { task } from '../task.svelte';
 import { viewLabel } from '../friendly';
+import { basename } from '../path';
+import { canMakeVideos, makeMovingBg, MOVING_BGS, MOVING_DIR, MOVING_VAR, movingFileName } from '../theme/movingBg';
+import { toBase64 } from '../theme/sounds';
 
 /**
  * Gives a design theme more or less depth on every screen at once, as one undo step. Each screen
@@ -56,7 +59,7 @@ export async function setScreenFx(this: Editor, id: ScreenFx) {
  * everything you chose on them; one undo step together with `extra` changes. Returns whether the
  * artwork could be written, or null if the theme closed meanwhile.
  */
-export async function redesignAll(this: Editor, label: string, o: { depth?: Depth; screenFx?: string }, extra: Change[]): Promise<boolean | null> {
+export async function redesignAll(this: Editor, label: string, o: { depth?: Depth; screenFx?: string; movingBg?: string | null }, extra: Change[]): Promise<boolean | null> {
   const p = this.project;
   if (!p) return null;
   const id = o.depth ?? this.depth ?? 'subtle';
@@ -76,7 +79,7 @@ export async function redesignAll(this: Editor, label: string, o: { depth?: Dept
     const font = await this.ensureFont(d.font);
     const titleFont = d.titleFont ? await this.ensureFont(d.titleFont) : null;
     if (this.project !== p) return null;
-    const ctx = { vars: true, art: `./${artRel}`, font: font ? `./${font}` : null, titleFont: titleFont ? `./${titleFont}` : null, logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null, consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null, depth: id, motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined, screenFx: o.screenFx ?? this.screenFx };
+    const ctx = { vars: true, art: `./${artRel}`, font: font ? `./${font}` : null, titleFont: titleFont ? `./${titleFont}` : null, logos: has('_inc/systems/logos') ? './_inc/systems/logos' : null, consoles: has('_inc/systems/consoles') ? './_inc/systems/consoles' : null, depth: id, motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined, screenFx: o.screenFx ?? this.screenFx, movingBg: o.movingBg !== undefined ? o.movingBg : this.movingBgPath() };
     const now = this.res;
     if (!now) return null;
     const gameLayouts = Object.fromEntries(vs.map((v) => [v, appliedGameLayout(p, v)]));
@@ -358,4 +361,56 @@ export function applyPalette(this: Editor, palette: Palette): number {
     .filter((c): c is Change => !!c);
   if (changes.length) this.commit(`palette “${palette.label}”${this.consoleOnly ? ` for ${this.consoleName}` : ''}`, changes);
   return changes.length;
+}
+
+/** The moving background video the theme uses (theme-relative, ./...), if its file is there. */
+export function movingBgPath(this: Editor): string | null {
+  const p = this.project;
+  const file = (this.themeRes ?? this.res)?.vars.get(MOVING_VAR)?.value.trim();
+  if (!p || !file || file === 'none') return null;
+  const rel = `${MOVING_DIR}/${file}`;
+  return p.assets.some((a) => a.rel.toLowerCase() === rel.toLowerCase()) ? `./${rel}` : null;
+}
+
+/** Which moving background the theme has (an id in MOVING_BGS), or null. */
+export function movingBg(this: Editor): string | null {
+  void this.rev;
+  const path = this.movingBgPath();
+  return path ? (MOVING_BGS.find((m) => basename(path).startsWith(`${m.id}-`))?.id ?? null) : null;
+}
+
+/**
+ * Gives every screen of a design theme a moving background, made now in the theme's colours
+ * (a few seconds), or takes it away. One undo step.
+ */
+export async function setMovingBg(this: Editor, id: string | null) {
+  if (this.sharedOnly('Moving backgrounds')) return;
+  const p = this.project;
+  const colours = this.designColours();
+  if (!p || this.depth === null || !colours || !['system', ...GAME_VIEWS].some((v) => appliedDesign(p, v))) return void this.notify('Moving backgrounds work on themes made from a design (New theme, or a design in Presets).', 'error');
+  if (this.menuGuard()) return;
+  const bg = id ? MOVING_BGS.find((m) => m.id === id) : null;
+  if (id && !bg) return;
+  let path: string | null = null;
+  if (bg) {
+    const file = movingFileName(bg.id, colours);
+    const rel = `${MOVING_DIR}/${file}`;
+    if (!p.assets.some((a) => a.rel.toLowerCase() === rel.toLowerCase())) {
+      if (!canMakeVideos()) return void this.notify('This PC can’t make videos here, so moving backgrounds aren’t available.', 'error');
+      try {
+        await this.ensureBackup();
+        const bytes = await makeMovingBg(bg.id, colours, (f) => this.notify(`Making “${bg.label}”… ${Math.round(f * 100)}%`, 'info', 600000));
+        await api.writeBinary(join(p.dir, rel), toBase64(bytes));
+      } catch (e) {
+        return void this.notify(`Couldn’t make the moving background: ${e}`, 'error');
+      }
+      if (this.project !== p) return;
+      p.setAssets([...p.assets, { rel, kind: 'video', size: 0 }]);
+    }
+    path = `./${rel}`;
+  }
+  const v = this.designVarChange(MOVING_VAR, path ? basename(path) : 'none');
+  const wrote = await this.redesignAll(bg ? `moving background “${bg.label}”` : 'no moving background', { movingBg: path }, v ? [v] : []);
+  if (wrote === null) return;
+  this.notify(bg ? `Moving background “${bg.label}” on every screen. RetroBat plays it; the preview here shows it too. Ctrl+Z to undo.` : 'The moving background is gone; the still one shows again.');
 }

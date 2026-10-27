@@ -13,6 +13,7 @@
   import DesignGroupChips from './DesignGroupChips.svelte';
   import { backgroundSvg } from '$lib/theme/designArt';
   import { removeMyDesign } from '$lib/theme/designList.svelte';
+  import { MOVING_BGS } from '$lib/theme/movingBg';
   import { ask } from '@tauri-apps/plugin-dialog';
 
   const GAME_LISTS = ['basic', 'detailed', 'video'];
@@ -129,6 +130,16 @@
   }
 
   const canSave = $derived(ed.canSaveDesign());
+
+  let makingBg = $state(false);
+  async function setMoving(id: string | null) {
+    makingBg = true;
+    try {
+      await ed.setMovingBg(id);
+    } finally {
+      makingBg = false;
+    }
+  }
 
   async function removeDesign(d: Design) {
     const ok = await ask(`Delete “${d.label}” from My designs? Themes made with it keep their look.`, { title: 'Delete design', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Keep it' });
@@ -292,6 +303,21 @@
             {/each}
           </div>
           <p class="text-xs text-muted-foreground">Drawn over every screen by RetroBat's own shaders. The preview shows a close match.</p>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <span class="text-xs font-medium">Moving background</span>
+          <div class="grid grid-cols-2 gap-1">
+            {#each [{ id: null, label: 'Still', help: 'The design’s own picture, not moving' }, ...MOVING_BGS] as m (m.id ?? 'none')}
+              <button
+                class="rounded-md px-2 py-1 text-xs font-medium ring-1 ring-border transition-colors duration-150 hover:bg-muted disabled:opacity-50 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:ring-primary"
+                aria-pressed={ed.movingBg() === m.id}
+                disabled={makingBg}
+                onclick={() => setMoving(m.id)}
+                title={m.help}>{m.label}</button
+              >
+            {/each}
+          </div>
+          <p class="text-xs text-muted-foreground">A short video made in your colours, looping behind everything. It takes a few seconds to make. After changing colours, pick it again to redraw it.</p>
         </div>
       {/if}
       <div class="flex flex-col gap-1.5">

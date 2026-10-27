@@ -1097,6 +1097,8 @@ export class Editor {
       depth,
       motion: this.motionFeel ? MOTION_FEELS[this.motionFeel] : undefined,
       screenFx: this.screenFx,
+      // A moving background is drawn in the theme's colours: it stays only while they do.
+      movingBg: keepColours ? this.movingBgPath() : null,
     };
     this.rev++;
     const res = this.res;
