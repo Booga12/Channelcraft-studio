@@ -72,3 +72,10 @@ export function relative(fromDir: string, target: string): string {
   const parts = [...ups, ...rest];
   return './' + parts.join('/');
 }
+
+/** Whether `path` is inside `dir` (Windows paths: either slash, any case). */
+export function insideDir(path: string, dir: string): boolean {
+  const norm = (x: string) => x.replace(/[\\/]+/g, '/').replace(/\/$/, '').toLowerCase();
+  const d = norm(dir);
+  return !!d && norm(path).startsWith(`${d}/`);
+}

@@ -50,6 +50,29 @@ export interface ThemeFs {
   loadAll?(dir: string): Promise<{ entries: FileEntry[]; xml: TextFile[] }>;
 }
 
+/** One thing in a folder the Explorer panel looks at. */
+export interface ExplorerEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  /** What a file is to a theme ("" for folders, "other" for files a theme can't use). */
+  kind: 'image' | 'video' | 'sound' | 'font' | 'other' | '';
+  size: number;
+  /** Unix seconds. */
+  modified: number;
+  /** Why a file can't be added, or null when it can. */
+  problem: string | null;
+  /** For folders: how many things are inside. */
+  items: number | null;
+}
+
+export interface ExplorerPlace {
+  name: string;
+  path: string;
+  group: 'place' | 'drive' | 'retrobat';
+  detail: string;
+}
+
 export interface LibraryAsset {
   path: string;
   /** Path inside the library folder, with forward slashes. */
@@ -156,6 +179,16 @@ export const api = {
   listLibraryAssets: () => invoke<LibraryAsset[]>('list_library_assets'),
   /** Copies files into the library by kind; nothing there is overwritten. */
   addLibraryAssets: (paths: string[]) => invoke<{ added: string[]; existing: string[]; problems: string[] }>('add_library_assets', { paths }),
+  /** One folder's contents for the Explorer panel (folders first; capped for huge folders). */
+  explorerList: (path: string) => invoke<{ path: string; parent: string | null; entries: ExplorerEntry[]; total: number; truncated: boolean }>('explorer_list', { path }),
+  /** Files whose names contain `query`, in a folder and the folders inside it. */
+  explorerSearch: (path: string, query: string) => invoke<{ entries: ExplorerEntry[]; truncated: boolean }>('explorer_search', { path, query }),
+  /** Every file a theme can use in a folder and the folders inside it. */
+  explorerFolderFiles: (path: string) => invoke<{ files: { path: string; size: number }[]; truncated: boolean }>('explorer_folder_files', { path }),
+  /** Windows' own folders, the drives and RetroBat's folders. */
+  explorerPlaces: () => invoke<ExplorerPlace[]>('explorer_places'),
+  /** Copies files into the theme by kind; returns theme-relative paths. */
+  explorerAddToTheme: (themeDir: string, paths: string[]) => invoke<{ added: string[]; existing: string[]; problems: string[] }>('explorer_add_to_theme', { themeDir, paths }),
   /** Moves a library file to the Recycle Bin. */
   removeLibraryAsset: (path: string) => invoke<void>('remove_library_asset', { path }),
   readThemesettings: (theme: string) => invoke<string>('read_themesettings', { theme }),

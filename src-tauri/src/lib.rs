@@ -2,6 +2,7 @@ mod commands;
 mod storage;
 mod importing;
 mod assets;
+mod explorer;
 mod intro;
 mod problems;
 
@@ -145,6 +146,11 @@ pub fn run() {
             assets::list_library_assets,
             assets::add_library_assets,
             assets::remove_library_asset,
+            explorer::explorer_list,
+            explorer::explorer_search,
+            explorer::explorer_folder_files,
+            explorer::explorer_places,
+            explorer::explorer_add_to_theme,
             problems::log_problem,
             problems::read_problem_log,
             problems::problem_log_path,

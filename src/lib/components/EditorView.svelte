@@ -16,6 +16,7 @@
   import OptionsPanel from './OptionsPanel.svelte';
   import VariablesPanel from './VariablesPanel.svelte';
   import FilesPanel from './FilesPanel.svelte';
+  import ExplorerPanel from './ExplorerPanel.svelte';
   import Preview from './Preview.svelte';
   import PropertyPanel from './PropertyPanel.svelte';
   import SourceView from './SourceView.svelte';
@@ -169,6 +170,8 @@
     <OptionsPanel />
   {:else if id === 'history'}
     <HistoryPanel />
+  {:else if id === 'explorer'}
+    <ExplorerPanel />
   {:else if id === 'files'}
     <FilesPanel />
   {/if}

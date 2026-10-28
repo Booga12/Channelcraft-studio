@@ -1,7 +1,7 @@
 // User preferences, kept in the webview's local storage.
 
 /** The panels that open from the tool dock beside the preview. */
-export type PanelId = 'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'variables' | 'options' | 'history' | 'files';
+export type PanelId = 'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'variables' | 'options' | 'history' | 'explorer' | 'files';
 
 export type Mode = 'system' | 'light' | 'dark';
 
