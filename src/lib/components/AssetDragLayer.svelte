@@ -65,7 +65,7 @@
   });
 
   const t = $derived(assetDrag.target);
-  const label = $derived(assetDrag.item ? (assetDrag.external && !t ? 'Drop to add to your Assets' : describe(t, assetDrag.item, assetDrag.external ? dropped.filter((p) => kindOfFile(p)).length : 1)) : '');
+  const label = $derived(assetDrag.item ? (assetDrag.external && !t ? 'Drop to add to your Assets' : describe(t, assetDrag.item, assetDrag.external ? dropped.filter((p) => kindOfFile(p)).length : assetDrag.paths.length || 1)) : '');
 </script>
 
 {#if assetDrag.item}
@@ -85,7 +85,7 @@
         <img src={fileUrl(assetDrag.item.path)} alt="" />
       {/if}
       <span class="txt">
-        <strong>{assetDrag.item.name}</strong>
+        <strong>{assetDrag.item.name}{#if assetDrag.paths.length > 1}<span class="more"> + {assetDrag.paths.length - 1} more</span>{/if}</strong>
         <small>{label}</small>
       </span>
     </div>
@@ -148,6 +148,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .more {
+    color: var(--text-dim);
+    font-weight: 500;
   }
   small {
     color: var(--text-dim);

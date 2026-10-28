@@ -216,4 +216,17 @@ describe('the explorer panel state', () => {
     explorer.clear();
     respond = () => null;
   });
+
+  it('drags every ticked file when the dragged one is ticked, else just that one', async () => {
+    const { dragPaths } = await import('./explorer.svelte');
+    const { insideDir } = await import('./path');
+    expect(dragPaths('a', new Set(['a', 'b', 'c']))).toEqual(['a', 'b', 'c']);
+    expect(dragPaths('b', new Set(['a', 'b']))).toEqual(['b', 'a']);
+    expect(dragPaths('x', new Set(['a', 'b']))).toEqual(['x']);
+    expect(dragPaths('a', new Set(['a']))).toEqual(['a']);
+    // Files already in the theme are used where they are.
+    expect(insideDir('M:\\Themes\\T\\art\\a.png', 'm:/themes/t')).toBe(true);
+    expect(insideDir('M:\\Themes\\T2\\a.png', 'M:\\Themes\\T')).toBe(false);
+    expect(insideDir('C:\\pics\\a.png', '')).toBe(false);
+  });
 });

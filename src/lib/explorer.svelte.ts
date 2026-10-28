@@ -477,3 +477,12 @@ export function folderOf(path: string): string {
   return /^[a-z]:$/i.test(parent) ? `${parent}\\` : parent;
 }
 
+
+/**
+ * The files a drag from `path` carries: every ticked file (the dragged one first) when it is one
+ * of several ticked, else just that one.
+ */
+export function dragPaths(path: string, selected: ReadonlySet<string>): string[] {
+  if (!selected.has(path) || selected.size < 2) return [path];
+  return [path, ...[...selected].filter((p) => p !== path)];
+}

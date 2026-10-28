@@ -8,7 +8,7 @@ import { type ThemeFile, ThemeProject } from '../theme/project';
 import { addElementChange, insertTarget, varRef } from '../theme/edits';
 import { api } from '../api';
 import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
-import { basename, dirname, join, relative } from '../path';
+import { basename, dirname, insideDir, join, relative } from '../path';
 import { blobBase64 } from '../raster';
 import { catalogFont } from '../theme/fonts';
 import { elementLabel, propLabel } from '../friendly';
@@ -260,6 +260,8 @@ export function relativeAssetPath(this: Editor, elementName: string, prop: strin
 export async function importAsset(this: Editor, srcPath: string, kind: AssetKind): Promise<string | null> {
   const p = this.project;
   if (!p) return null;
+  // A file already inside the theme (dragged from the Explorer's "This theme") is used where it is.
+  if (insideDir(srcPath, p.dir)) return srcPath;
   const dir = ASSET_THEME_DIR[kind];
   const rel = await api.importAsset(p.dir, srcPath, dir);
   p.setAssets(await api.listThemeFiles(p.dir));

@@ -122,12 +122,15 @@ class AssetDrag {
   x = $state(0);
   y = $state(0);
   target = $state.raw<DropTarget | null>(null);
-  /** Files dragged in from Explorer (no single item yet). */
+  /** Files dragged in from Windows Explorer (no single item yet). */
   external = $state(false);
+  /** Every file being dragged, when it's more than the one item (ticked files in the Explorer tab). */
+  paths = $state.raw<string[]>([]);
 
-  start(item: DragItem, external = false) {
+  start(item: DragItem, external = false, paths: string[] = []) {
     this.item = item;
     this.external = external;
+    this.paths = paths;
     this.target = null;
   }
 
@@ -154,6 +157,7 @@ class AssetDrag {
     this.item = null;
     this.target = null;
     this.external = false;
+    this.paths = [];
   }
 
   /**
@@ -163,6 +167,7 @@ class AssetDrag {
   async drop(paths?: string[]): Promise<boolean> {
     const item = this.item;
     const t = this.target;
+    const many = paths?.length ? paths : this.paths;
     this.cancel();
     if (!item || !t) return false;
     if (!t.fit.ok) {
@@ -170,7 +175,7 @@ class AssetDrag {
       return true;
     }
     if (t.add) {
-      const files = (paths?.length ? paths : [item.path]).map((path) => ({ path, kind: kindOfFile(path) })).filter((f): f is { path: string; kind: AssetKind } => !!f.kind);
+      const files = (many.length ? many : [item.path]).map((path) => ({ path, kind: kindOfFile(path) })).filter((f): f is { path: string; kind: AssetKind } => !!f.kind);
       await ed.addAssets(files, t.add);
       return true;
     }

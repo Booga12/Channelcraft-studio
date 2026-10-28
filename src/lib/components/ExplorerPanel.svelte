@@ -4,8 +4,10 @@
   import { onMount } from 'svelte';
   import { ed } from '$lib/editor.svelte';
   import { fileUrl, type ExplorerEntry } from '$lib/api';
+  import { assetDrag, kindOfFile } from '$lib/assetDrag.svelte';
   import {
     crumbsOf,
+    dragPaths,
     explorer,
     folderOf,
     formatSize,
@@ -89,8 +91,61 @@
   }
 
   function onTile(e: ExplorerEntry, ev: MouseEvent | KeyboardEvent) {
+    // The click that ends a drag doesn't tick.
+    if (dragged) return void (dragged = false);
     if (searching && ev instanceof MouseEvent && ev.detail === 2) return;
     explorer.click(e, files, { shift: ev.shiftKey }, can);
+  }
+
+  // ---- dragging a file onto the preview, a layer or a property row (as from Assets) ----
+  let dragged = false;
+  function down(ev: PointerEvent, e: ExplorerEntry) {
+    const kind = kindOfFile(e.path);
+    if (ev.button !== 0 || e.isDir || e.problem || !kind || !themeDir) return;
+    const node = ev.currentTarget as HTMLElement;
+    const sx = ev.clientX;
+    const sy = ev.clientY;
+    let started = false;
+    let paths: string[] = [];
+    const move = (m: PointerEvent) => {
+      if (!started) {
+        if (Math.hypot(m.clientX - sx, m.clientY - sy) < 5) return;
+        started = true;
+        node.setPointerCapture(m.pointerId);
+        // Ticked files only come along from My PC (This theme has no ticks).
+        paths = inTheme ? [e.path] : dragPaths(e.path, explorer.selected);
+        assetDrag.start({ path: e.path, kind, name: e.name }, false, paths.length > 1 ? paths : []);
+      }
+      assetDrag.move(m.clientX, m.clientY);
+    };
+    const key = (k: KeyboardEvent) => k.key === 'Escape' && (assetDrag.cancel(), stop());
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('keydown', key);
+    };
+    const cancel = () => {
+      stop();
+      if (started) assetDrag.cancel();
+    };
+    const up = async () => {
+      stop();
+      if (!started) return;
+      dragged = true;
+      // If no click follows (released outside the tile), don't eat the next real one.
+      setTimeout(() => (dragged = false), 0);
+      if (!assetDrag.item) return;
+      const hit = assetDrag.target;
+      // Pictures and videos that became new layers are in the theme now: untick them.
+      if ((await assetDrag.drop()) && hit?.fit.ok && hit.add) {
+        for (const p of paths) if (['image', 'video'].includes(kindOfFile(p) ?? '')) explorer.selected.delete(p);
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('keydown', key);
   }
 
   async function onFolderTick(e: ExplorerEntry) {
@@ -298,7 +353,9 @@
               aria-checked={inTheme ? undefined : on}
               aria-disabled={!can(e) && !inTheme}
               tabindex={inTheme ? undefined : 0}
-              title="{e.name}{e.problem ? `\n${e.problem}` : already ? '\nAlready in this theme' : ''}"
+              title="{e.name}{e.problem ? `\n${e.problem}` : `${already ? '\nAlready in this theme' : ''}\nDrag onto the preview to use it`}"
+              class:drag={!e.problem && !!themeDir}
+              onpointerdown={(ev) => down(ev, e)}
               onclick={(ev) => onTile(e, ev)}
               onkeydown={(ev) => ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ') && (ev.preventDefault(), onTile(e, ev))}
               onmouseenter={(ev) => e.kind === 'video' && (ev.currentTarget.querySelector('video') as HTMLVideoElement | null)?.play().catch(() => {})}
@@ -313,7 +370,7 @@
                 {:else if e.kind === 'font'}
                   <span class="aa" style:font-family="{fontFamily(e.path)}, sans-serif">Aa</span>
                 {:else if e.kind === 'sound'}
-                  <button class="play" class:playing={playing === e.path} title={playing === e.path ? 'Stop' : 'Listen'} aria-label={playing === e.path ? 'Stop' : 'Listen'} onclick={(ev) => (ev.stopPropagation(), toggleSound(e))}>{playing === e.path ? '■' : '♪'}</button>
+                  <button class="play" class:playing={playing === e.path} title={playing === e.path ? 'Stop' : 'Listen'} aria-label={playing === e.path ? 'Stop' : 'Listen'} onpointerdown={(ev) => ev.stopPropagation()} onclick={(ev) => (ev.stopPropagation(), toggleSound(e))}>{playing === e.path ? '■' : '♪'}</button>
                 {:else}
                   <span class="mark dim">?</span>
                 {/if}
@@ -341,7 +398,9 @@
               role={inTheme ? 'listitem' : 'checkbox'}
               aria-checked={inTheme ? undefined : on}
               tabindex={inTheme ? undefined : 0}
-              title={e.problem ?? e.path}
+              title={e.problem ?? `${e.path}\nDrag onto the preview to use it`}
+              class:drag={!e.problem && !!themeDir}
+              onpointerdown={(ev) => down(ev, e)}
               onclick={(ev) => onTile(e, ev)}
               onkeydown={(ev) => ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ') && (ev.preventDefault(), onTile(e, ev))}
             >
@@ -698,6 +757,10 @@
   }
   .tile:hover {
     border-color: var(--brand);
+  }
+  .tile.drag:active,
+  .lrow.drag:active {
+    cursor: grabbing;
   }
   .tile:focus-visible,
   .lrow:focus-visible,
