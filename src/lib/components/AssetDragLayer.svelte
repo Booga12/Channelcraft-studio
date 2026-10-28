@@ -10,6 +10,7 @@
   import { fileUrl } from '$lib/api';
   import { basename } from '$lib/path';
   import { prefs } from '$lib/prefs.svelte';
+  import { explorer } from '$lib/explorer.svelte';
 
   let dropped = $state<string[]>([]);
 
@@ -31,6 +32,12 @@
             assetDrag.move(...toCss(d.position));
           } else if (d.type === 'drop') {
             const paths = d.paths.length ? d.paths : dropped;
+            const [cx, cy] = toCss(d.position);
+            if (paths.length && document.elementFromPoint(cx, cy)?.closest('[data-explorer-drop]')) {
+              assetDrag.cancel();
+              await explorer.openDropped(paths);
+              return;
+            }
             if (assetDrag.item) assetDrag.move(...toCss(d.position));
             if (assetDrag.target) {
               await assetDrag.drop(paths);

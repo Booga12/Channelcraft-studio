@@ -173,7 +173,7 @@ export class Editor {
   /** Bumped whenever a panel is asked for, so asking twice still brings it forward. */
   panelRequest = $state(0);
 
-  showPanel(id: 'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'options' | 'variables' | 'files' | 'history' | 'properties') {
+  showPanel(id: 'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'options' | 'variables' | 'files' | 'history' | 'explorer' | 'properties') {
     this.leftTab = id as typeof this.leftTab;
     this.panelRequest++;
   }
@@ -200,7 +200,7 @@ export class Editor {
   hidden = $state<Record<string, boolean>>({});
   sourceFile = $state<string | null>(null);
   sourceLine = $state<number | null>(null);
-  leftTab = $state<'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'options' | 'variables' | 'files' | 'history' | 'properties'>('elements');
+  leftTab = $state<'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'options' | 'variables' | 'files' | 'history' | 'explorer' | 'properties'>('elements');
   showSource = $state(false);
   toast = $state<Toast | null>(null);
   busy = $state(false);

@@ -39,7 +39,7 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Kind::Xml => "XML file",
             Kind::Image => "picture",
@@ -50,7 +50,7 @@ impl Kind {
         }
     }
     /// Largest single file accepted when importing one asset.
-    fn max_asset(self) -> u64 {
+    pub(crate) fn max_asset(self) -> u64 {
         match self {
             Kind::Image => 64 << 20,
             Kind::Font => 32 << 20,
@@ -190,12 +190,12 @@ fn open_source(source: &Path) -> CmdResult<Source> {
 }
 
 #[cfg(windows)]
-fn is_reparse(meta: &fs::Metadata) -> bool {
+pub(crate) fn is_reparse(meta: &fs::Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
     meta.file_attributes() & 0x400 != 0
 }
 #[cfg(not(windows))]
-fn is_reparse(_meta: &fs::Metadata) -> bool {
+pub(crate) fn is_reparse(_meta: &fs::Metadata) -> bool {
     false
 }
 
