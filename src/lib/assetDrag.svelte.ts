@@ -164,7 +164,7 @@ class AssetDrag {
    * Adds the item (or all `paths`, from Explorer) as new elements, or links it to the element under
    * the pointer. Returns whether something was hit.
    */
-  async drop(paths?: string[]): Promise<boolean> {
+  async drop(paths?: string[], placed?: string[]): Promise<boolean> {
     const item = this.item;
     const t = this.target;
     const many = paths?.length ? paths : this.paths;
@@ -176,7 +176,7 @@ class AssetDrag {
     }
     if (t.add) {
       const files = (many.length ? many : [item.path]).map((path) => ({ path, kind: kindOfFile(path) })).filter((f): f is { path: string; kind: AssetKind } => !!f.kind);
-      await ed.addAssets(files, t.add);
+      await ed.addAssets(files, t.add, placed);
       return true;
     }
     await ed.linkAsset(item.path, item.kind, t.element, t.prop);

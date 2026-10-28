@@ -5,6 +5,7 @@
   import { ed } from '$lib/editor.svelte';
   import { fileUrl, type ExplorerEntry } from '$lib/api';
   import { assetDrag, kindOfFile } from '$lib/assetDrag.svelte';
+  import { addsAsNew } from '$lib/theme/assetDrop';
   import {
     crumbsOf,
     dragPaths,
@@ -112,13 +113,29 @@
         if (Math.hypot(m.clientX - sx, m.clientY - sy) < 5) return;
         started = true;
         node.setPointerCapture(m.pointerId);
-        // Ticked files only come along from My PC (This theme has no ticks).
-        paths = inTheme ? [e.path] : dragPaths(e.path, explorer.selected);
+        // Ticked files only come along from My PC (This theme has no ticks), and only when this
+        // is a picture or video: those are the ones that become new layers together.
+        paths = inTheme || !addsAsNew(kind) ? [e.path] : dragPaths(e.path, explorer.selected).filter((p) => {
+                const k = kindOfFile(p);
+                return !!k && addsAsNew(k);
+              });
         assetDrag.start({ path: e.path, kind, name: e.name }, false, paths.length > 1 ? paths : []);
       }
       assetDrag.move(m.clientX, m.clientY);
     };
-    const key = (k: KeyboardEvent) => k.key === 'Escape' && (assetDrag.cancel(), stop());
+    /** The click that follows letting go mustn't tick (the tile still has the pointer). */
+    const eatClick = () => {
+      dragged = true;
+      // If no click follows (released outside the tile), don't eat the next real one.
+      const clear = () => setTimeout(() => (dragged = false), 0);
+      window.addEventListener('pointerup', clear, { once: true, capture: true });
+    };
+    const key = (k: KeyboardEvent) => {
+      if (k.key !== 'Escape') return;
+      if (started) eatClick();
+      assetDrag.cancel();
+      stop();
+    };
     const stop = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
@@ -133,14 +150,12 @@
       stop();
       if (!started) return;
       dragged = true;
-      // If no click follows (released outside the tile), don't eat the next real one.
       setTimeout(() => (dragged = false), 0);
       if (!assetDrag.item) return;
-      const hit = assetDrag.target;
-      // Pictures and videos that became new layers are in the theme now: untick them.
-      if ((await assetDrag.drop()) && hit?.fit.ok && hit.add) {
-        for (const p of paths) if (['image', 'video'].includes(kindOfFile(p) ?? '')) explorer.selected.delete(p);
-      }
+      // Files that really became new layers are in the theme now: untick them.
+      const placed: string[] = [];
+      await assetDrag.drop(undefined, placed);
+      for (const p of placed) explorer.selected.delete(p);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -869,6 +884,7 @@
     padding: 5px 6px;
     border-radius: 6px;
     cursor: pointer;
+    user-select: none;
   }
   .lrow:hover {
     background: var(--bg);

@@ -7,6 +7,7 @@
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { ed } from '$lib/editor.svelte';
   import { assetDrag, describe, kindOfFile } from '$lib/assetDrag.svelte';
+  import { addsAsNew } from '$lib/theme/assetDrop';
   import { fileUrl } from '$lib/api';
   import { basename } from '$lib/path';
   import { prefs } from '$lib/prefs.svelte';
@@ -65,7 +66,17 @@
   });
 
   const t = $derived(assetDrag.target);
-  const label = $derived(assetDrag.item ? (assetDrag.external && !t ? 'Drop to add to your Assets' : describe(t, assetDrag.item, assetDrag.external ? dropped.filter((p) => kindOfFile(p)).length : assetDrag.paths.length || 1)) : '');
+  /** Several files can only go on as new layers; replacing an element's file uses the grabbed one. */
+  const replacing = $derived(!!t && !t.add);
+  const many = $derived(assetDrag.paths.length > 1 && !replacing);
+  const newLayers = (paths: string[]) => paths.filter((p) => { const k = kindOfFile(p); return !!k && addsAsNew(k); }).length || 1;
+  const label = $derived.by(() => {
+    const item = assetDrag.item;
+    if (!item) return '';
+    if (assetDrag.external && !t) return 'Drop to add to your Assets';
+    const text = describe(t, item, assetDrag.external ? newLayers(dropped) : many ? assetDrag.paths.length : 1);
+    return assetDrag.paths.length > 1 && replacing && t?.fit.ok ? `${text} · only this file` : text;
+  });
 </script>
 
 {#if assetDrag.item}
@@ -85,7 +96,7 @@
         <img src={fileUrl(assetDrag.item.path)} alt="" />
       {/if}
       <span class="txt">
-        <strong>{assetDrag.item.name}{#if assetDrag.paths.length > 1}<span class="more"> + {assetDrag.paths.length - 1} more</span>{/if}</strong>
+        <strong>{assetDrag.item.name}{#if many}<span class="more"> + {assetDrag.paths.length - 1} more</span>{/if}</strong>
         <small>{label}</small>
       </span>
     </div>

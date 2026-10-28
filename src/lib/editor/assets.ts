@@ -101,7 +101,7 @@ export async function linkAsset(this: Editor, src: string, kind: AssetKind, elem
  * else the middle) and stepped a little apart, above everything else. Each file is copied into
  * the theme first. All of it is one undo step. Returns the new element names.
  */
-export async function addAssets(this: Editor, files: { path: string; kind: AssetKind }[], at?: { x: number; y: number }): Promise<string[]> {
+export async function addAssets(this: Editor, files: { path: string; kind: AssetKind }[], at?: { x: number; y: number }, placed?: string[]): Promise<string[]> {
   const p = this.project;
   const res = this.res;
   if (!p || !res || !this.currentView) return [];
@@ -121,7 +121,10 @@ export async function addAssets(this: Editor, files: { path: string; kind: Asset
       this.notify(String(e), 'error');
     }
   }
-  return this.placeNewAssets(p, view, copied, at, skipped);
+  const names = this.placeNewAssets(p, view, copied, at, skipped);
+  // `placed` gets the source files that really became layers (all copied ones, or none).
+  if (names.length) placed?.push(...copied.map((c) => c.src));
+  return names;
 }
 
 /** Adds files already in the theme as new layers on `view`, centred on `at`. One undo step. */
