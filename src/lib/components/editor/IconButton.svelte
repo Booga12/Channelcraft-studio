@@ -22,6 +22,7 @@
     label: string;
     shortcut?: string;
     side?: 'top' | 'bottom' | 'left' | 'right';
+    /** Only the look: the buttons that use it also change their label, so no aria-pressed. */
     active?: boolean;
     disabled?: boolean;
     variant?: ButtonVariant;
@@ -41,7 +42,6 @@
         {size}
         {disabled}
         aria-label={label}
-        aria-pressed={active ? true : undefined}
         class={cn('text-muted-foreground hover:text-foreground', active && 'bg-primary/12 text-primary hover:bg-primary/18 hover:text-primary', className)}
       >
         {@render children()}

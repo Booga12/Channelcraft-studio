@@ -77,7 +77,7 @@
               <small>{NOTES[b.note] ?? (b.note || 'Backup')} · {b.files} files · {size(b.size)}</small>
               {#if b.problem}<small class="warn">{b.problem}</small>{/if}
             </div>
-            <button class="ghost small" title="Show this zip in its folder" onclick={() => revealItemInDir(b.path)}><Icon name="folder" size={14} /></button>
+            <button class="ghost small" title="Show this zip in its folder" aria-label="Show this zip in its folder" onclick={() => revealItemInDir(b.path)}><Icon name="folder" size={14} /></button>
             <button class="small" disabled={!b.restorable || working || ed.busy} onclick={() => restore(b)}>{working ? 'Restoring…' : 'Restore'}</button>
           </div>
         {/each}

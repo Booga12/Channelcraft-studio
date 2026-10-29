@@ -7,12 +7,12 @@
 </script>
 
 <div class="hist">
-  <button class="step" class:cur={h.done.length === 0} onclick={() => ed.jumpTo(0)}>
+  <button class="step" class:cur={h.done.length === 0} aria-current={h.done.length === 0 ? 'step' : undefined} onclick={() => ed.jumpTo(0)}>
     <Icon name="file" size={13} />
     <span>Opened theme</span>
   </button>
   {#each h.done as label, i}
-    <button class="step" class:cur={i === h.done.length - 1} onclick={() => ed.jumpTo(i + 1)}>
+    <button class="step" class:cur={i === h.done.length - 1} aria-current={i === h.done.length - 1 ? 'step' : undefined} onclick={() => ed.jumpTo(i + 1)}>
       <span class="n">{i + 1}</span>
       <span>{label[0].toUpperCase() + label.slice(1)}</span>
     </button>

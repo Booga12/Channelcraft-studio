@@ -56,6 +56,22 @@
     target.addEventListener('pointermove', move);
     target.addEventListener('pointerup', up);
   }
+
+  /** The same from the keyboard: arrows change the width (Shift: further), Home/End go to the ends. */
+  function gripKey(e: KeyboardEvent) {
+    const step = e.shiftKey ? 64 : 16;
+    const out = edge === 'right' ? 'ArrowRight' : 'ArrowLeft';
+    const inn = edge === 'right' ? 'ArrowLeft' : 'ArrowRight';
+    let w = width;
+    if (e.key === out) w += step;
+    else if (e.key === inn) w -= step;
+    else if (e.key === 'Home') w = min;
+    else if (e.key === 'End') w = max;
+    else return;
+    e.preventDefault();
+    width = Math.round(Math.min(max, Math.max(min, w)));
+    onresized?.();
+  }
 </script>
 
 <section
@@ -82,11 +98,19 @@
   <div class="legacy-panel min-h-0 flex-1 overflow-auto">
     {@render children()}
   </div>
+  <!-- A focusable separator is a resize control (WAI-ARIA window splitter); Svelte's check doesn't know that. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
-    class={cn('absolute top-0 bottom-0 z-10 w-2 cursor-col-resize transition-colors hover:bg-primary/20', edge === 'right' ? '-right-1' : '-left-1')}
+    class={cn('absolute top-0 bottom-0 z-10 w-2 cursor-col-resize transition-colors hover:bg-primary/20 focus-visible:bg-primary/20', edge === 'right' ? '-right-1 focus-visible:right-0' : '-left-1 focus-visible:left-0')}
     role="separator"
     aria-orientation="vertical"
+    aria-label="{title} width"
+    aria-valuenow={width}
+    aria-valuemin={min}
+    aria-valuemax={max}
+    tabindex="0"
     title="Drag to change the width"
     onpointerdown={grip}
+    onkeydown={gripKey}
   ></div>
 </section>

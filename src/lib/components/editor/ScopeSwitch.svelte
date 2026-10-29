@@ -33,6 +33,7 @@
   import { Separator } from '$lib/components/ui/separator';
   import { elementLabel, humanize, propLabel } from '$lib/friendly';
   import { cn } from '$lib/utils';
+  import { mergeProps } from 'bits-ui';
 
   const own = $derived(ed.consoleValues);
   const blocker = $derived(ed.gameOnlyBlocker);
@@ -45,6 +46,20 @@
     if (mode === 'game' && blocker) return;
     ed.consoleOnly = mode === 'console';
     ed.gameOnly = mode === 'game';
+  }
+
+  /** One Tab stop for the switch; the arrows move to the next option that can be chosen and pick it. */
+  function radioKeys(e: KeyboardEvent) {
+    const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    const usable = OPTIONS.filter((o) => !(o.id === 'game' && blocker));
+    const i = usable.findIndex((o) => o.id === scope.mode);
+    const next = usable[(i + dir + usable.length) % usable.length];
+    if (!next) return;
+    pick(next.id);
+    const group = (e.currentTarget as HTMLElement).closest('[role="radiogroup"]');
+    group?.querySelector<HTMLElement>(`[data-scope="${next.id}"]`)?.focus();
   }
 
   const OPTIONS = $derived([
@@ -63,9 +78,11 @@
         <Tooltip.Trigger>
           {#snippet child({ props })}
             <button
-              {...props}
+              {...mergeProps(props, { onkeydown: radioKeys })}
               type="button"
               role="radio"
+              data-scope={o.id}
+              tabindex={on ? 0 : -1}
               aria-label={o.label}
               aria-checked={on}
               aria-disabled={off}

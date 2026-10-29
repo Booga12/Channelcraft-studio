@@ -132,6 +132,7 @@
     };
     const key = (k: KeyboardEvent) => {
       if (k.key !== 'Escape') return;
+      k.preventDefault();
       if (started) eatClick();
       assetDrag.cancel();
       stop();
@@ -140,7 +141,7 @@
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', cancel);
-      window.removeEventListener('keydown', key);
+      window.removeEventListener('keydown', key, true);
     };
     const cancel = () => {
       stop();
@@ -160,7 +161,7 @@
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', cancel);
-    window.addEventListener('keydown', key);
+    window.addEventListener('keydown', key, true);
   }
 
   async function onFolderTick(e: ExplorerEntry) {
@@ -224,6 +225,21 @@
   }
   $effect(() => () => audio?.pause());
 
+  /** Arrow keys (and Home/End) in a radio group: move to the next choice and pick it. */
+  function radioKeys(ev: KeyboardEvent) {
+    const steps: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    const step = steps[ev.key];
+    if (!step && ev.key !== 'Home' && ev.key !== 'End') return;
+    const items = [...(ev.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="radio"]:not(:disabled)')];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0 || !items.length) return;
+    ev.preventDefault();
+    const n = ev.key === 'Home' ? 0 : ev.key === 'End' ? items.length - 1 : (i + (step ?? 0) + items.length) % items.length;
+    items[n].focus();
+    items[n].click();
+  }
+  const filterTab = (id: Filter, i: number) => (explorer.filter === id || (i === 0 && !filters.some((f) => f.id === explorer.filter)) ? 0 : -1);
+
   const placeGroups = $derived([
     { id: 'place', label: 'Quick places', items: explorer.places.filter((p) => p.group === 'place') },
     { id: 'drive', label: 'Drives', items: explorer.places.filter((p) => p.group === 'drive') },
@@ -231,12 +247,12 @@
   ]);
 </script>
 
-<div class="exp" data-explorer-drop>
+<div class="exp" data-explorer-drop data-own-keys>
   <div class="scroll">
     <div class="top">
-      <div class="seg" role="radiogroup" aria-label="Where to look">
-        <button role="radio" aria-checked={inTheme} class:on={inTheme} disabled={!themeDir || !!explorer.adding} title={explorer.adding ? 'Wait until the files are added' : themeDir ? 'Everything already inside this theme' : 'Open a theme first'} onclick={() => explorer.setSource('theme', themeDir)}>This theme</button>
-        <button role="radio" aria-checked={!inTheme} class:on={!inTheme} disabled={!!explorer.adding && !inTheme} title="Any folder on your computer (it's only looked at; nothing there is changed)" onclick={() => explorer.setSource('pc', themeDir)}>My PC</button>
+      <div class="seg" role="radiogroup" aria-label="Where to look" tabindex="-1" onkeydown={radioKeys}>
+        <button role="radio" aria-checked={inTheme} tabindex={inTheme && themeDir && !explorer.adding ? 0 : -1} class:on={inTheme} disabled={!themeDir || !!explorer.adding} title={explorer.adding ? 'Wait until the files are added' : themeDir ? 'Everything already inside this theme' : 'Open a theme first'} onclick={() => explorer.setSource('theme', themeDir)}>This theme</button>
+        <button role="radio" aria-checked={!inTheme} tabindex={!inTheme || !themeDir || !!explorer.adding ? 0 : -1} class:on={!inTheme} disabled={!!explorer.adding && !inTheme} title="Any folder on your computer (it's only looked at; nothing there is changed)" onclick={() => explorer.setSource('pc', themeDir)}>My PC</button>
       </div>
 
       <div class="nav">
@@ -254,9 +270,9 @@
         <input class="search" type="search" placeholder="Search this folder and the folders inside it" value={explorer.query} oninput={(e) => explorer.search(e.currentTarget.value)} aria-label="Search" />
 
         <div class="filters">
-          <div class="chips" role="radiogroup" aria-label="Show">
-            {#each filters as f (f.id)}
-              <button role="radio" aria-checked={explorer.filter === f.id} class:on={explorer.filter === f.id} onclick={() => (explorer.filter = f.id)}>
+          <div class="chips" role="radiogroup" aria-label="Show" tabindex="-1" onkeydown={radioKeys}>
+            {#each filters as f, i (f.id)}
+              <button role="radio" aria-checked={explorer.filter === f.id} tabindex={filterTab(f.id, i)} class:on={explorer.filter === f.id} onclick={() => (explorer.filter = f.id)}>
                 {f.label}{#if f.n !== undefined}<span class="n">{f.n}</span>{/if}
               </button>
             {/each}
@@ -355,7 +371,7 @@
           </div>
         </div>
       {:else if explorer.view === 'grid'}
-        <div class="grid" style:--tile="{explorer.thumb}px">
+        <div class="grid" role={inTheme ? 'list' : 'group'} aria-label="Files" style:--tile="{explorer.thumb}px">
           {#each files as e (e.path)}
             {@const on = explorer.selected.has(e.path)}
             {@const already = !inTheme && isInTheme(e, keys)}
@@ -401,7 +417,7 @@
           {/each}
         </div>
       {:else}
-        <div class="list" role="list">
+        <div class="list" role={inTheme ? 'list' : 'group'} aria-label="Files">
           {#each files as e (e.path)}
             {@const on = explorer.selected.has(e.path)}
             {@const already = !inTheme && isInTheme(e, keys)}

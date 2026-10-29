@@ -64,7 +64,7 @@
       </label>
       {#if rawLog}
         <div class="logbar">
-          <button class="ghost small" onclick={() => (showLog = !showLog)}>{showLog ? 'Hide' : 'See'} what would be included</button>
+          <button class="ghost small" aria-expanded={showLog} onclick={() => (showLog = !showLog)}>{showLog ? 'Hide' : 'See'} what would be included</button>
           <button class="ghost small" onclick={() => logPath && revealItemInDir(logPath)}>Show the log file</button>
         </div>
         {#if showLog}<pre>{log}</pre>{/if}

@@ -83,7 +83,7 @@
           {#if !plan.hasSplash}<span class="faint">It has no loading screen of its own, so RetroBat shows its standard one.</span>{/if}
         </p>
         {#if plan.skipped.length}
-          <button class="ghost small" onclick={() => (showSkipped = !showSkipped)}>{plan.skipped.length} file{plan.skipped.length === 1 ? '' : 's'} left out {showSkipped ? '▴' : '▾'}</button>
+          <button class="ghost small" onclick={() => (showSkipped = !showSkipped)} aria-expanded={showSkipped}>{plan.skipped.length} file{plan.skipped.length === 1 ? '' : 's'} left out {showSkipped ? '▴' : '▾'}</button>
           {#if showSkipped}
             <ul class="skipped">
               {#each plan.skipped.slice(0, 200) as s}<li><span class="mono">{s.path}</span> <span class="faint">{s.reason}</span></li>{/each}

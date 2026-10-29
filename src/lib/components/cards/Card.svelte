@@ -78,6 +78,11 @@
     cursor: pointer;
     user-select: none;
   }
+  summary:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: -1px;
+    border-radius: 10px;
+  }
   summary::-webkit-details-marker {
     display: none;
   }

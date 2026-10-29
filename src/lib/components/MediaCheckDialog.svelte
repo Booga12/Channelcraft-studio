@@ -109,10 +109,10 @@
     <div class="body">
       {#if issues.length}
         <div class="chips">
-          <button class="chip" class:on={!kind} onclick={() => (kind = '')}>All <b>{issues.length}</b></button>
+          <button class="chip" class:on={!kind} aria-current={!kind ? 'true' : undefined} onclick={() => (kind = '')}>All <b>{issues.length}</b></button>
           {#each Object.entries(ISSUE_LABEL) as [k, label]}
             {#if counts[k as IssueKind]}
-              <button class="chip" class:on={kind === k} onclick={() => (kind = k as IssueKind)}>{label} <b>{counts[k as IssueKind]}</b></button>
+              <button class="chip" class:on={kind === k} aria-current={kind === k ? 'true' : undefined} onclick={() => (kind = k as IssueKind)}>{label} <b>{counts[k as IssueKind]}</b></button>
             {/if}
           {/each}
           <select bind:value={system} aria-label="Console">

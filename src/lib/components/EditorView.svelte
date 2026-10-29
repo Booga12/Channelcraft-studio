@@ -1,7 +1,7 @@
 <script lang="ts">
   // The editor: one bar on top, and the preview filling the rest with floating tools over it
   // (the dock and its panel on the left, the inspector on the right when something is selected).
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { ed } from '$lib/editor.svelte';
@@ -87,8 +87,65 @@
     else ed.paste();
   }
 
+  /** Closing a panel that has the keyboard focus inside it gives the focus back to what opened it. */
+  function handBack(panel: string, to: Element | null | undefined, fallback: () => Element | null) {
+    const a = document.activeElement;
+    if (!a?.closest(`[data-panel="${panel}"]`)) return;
+    // Something that can take the focus outside the closing panel, or else the fallback.
+    const usable = (t: Element | null | undefined): t is HTMLElement =>
+      t instanceof HTMLElement && t.isConnected && t !== document.body && !t.closest(`[data-panel="${panel}"]`);
+    if (usable(to)) {
+      to.focus();
+      if (document.activeElement === to) return;
+    }
+    const f = fallback();
+    if (usable(f)) f.focus();
+  }
+  /** The dock's Add button, or else its first button (for a panel with no dock button, e.g. Library in Simple mode). */
+  const dockStart = () => document.querySelector('[data-tour="add"]') ?? document.querySelector('[data-tour="dock"] button');
+  function closeDock() {
+    if (open) handBack('dock', document.querySelector(`[data-tour="panel-${open}"]`), dockStart);
+    open = null;
+  }
+  /** What had the focus when the inspector opened (a layer row, the preview…). */
+  let inspectorOpener: Element | null = null;
+  $effect(() => {
+    if (inspecting) untrack(() => (inspectorOpener = document.activeElement));
+  });
+  function closeInspector() {
+    // Opened from the preview or a shortcut (focus on the page): the selected layer row if the
+    // Layers list is open, or else the dock.
+    handBack('inspector', inspectorOpener, () => {
+      const row = ed.selected ? document.querySelector(`[data-layer="${CSS.escape(ed.selected)}"] button.row`) : null;
+      return row ?? document.querySelector('[data-tour="panel-elements"]') ?? dockStart();
+    });
+    ed.selected = null;
+  }
+
+  // Leaving the six-consoles view removes the button that had the focus ('Back to editing' or a
+  // tile): the focus goes to the preview's 'Show six consoles at once' button rather than the page.
+  let sheetWas = false;
+  $effect(() => {
+    const now = ed.contactSheet;
+    const was = sheetWas;
+    sheetWas = now;
+    if (was && !now)
+      tick().then(() => {
+        const a = document.activeElement;
+        if (a && a !== document.body && a.isConnected) return;
+        document.querySelector<HTMLElement>('[data-tour="preview"] button[aria-label="Show six consoles at once"]')?.focus();
+      });
+  });
+
+  /** Widgets that use the arrow keys themselves (moving between their options). */
+  const OWN_ARROWS = '[role="radiogroup"], [role="radio"], [role="tablist"], [role="tab"], [role="menu"], [role="menubar"], [role="toolbar"], [role="slider"], [role="separator"][tabindex]';
+  /** The keys a [data-own-keys] part handles itself. */
+  const OWN_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Escape']);
+
   function onkeydown(e: KeyboardEvent) {
     if (ed.showSearch || ed.showSettings || ed.showShortcuts || ed.showGuide || ed.showTour) return;
+    // A control that already handled the key (a picker moving between options…) keeps it.
+    if (e.defaultPrevented) return;
     // A menu or popover handles its own keys (an Escape there closes only it).
     if (document.querySelector('[data-slot$="-content"][data-state="open"]')) return;
     if ((e.target as HTMLElement | null)?.closest?.('[data-slot$="-content"]')) return;
@@ -110,6 +167,10 @@
     if (mod && k === '-') return run(() => (ed.zoom = Math.max(0.1, (typeof ed.zoom === 'number' ? ed.zoom : 0.5) / 1.25)));
     if (mod && k === "'") return run(() => prefs.set('showGrid', !prefs.v.showGrid));
     if (typing) return;
+    if (e.key.startsWith('Arrow') && (e.target as HTMLElement | null)?.closest?.(OWN_ARROWS)) return;
+    // A part marked data-own-keys moves and closes with its own window-level handler, which runs
+    // after this one (so its preventDefault comes too late): leave it the moving keys and Escape.
+    if (!mod && OWN_KEYS.has(e.key) && (e.target as HTMLElement | null)?.closest?.('[data-own-keys]')) return;
     if (mod && k === 'd') return run(() => ed.duplicate());
     if (mod && k === 'c') return run(() => ed.copy());
     if (mod && k === 'v') {
@@ -145,8 +206,8 @@
     }
     if (e.key === 'Escape') {
       // First the selection, then a panel that isn't pinned.
-      if (ed.selected) ed.selected = null;
-      else if (open && !prefs.v.pinPanel) open = null;
+      if (ed.selected) closeInspector();
+      else if (open && !prefs.v.pinPanel) closeDock();
     }
   }
 </script>
@@ -211,7 +272,7 @@
     <div class="pointer-events-none absolute top-3 bottom-3 left-3 z-10 flex items-start gap-2">
       <div class="pointer-events-auto"><ToolDock bind:open /></div>
       {#if open && info}
-        <div class="pointer-events-auto flex h-full" transition:fly={{ x: -16, duration: 220, easing: cubicOut }}>
+        <div class="pointer-events-auto flex h-full" data-panel="dock" transition:fly={{ x: -16, duration: 220, easing: cubicOut }}>
           <FloatingPanel
             title={open === 'variables' && !ed.simple ? 'Variables' : info.label}
             subtitle={info.help}
@@ -219,7 +280,7 @@
             onresized={() => prefs.save()}
             pinned={prefs.v.pinPanel}
             onpin={() => prefs.set('pinPanel', !prefs.v.pinPanel)}
-            onclose={() => (open = null)}
+            onclose={closeDock}
           >
             {#key open}
               <div class="h-full" in:fade={{ duration: 150 }}>{@render panelBody(open)}</div>
@@ -230,7 +291,7 @@
     </div>
 
     {#if inspecting}
-      <div class="absolute top-3 right-3 bottom-3 z-10 flex" transition:fly={{ x: 24, duration: 260, easing: cubicOut }}>
+      <div class="absolute top-3 right-3 bottom-3 z-10 flex" data-panel="inspector" transition:fly={{ x: 24, duration: 260, easing: cubicOut }}>
         <FloatingPanel
           title={ed.selection.length > 1 ? `${ed.selection.length} elements` : el ? (ed.simple ? elementLabel(el.name) : el.name) : 'Inspector'}
           subtitle={ed.selection.length > 1 ? 'Line them up, or change them together' : el ? typeLabel(el.type) : ''}
@@ -238,7 +299,7 @@
           min={280}
           bind:width={prefs.v.inspectorWidth}
           onresized={() => prefs.save()}
-          onclose={() => (ed.selected = null)}
+          onclose={closeInspector}
         >
           <QuickBar />
           <PropertyPanel inInspector />

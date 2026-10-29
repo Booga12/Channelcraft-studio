@@ -2,7 +2,7 @@
   // The first-run tour: a spotlight on the real controls, one short step at a time. Shows once,
   // the first time a theme is open; Help → Take the tour shows it again. Steps whose control
   // isn't on screen are skipped.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { ed } from '$lib/editor.svelte';
 
@@ -28,9 +28,38 @@
   let bubble = $state({ x: 0, y: 0 });
   let bubbleEl = $state<HTMLElement>();
 
+  /** The Next / Start editing button, last in the bubble's row. */
+  const nextBtn = () => bubbleEl?.querySelector<HTMLElement>('.row > :last-child') ?? null;
+
+  // Focus goes back to whatever opened the tour once it closes. A menu or palette item that
+  // opened it is gone by then, so it falls back to where that menu put focus, then to Search.
+  let returnTo: HTMLElement | null = null;
+  const keep = (el: Element | null) => {
+    if (el instanceof HTMLElement && el !== document.body && !bubbleEl?.contains(el)) returnTo = el;
+  };
+
   onMount(() => {
+    keep(document.activeElement);
     steps = STEPS.filter((s) => find(s)?.getClientRects().length);
     if (!steps.length) ed.closeTour();
+    return () => {
+      const to = returnTo?.isConnected ? returnTo : document.querySelector<HTMLElement>('[data-tour="search"]');
+      to?.focus();
+    };
+  });
+
+  // Move focus into the bubble when it appears (and again once a closing menu has handed focus
+  // back to its button).
+  $effect(() => {
+    if (!bubbleEl) return;
+    const grab = () => {
+      if (!bubbleEl || bubbleEl.contains(document.activeElement)) return;
+      keep(document.activeElement);
+      nextBtn()?.focus();
+    };
+    untrack(grab);
+    const t = setTimeout(grab, 60);
+    return () => clearTimeout(t);
   });
 
   const step = $derived(steps[at]);
@@ -78,10 +107,26 @@
     else ed.closeTour();
   }
 
+  function back() {
+    at--;
+    // The Back button goes away on the first step; keep focus in the bubble.
+    if (at === 0) nextBtn()?.focus();
+  }
+
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') ed.closeTour();
+    const inBubble = !!bubbleEl && e.target instanceof Node && bubbleEl.contains(e.target);
+    if (e.key === 'Tab' && bubbleEl) {
+      // Keep Tab inside the bubble while the tour is showing.
+      const items = [...bubbleEl.querySelectorAll<HTMLElement>('button:not([disabled])')];
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement as HTMLElement);
+      const j = i < 0 ? (e.shiftKey ? items.length - 1 : 0) : (i + (e.shiftKey ? -1 : 1) + items.length) % items.length;
+      items[j].focus();
+    } else if (e.key === 'Escape') ed.closeTour();
+    // Enter on Back or Skip does what that button says, not Next.
+    else if (e.key === 'Enter' && inBubble && e.target !== nextBtn()) return;
     else if (e.key === 'ArrowRight' || e.key === 'Enter') next();
-    else if (e.key === 'ArrowLeft' && at > 0) at--;
+    else if (e.key === 'ArrowLeft' && at > 0) back();
     else return;
     e.preventDefault();
     e.stopPropagation();
@@ -98,10 +143,9 @@
     <h2 id="tour-title">{step.title}</h2>
     <p id="tour-text">{step.text}</p>
     <div class="row">
-      <button class="skip" onclick={() => ed.closeTour()}>{at < steps.length - 1 ? 'Skip tour' : ''}</button>
-      {#if at > 0}<Button size="sm" variant="outline" onclick={() => at--}>Back</Button>{/if}
-      <!-- svelte-ignore a11y_autofocus -->
-      <Button size="sm" onclick={next} autofocus>{at < steps.length - 1 ? 'Next' : 'Start editing'}</Button>
+      <button class="skip" onclick={() => ed.closeTour()} disabled={at >= steps.length - 1} aria-hidden={at >= steps.length - 1 ? 'true' : undefined}>{at < steps.length - 1 ? 'Skip tour' : ''}</button>
+      {#if at > 0}<Button size="sm" variant="outline" onclick={back}>Back</Button>{/if}
+      <Button size="sm" onclick={next}>{at < steps.length - 1 ? 'Next' : 'Start editing'}</Button>
     </div>
   </div>
 {/if}

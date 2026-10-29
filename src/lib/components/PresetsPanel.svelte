@@ -15,6 +15,7 @@
   import { removeMyDesign } from '$lib/theme/designList.svelte';
   import MovingBgPicker from './MovingBgPicker.svelte';
   import { ask } from '@tauri-apps/plugin-dialog';
+  import { tick } from 'svelte';
 
   const GAME_LISTS = ['basic', 'detailed', 'video'];
 
@@ -29,6 +30,8 @@
   let restyleWith = $state('');
 
   async function applyDesign(d: Design) {
+    // The cards are disabled while it works, which drops the focus: give it back afterwards.
+    const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     applying = true;
     try {
       const p = ed.project;
@@ -36,6 +39,8 @@
       await ed.applyDesign(d, { hideOwn, ...keep });
     } finally {
       applying = false;
+      await tick();
+      if (back?.isConnected && (!document.activeElement || document.activeElement === document.body)) back.focus();
     }
   }
 
@@ -111,20 +116,27 @@
     const style = choice === 'plain' ? null : (choice ?? styleFor(l));
     // A game list layout on a theme without a design: ask first.
     if (!style && isGameList && choice !== 'plain') {
+      if (!askBox?.contains(document.activeElement)) askFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       asking = card;
       restyleWith = (DESIGNS.find((d) => designGameLayout(d) === l.id) ?? DESIGNS[0]).id;
+      // Focus goes into the question, also when it was already open for another card.
+      tick().then(() => askBox?.querySelector<HTMLElement>('button')?.focus());
       return;
     }
-    asking = null;
     if (style) {
+      // The cards are disabled while it works, which drops the focus: give it back afterwards.
+      const back = closeAsk(false) ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
       applying = true;
       try {
         await ed.applyLayout(l, isSystem ? ['system'] : targets, style, hideOwn);
       } finally {
         applying = false;
+        await tick();
+        if (back?.isConnected && (!document.activeElement || document.activeElement === document.body)) back.focus();
       }
       return;
     }
+    closeAsk();
     await ed.applyLayout(l, targets);
     ed.notify(`“${l.label}” applied to ${targets.map((v) => viewLabel(v)).join(', ')}. Press Ctrl+Z to undo.`);
   }
@@ -152,6 +164,32 @@
     ed.notify(n ? `Palette “${p.label}” applied${ed.consoleOnly ? ` to ${ed.consoleName} only` : ''}. Press Ctrl+Z to undo.` : 'This theme names its colours differently; change them in Colours.');
   }
 
+  /** Arrow keys (and Home/End) in a radio group: move to the next choice and pick it. */
+  function radioKeys(ev: KeyboardEvent) {
+    const steps: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    const step = steps[ev.key];
+    if (!step && ev.key !== 'Home' && ev.key !== 'End') return;
+    const items = [...(ev.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="radio"]:not(:disabled)')];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    ev.preventDefault();
+    const n = ev.key === 'Home' ? 0 : ev.key === 'End' ? items.length - 1 : (i + (step ?? 0) + items.length) % items.length;
+    items[n].focus();
+    items[n].click();
+  }
+
+  // The "Keep my theme's look / Restyle" question takes the keyboard focus while it's open, and
+  // gives it back to the layout card that asked when it closes (Escape or Cancel closes it).
+  let askBox = $state<HTMLElement | null>(null);
+  let askFrom: HTMLElement | null = null;
+  /** Closes the question; returns the card focus goes back to (if focus was inside it), focusing it unless `focus` is false. */
+  function closeAsk(focus = true) {
+    const back = askBox?.contains(document.activeElement) ? askFrom : null;
+    asking = null;
+    if (focus) back?.focus();
+    return back;
+  }
+
   const covered = $derived.by(() => {
     const r = ed.res;
     if (!r) return 0;
@@ -173,7 +211,7 @@
     <div class="designs">
       {#each DESIGNS.filter((d) => designGroup === 'all' || d.group === designGroup) as d (d.id)}
         <div class="dwrap">
-          <button class="dcard" class:on={current === `design-${d.id}`} onclick={() => applyDesign(d)} title={d.description} disabled={applying}>
+          <button class="dcard" class:on={current === `design-${d.id}`} aria-current={current === `design-${d.id}` ? 'true' : undefined} onclick={() => applyDesign(d)} title={d.description} disabled={applying}>
             <DesignThumb design={d} />
             <span class="name">
               {#if current === `design-${d.id}`}<Icon name="check" size={12} />{/if}
@@ -226,7 +264,8 @@
       {/if}
       {#if asking}
         {@const l = asking}
-        <div class="ask" role="group" aria-label="How to use {l.label}">
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions (only catches Escape from the buttons inside) -->
+        <div class="ask" role="group" aria-label="How to use {l.label}" bind:this={askBox} onkeydown={(e) => e.key === 'Escape' && (e.preventDefault(), closeAsk())}>
           <strong>“{l.label}” on this theme</strong>
           <button class="secondary small" onclick={() => apply(l, 'plain')}>Keep my theme's look <small>Only the list, picture and text move</small></button>
           <div class="restyle">
@@ -239,7 +278,7 @@
               {/each}
             </select>
           </div>
-          <button class="link small" onclick={() => (asking = null)}>Cancel</button>
+          <button class="link small" onclick={() => closeAsk()}>Cancel</button>
         </div>
       {/if}
       {#if gridSystem}
@@ -252,7 +291,7 @@
       <div class="tiles">
         {#each layouts as l (l.id)}
           {@const st = styleFor(l)}
-          <button class="card" class:on={currentLayout === l.id} onclick={() => apply(l)} title={l.description} disabled={applying}>
+          <button class="card" class:on={currentLayout === l.id} aria-current={currentLayout === l.id ? 'true' : undefined} onclick={() => apply(l)} title={l.description} disabled={applying}>
             <svg viewBox="0 0 160 90" class="pic" aria-hidden="true" style:background-image={st ? bgOf(st) : undefined}>
               {#if !st}<rect x="0" y="0" width="160" height="90" fill="#141414" />{/if}
               {#each l.diagram as r}
@@ -282,11 +321,12 @@
       {#if ed.depth !== null}
         <div class="flex flex-col gap-1.5">
           <span class="text-xs font-medium">3D depth</span>
-          <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted p-0.5" role="radiogroup" aria-label="3D depth">
-            {#each DEPTHS as d (d.id)}
+          <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted p-0.5" role="radiogroup" aria-label="3D depth" tabindex="-1" onkeydown={radioKeys}>
+            {#each DEPTHS as d, i (d.id)}
               <button
                 role="radio"
                 aria-checked={ed.depth === d.id}
+                tabindex={ed.depth === d.id || (i === 0 && !DEPTHS.some((x) => x.id === ed.depth)) ? 0 : -1}
                 class="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-all duration-150 hover:text-foreground aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-elev-1"
                 onclick={() => ed.setDepth(d.id)}
                 title={d.help}>{d.label}</button

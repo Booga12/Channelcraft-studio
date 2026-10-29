@@ -161,7 +161,7 @@
     {/if}
     <label class="find">
       <SearchIcon size={14} />
-      <input type="search" placeholder="Find a setting… (try “glow” or “front”)" bind:value={cards.query} />
+      <input type="search" aria-label="Find a setting" placeholder="Find a setting… (try “glow” or “front”)" bind:value={cards.query} />
     </label>
   </div>
 

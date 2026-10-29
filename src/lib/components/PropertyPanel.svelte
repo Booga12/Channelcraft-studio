@@ -190,7 +190,7 @@
 
   <h4>Animation</h4>
   <div class="anim">
-    <select value={animId ?? ''} onchange={(e) => ed.setAnimation(el.name, e.currentTarget.value || null)}>
+    <select aria-label="Animation" value={animId ?? ''} onchange={(e) => ed.setAnimation(el.name, e.currentTarget.value || null)}>
       <option value="">None</option>
       {#if animId === 'custom'}<option value="custom" disabled>Custom (from the theme)</option>{/if}
       <optgroup label={screen === 'console' ? 'On every console you move to' : 'On every game you move to'}>
@@ -270,13 +270,13 @@
             <input type="range" min="0" max="12" step="1" value={frame.frame.border} oninput={(e) => changeFrame({ border: e.currentTarget.valueAsNumber })} />
             <b>{frame.frame.border} px</b>
           </label>
-          <div class="colour"><span>Border colour</span><ColorInput value={shown(frame.frame.borderColor)} onchange={(v) => changeFrame({ borderColor: v })} /></div>
+          <div class="colour"><span>Border colour</span><ColorInput label="Border colour" value={shown(frame.frame.borderColor)} onchange={(v) => changeFrame({ borderColor: v })} /></div>
           <label>
             <span>Shadow</span>
             <input type="range" min="0" max="30" step="1" value={frame.frame.shadow} oninput={(e) => changeFrame({ shadow: e.currentTarget.valueAsNumber })} />
             <b>{frame.frame.shadow} px</b>
           </label>
-          <div class="colour"><span>Shadow colour</span><ColorInput value={shown(frame.frame.shadowColor)} onchange={(v) => changeFrame({ shadowColor: v })} /></div>
+          <div class="colour"><span>Shadow colour</span><ColorInput label="Shadow colour" value={shown(frame.frame.shadowColor)} onchange={(v) => changeFrame({ shadowColor: v })} /></div>
           <p class="faint note">RetroBat's frame shader. It suits screenshots, videos, box art and fan art; RetroBat skips pictures with see-through corners (most logos), so give those the soft shadow instead.</p>
         {/if}
       {/if}
@@ -320,7 +320,7 @@
 
   {#if missing.length}
     <div class="add">
-      <select bind:value={adding} onchange={() => addProp(adding)}>
+      <select bind:value={adding} onchange={() => addProp(adding)} aria-label={ed.simple ? 'Add a setting' : 'Add property'}>
         <option value="">{ed.simple ? '＋ Add a setting…' : '＋ Add property…'}</option>
         {#each missing as m}
           <option value={m.name} title={m.hint}>{ed.simple ? propLabel(m.name) : m.name}</option>

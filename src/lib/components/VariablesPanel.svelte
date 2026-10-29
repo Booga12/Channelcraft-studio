@@ -42,7 +42,7 @@
     <p class="dim intro">Values defined in <span class="mono">&lt;variables&gt;</span> and used as <span class="mono">${'{name}'}</span>. Editing one changes every element that uses it.</p>
   {/if}
   <div class="head">
-    <input placeholder={ed.simple ? 'Find a colour…' : 'Filter variables…'} bind:value={filter} />
+    <input placeholder={ed.simple ? 'Find a colour…' : 'Filter variables…'} aria-label={ed.simple ? 'Find a colour' : 'Filter variables'} bind:value={filter} />
     {#if !ed.simple}<label class="chk"><input type="checkbox" bind:checked={onlyColors} /> Colours</label>{/if}
   </div>
   {#each vars as v (v.name)}
@@ -67,7 +67,7 @@
       {#if COLOR_RE.test(v.raw)}
         <ColorInput value={v.raw} onchange={(val) => ed.setVar(v.name, val)} />
       {:else}
-        <input class="mono" value={v.raw} spellcheck="false" onchange={(e) => ed.setVar(v.name, e.currentTarget.value)} />
+        <input class="mono" value={v.raw} spellcheck="false" aria-label={ed.simple ? humanize(v.name) : v.name} onchange={(e) => ed.setVar(v.name, e.currentTarget.value)} />
         {#if v.raw !== v.value}<div class="faint mono resolved" title="Resolved value">= {v.value}</div>{/if}
       {/if}
     </div>

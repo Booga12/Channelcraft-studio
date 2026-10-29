@@ -30,7 +30,7 @@
     <div class="flex min-w-0 flex-col leading-tight" title={ed.project?.dir}>
       <span class="flex items-center gap-1.5 text-sm font-semibold">
         <span class="max-w-40 truncate 2xl:max-w-56">{ed.project?.name}</span>
-        {#if ed.dirtyCount > 0}<span class="size-1.5 shrink-0 rounded-full bg-scope" title="Unsaved changes"></span>{/if}
+        {#if ed.dirtyCount > 0}<span class="size-1.5 shrink-0 rounded-full bg-scope" role="img" aria-label="Unsaved changes" title="Unsaved changes"></span>{/if}
       </span>
       {#if active}<span class="text-[10.5px] whitespace-nowrap text-primary">In use by RetroBat</span>{/if}
     </div>
@@ -55,6 +55,8 @@
     <button
       class="flex h-8 items-center gap-2 rounded-lg border bg-muted/50 px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       onclick={() => (ed.showSearch = true)}
+      aria-label="Search"
+      aria-keyshortcuts="Control+K"
       data-tour="search"
       title="Find any command, element or setting"
     >
@@ -63,8 +65,8 @@
       <Kbd>Ctrl K</Kbd>
     </button>
     <div class="flex h-8 items-center rounded-lg bg-muted p-0.5" role="group" aria-label="Editor mode">
-      <button class={cn('h-7 rounded-md px-2.5 text-xs font-medium transition-all duration-200', ed.simple ? 'bg-background text-foreground shadow-elev-1' : 'text-muted-foreground hover:text-foreground')} onclick={() => ed.setMode('simple')} title="Plain names and the most useful settings">Simple</button>
-      <button class={cn('h-7 rounded-md px-2.5 text-xs font-medium transition-all duration-200', !ed.simple ? 'bg-background text-foreground shadow-elev-1' : 'text-muted-foreground hover:text-foreground')} onclick={() => ed.setMode('advanced')} title="Every setting, file names and the XML source">Advanced</button>
+      <button class={cn('h-7 rounded-md px-2.5 text-xs font-medium transition-all duration-200', ed.simple ? 'bg-background text-foreground shadow-elev-1' : 'text-muted-foreground hover:text-foreground')} aria-current={ed.simple ? 'true' : undefined} onclick={() => ed.setMode('simple')} title="Plain names and the most useful settings">Simple</button>
+      <button class={cn('h-7 rounded-md px-2.5 text-xs font-medium transition-all duration-200', !ed.simple ? 'bg-background text-foreground shadow-elev-1' : 'text-muted-foreground hover:text-foreground')} aria-current={!ed.simple ? 'true' : undefined} onclick={() => ed.setMode('advanced')} title="Every setting, file names and the XML source">Advanced</button>
     </div>
     <ModeToggle />
     <Separator orientation="vertical" class="mx-1 !h-5" />

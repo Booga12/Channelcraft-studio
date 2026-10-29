@@ -6,7 +6,8 @@
   import { isVisible, zOf } from '$lib/render';
   import { BUILT_IN_SPLASH, isSplashExtra } from '$lib/theme/splash';
   import Icon, { TYPE_ICONS } from './Icon.svelte';
-  import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
+  import ContextMenu, { menuPoint, type MenuItem } from './ContextMenu.svelte';
+  import { tick } from 'svelte';
 
   let filter = $state('');
   let adding = $state(false);
@@ -145,9 +146,60 @@
     renaming = null;
   }
 
+  /** After renaming from the keyboard, focus goes back to the layer's row (under its new name if it took). */
+  async function focusRow(...names: string[]) {
+    await tick();
+    for (const n of names) {
+      const b = listEl?.querySelector<HTMLElement>(`li[data-layer="${CSS.escape(n)}"] .row`);
+      if (b) return b.focus();
+    }
+  }
+
   function add(type: string) {
+    // Focus goes back to the + button before the menu (and the focused item) goes away.
+    addBtn?.focus({ preventScroll: true });
     adding = false;
     ed.addElement(type);
+  }
+
+  /** Focus leaving the add menu (Tab, or a click elsewhere) closes it; the + button toggles it itself. */
+  function addMenuOut(e: FocusEvent) {
+    const to = e.relatedTarget as Node | null;
+    if (to && ((e.currentTarget as HTMLElement).contains(to) || to === addBtn)) return;
+    adding = false;
+  }
+
+  // The add menu: opens with its first item focused, Up/Down move, Escape closes back to the + button.
+  let addBtn: HTMLButtonElement;
+
+  /** "Ready-made elements…": Layers is swapped for Library, so focus goes into the new panel. */
+  async function openLibrary() {
+    adding = false;
+    ed.showPanel('library');
+    await tick();
+    document.querySelector<HTMLElement>('[data-panel="dock"] input, [data-panel="dock"] button')?.focus({ preventScroll: true });
+  }
+  function focusFirst(node: HTMLElement) {
+    node.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+  }
+  function addMenuKey(e: KeyboardEvent) {
+    const items = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const go = (n: number) => {
+      e.preventDefault();
+      e.stopPropagation();
+      items[(n + items.length) % items.length]?.focus();
+    };
+    if (e.key === 'ArrowDown') go(i + 1);
+    else if (e.key === 'ArrowUp') go(i < 0 ? -1 : i - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(-1);
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      adding = false;
+      addBtn?.focus();
+    }
   }
 
   function onkey(e: KeyboardEvent) {
@@ -176,7 +228,7 @@
 
 <div class="layers">
   <div class="search">
-    <input placeholder="Find a layer…" bind:value={filter} />
+    <input placeholder="Find a layer…" aria-label="Find a layer" bind:value={filter} />
   </div>
   <ul role="listbox" aria-label="Layers" aria-multiselectable="true" bind:this={listEl}>
     {#each list as el (el.name)}
@@ -194,10 +246,16 @@
         oncontextmenu={(e) => {
           e.preventDefault();
           if (!ed.isSelected(el.name)) ed.select(el.name, 'only');
-          menuAt = { x: e.clientX, y: e.clientY };
+          // Also opened from the keyboard (menu key or Shift+F10) on a focused row.
+          menuAt = menuPoint(e);
         }}
       >
-        <button class="ico" title={ed.hidden[el.name] ? 'Show in the preview' : 'Hide in the preview only (the theme is not changed)'} onclick={() => (ed.hidden[el.name] = !ed.hidden[el.name])}>
+        <button
+          class="ico"
+          title={ed.hidden[el.name] ? 'Show in the preview' : 'Hide in the preview only (the theme is not changed)'}
+          aria-label={ed.hidden[el.name] ? 'Show in the preview' : 'Hide in the preview'}
+          onclick={() => (ed.hidden[el.name] = !ed.hidden[el.name])}
+        >
           {#if !ed.hidden[el.name]}<Icon name="eye" size={14} />{/if}
         </button>
         <button class="row" onclick={(e) => click(e, el.name)} ondblclick={() => startRename(el.name)} title="{el.name} · double-click to rename, drag up or down to change the order">
@@ -211,8 +269,16 @@
               onclick={(e) => e.stopPropagation()}
               onkeydown={(e) => {
                 e.stopPropagation();
-                if (e.key === 'Enter') finishRename();
-                if (e.key === 'Escape') renaming = null;
+                if (e.key === 'Enter') {
+                  // A rename that takes selects the (cleaned) new name; a refused one leaves the old row.
+                  const before = ed.selected;
+                  finishRename();
+                  focusRow(...(ed.selected && ed.selected !== before ? [ed.selected] : []), el.name);
+                }
+                if (e.key === 'Escape') {
+                  renaming = null;
+                  focusRow(el.name);
+                }
               }}
               onblur={finishRename}
             />
@@ -228,7 +294,14 @@
           {#if el.complex.some((c) => c.name === 'storyboard')}<span class="tag anim" title="Animated">✦</span>{/if}
           {#if !ed.simple}<span class="z mono" title="Layer (zIndex)">{zOf(el)}</span>{/if}
         </button>
-        <button class="ico lock" class:on={locked} title={locked ? 'Unlock' : 'Lock so it can’t be moved on the canvas'} onclick={() => ed.setLocked(el.name, !locked)}>
+        <button
+          class="ico lock"
+          class:on={locked}
+          title={locked ? 'Unlock' : 'Lock so it can’t be moved on the canvas'}
+          aria-label="Lock"
+          aria-pressed={locked}
+          onclick={() => ed.setLocked(el.name, !locked)}
+        >
           <Icon name="lock" size={13} />
         </button>
       </li>
@@ -243,24 +316,34 @@
     <span class="faint">{ed.selection.length > 1 ? `${ed.selection.length} selected` : `${list.length} layer${list.length === 1 ? '' : 's'}`}</span>
     <div class="spacer"></div>
     <div class="add">
-      <button class="ic" onclick={() => (adding = !adding)} title="Add an element to this screen"><Icon name="plus" size={15} /></button>
+      <button
+        class="ic"
+        bind:this={addBtn}
+        onclick={() => (adding = !adding)}
+        title="Add an element to this screen"
+        aria-label="Add an element to this screen"
+        aria-haspopup="menu"
+        aria-expanded={adding}
+      >
+        <Icon name="plus" size={15} />
+      </button>
       {#if adding}
-        <div class="menu" role="menu">
+        <div class="menu" role="menu" tabindex="-1" aria-label="Add an element" use:focusFirst onkeydown={addMenuKey} onfocusout={addMenuOut}>
           {#each ADDABLE_TYPES as t}
             <button class="item" role="menuitem" onclick={() => add(t)} title={TYPE_LABELS[t]?.help ?? ''}>
               <Icon name={TYPE_ICONS[t] ?? 'file'} size={15} />
               <span class="txt"><span>{typeLabel(t)}</span><small>{TYPE_LABELS[t]?.help ?? ''}</small></span>
             </button>
           {/each}
-          <button class="item more" role="menuitem" onclick={() => ((adding = false), ed.showPanel('library'))}>
+          <button class="item more" role="menuitem" onclick={openLibrary}>
             <Icon name="sparkle" size={15} />
             <span class="txt"><span>Ready-made elements…</span><small>Box art, game info and more, filled in by RetroBat</small></span>
           </button>
         </div>
       {/if}
     </div>
-    <button class="ic" onclick={() => ed.duplicate()} disabled={!ed.selection.length} title="Duplicate (Ctrl+D)"><Icon name="copy" size={15} /></button>
-    <button class="ic" onclick={() => ed.deleteSelection()} disabled={!ed.selection.length} title="Delete (Del)"><Icon name="trash" size={15} /></button>
+    <button class="ic" onclick={() => ed.duplicate()} disabled={!ed.selection.length} title="Duplicate (Ctrl+D)" aria-label="Duplicate"><Icon name="copy" size={15} /></button>
+    <button class="ic" onclick={() => ed.deleteSelection()} disabled={!ed.selection.length} title="Delete (Del)" aria-label="Delete"><Icon name="trash" size={15} /></button>
   </footer>
 </div>
 
@@ -355,7 +438,8 @@
   .lock {
     color: transparent;
   }
-  li:hover .lock {
+  li:hover .lock,
+  .lock:focus-visible {
     color: var(--text-faint);
   }
   .lock.on,

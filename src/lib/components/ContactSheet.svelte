@@ -126,7 +126,8 @@
     background: transparent;
     text-align: left;
   }
-  .tile:hover .frame {
+  .tile:hover .frame,
+  .tile:focus-visible .frame {
     outline: 2px solid var(--brand);
   }
   .frame {

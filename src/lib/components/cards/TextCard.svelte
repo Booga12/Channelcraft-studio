@@ -38,6 +38,49 @@
     choosing = false;
     ed.setProp(el.name, 'text', v, { literal: true });
   }
+  /** Picked from the list: focus goes back to the chip, as the list closes. */
+  function pickText(v: string) {
+    setText(v);
+    chipBtn?.focus();
+  }
+  // Keyboard in the "What it says" list: ↑ ↓ move, Home/End jump, Escape closes it (back to the chip).
+  let chipBtn = $state<HTMLButtonElement | null>(null);
+  const menuKeys = (node: HTMLElement) => {
+    const onkey = (e: KeyboardEvent) => {
+      const items = [...node.querySelectorAll<HTMLButtonElement>('button')];
+      const i = items.indexOf(document.activeElement as HTMLButtonElement);
+      let next = -1;
+      if (e.key === 'ArrowDown') next = (i + 1) % items.length;
+      else if (e.key === 'ArrowUp') next = (i - 1 + items.length) % items.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = items.length - 1;
+      else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        choosing = false;
+        chipBtn?.focus();
+        return;
+      } else return;
+      e.preventDefault();
+      e.stopPropagation();
+      items[next]?.focus();
+    };
+    node.addEventListener('keydown', onkey);
+    return () => node.removeEventListener('keydown', onkey);
+  };
+  function chipKey(e: KeyboardEvent) {
+    // ↓ on the chip opens the list and goes into it; Escape closes it.
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      choosing = true;
+      tick().then(() => (e.target as HTMLElement).parentElement?.querySelector<HTMLButtonElement>('.menu button')?.focus());
+    } else if (e.key === 'Escape' && choosing) {
+      e.preventDefault();
+      e.stopPropagation();
+      choosing = false;
+    }
+  }
 
   // ---- font ----
   const fontDef = $derived(el.props.get('fontPath'));
@@ -108,16 +151,16 @@
   {#if hasText}
     <div class="row">
       <div class="lbl">What it says</div>
-      <button class="chip" onclick={() => (choosing = !choosing)} aria-expanded={choosing}>
+      <button class="chip" bind:this={chipBtn} onclick={() => (choosing = !choosing)} onkeydown={chipKey} aria-expanded={choosing}>
         <span>{what}</span>
         <span class="tag">{kind.kind === 'source' ? 'filled in by RetroBat' : ''} ▾</span>
       </button>
       {#if choosing}
-        <div class="menu">
+        <div class="menu" {@attach menuKeys}>
           {#each sources as s (s.id)}
-            <button onclick={() => setText(s.code)}>{s.label}</button>
+            <button onclick={() => pickText(s.code)}>{s.label}</button>
           {/each}
-          <button onclick={() => setText(own || 'My text')}>Your own words…</button>
+          <button onclick={() => pickText(own || 'My text')}>Your own words…</button>
         </div>
       {/if}
       {#if kind.kind === 'own'}
@@ -149,7 +192,7 @@
     {#if themeFonts.length}
       <div class="fonts">
         {#each themeFonts as f (f.rel)}
-          <button class:on={sameFile(fontAbs, f.abs)} style:font-family={familyFor(f.abs)} title={f.rel} onclick={() => useFont(f.abs)}>{fontName(f.rel)}</button>
+          <button class:on={sameFile(fontAbs, f.abs)} aria-current={sameFile(fontAbs, f.abs) ? 'true' : undefined} style:font-family={familyFor(f.abs)} title={f.rel} onclick={() => useFont(f.abs)}>{fontName(f.rel)}</button>
         {/each}
       </div>
     {/if}

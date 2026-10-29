@@ -16,6 +16,7 @@
           class="ghost row"
           class:unused={!ed.res?.usedFiles.has(f)}
           class:cur={ed.sourceFile === f.key && ed.showSource}
+          aria-current={ed.sourceFile === f.key && ed.showSource ? 'true' : undefined}
           onclick={() => {
             ed.sourceFile = f.key;
             ed.sourceLine = null;

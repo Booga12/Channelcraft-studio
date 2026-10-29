@@ -62,6 +62,44 @@
     }
   }
 
+  // ---- keyboard: Escape closes the list (back to the … button); arrows move between the tabs ----
+  let browseBtn = $state<HTMLButtonElement | null>(null);
+  const closeOnEscape = (node: HTMLElement) => {
+    const onkey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      browsing = false;
+      browseBtn?.focus();
+    };
+    node.addEventListener('keydown', onkey);
+    return () => node.removeEventListener('keydown', onkey);
+  };
+  /** Escape on the … button itself (where focus is right after opening) closes the list too. */
+  function browseKey(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || !browsing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    browsing = false;
+  }
+  type Tab = 'assets' | 'theme' | 'free' | 'pc';
+  function selectTab(t: Tab) {
+    fontTab = t;
+    if (t === 'free') loadGoogle();
+    if (t === 'pc') loadPcFonts();
+  }
+  function tabKey(e: KeyboardEvent) {
+    const ids: Tab[] = kind === 'font' ? ['assets', 'theme', 'free', 'pc'] : ['assets', 'theme'];
+    const n = ids.length;
+    const i = Math.max(0, ids.indexOf(fontTab));
+    const next = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i - 1 + n) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    selectTab(ids[next]);
+    (e.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
+  }
+
   // ---- your Assets (and the app's own sounds) ----
   function toggleBrowse() {
     browsing = !browsing;
@@ -124,7 +162,7 @@
 
   // ---- fonts ----
   /** Where the list comes from: your Assets first, then the theme (and for fonts, free and PC fonts). */
-  let fontTab = $state<'assets' | 'theme' | 'free' | 'pc'>('assets');
+  let fontTab = $state<Tab>('assets');
   let pcFonts = $state<{ name: string; path: string; source: string }[]>([]);
   let busy = $state(false);
 
@@ -196,21 +234,21 @@
     {:else if value && !resolved && !value.includes('{') && !value.includes('$')}
       <span class="badge warn" title="File not found in the theme">missing</span>
     {/if}
-    <input class="mono" bind:value={text} spellcheck="false" onchange={() => onchange(text.trim())} onkeydown={(e) => e.key === 'Enter' && onchange(text.trim())} />
-    <button class="small" onclick={toggleBrowse} title="Choose a {what} from your Assets or the theme">…</button>
+    <input class="mono" aria-label="Path of the {what}" bind:value={text} spellcheck="false" onchange={() => onchange(text.trim())} onkeydown={(e) => e.key === 'Enter' && onchange(text.trim())} />
+    <button class="small" bind:this={browseBtn} onclick={toggleBrowse} onkeydown={browseKey} aria-label="Choose a {what} from your Assets or the theme" aria-expanded={browsing} title="Choose a {what} from your Assets or the theme">…</button>
   </div>
   {#if browsing}
-    <div class="browser">
+    <div class="browser" {@attach closeOnEscape}>
       <div class="bhead">
-        <input placeholder="Filter {what}s…" bind:value={filter} />
+        <input placeholder="Filter {what}s…" aria-label="Filter {what}s" bind:value={filter} />
         <button class="small" onclick={importFile} disabled={busy} title="Pick a file on your PC. It's added to your Assets too.">From my computer…</button>
       </div>
-      <div class="ftabs" role="tablist">
-        <button class:on={fontTab === 'assets'} role="tab" aria-selected={fontTab === 'assets'} onclick={() => (fontTab = 'assets')}>Your Assets</button>
-        <button class:on={fontTab === 'theme'} role="tab" aria-selected={fontTab === 'theme'} onclick={() => (fontTab = 'theme')}>In this theme</button>
+      <div class="ftabs" role="tablist" aria-label="Where to choose from">
+        <button class:on={fontTab === 'assets'} role="tab" aria-selected={fontTab === 'assets'} tabindex={fontTab === 'assets' ? 0 : -1} onkeydown={tabKey} onclick={() => selectTab('assets')}>Your Assets</button>
+        <button class:on={fontTab === 'theme'} role="tab" aria-selected={fontTab === 'theme'} tabindex={fontTab === 'theme' ? 0 : -1} onkeydown={tabKey} onclick={() => selectTab('theme')}>In this theme</button>
         {#if kind === 'font'}
-          <button class:on={fontTab === 'free'} role="tab" aria-selected={fontTab === 'free'} onclick={() => ((fontTab = 'free'), loadGoogle())}>Free fonts</button>
-          <button class:on={fontTab === 'pc'} role="tab" aria-selected={fontTab === 'pc'} onclick={() => ((fontTab = 'pc'), loadPcFonts())}>On this PC</button>
+          <button class:on={fontTab === 'free'} role="tab" aria-selected={fontTab === 'free'} tabindex={fontTab === 'free' ? 0 : -1} onkeydown={tabKey} onclick={() => selectTab('free')}>Free fonts</button>
+          <button class:on={fontTab === 'pc'} role="tab" aria-selected={fontTab === 'pc'} tabindex={fontTab === 'pc' ? 0 : -1} onkeydown={tabKey} onclick={() => selectTab('pc')}>On this PC</button>
         {/if}
       </div>
       {#if fontTab === 'assets'}
@@ -218,7 +256,7 @@
           {#each library as a (a.path)}
             {#if kind === 'sound'}
               <div class="srow">
-                <button class="small ghost" onclick={() => listen(a.path, fileUrl(a.path))} title={playing === a.path ? 'Stop' : 'Listen'}>{playing === a.path ? '■' : '▶'}</button>
+                <button class="small ghost" onclick={() => listen(a.path, fileUrl(a.path))} aria-label="{playing === a.path ? 'Stop' : 'Listen to'} {basename(a.rel)}" title={playing === a.path ? 'Stop' : 'Listen'}>{playing === a.path ? '■' : '▶'}</button>
                 <button class="item ghost" onclick={() => pickLibrary(a.path)} disabled={busy} title={a.rel}><span>{basename(a.rel)}</span></button>
               </div>
             {:else}
@@ -236,7 +274,7 @@
             <p class="faint gtitle">Made by the app</p>
             {#each appSounds as s (s.path)}
               <div class="srow">
-                <button class="small ghost" onclick={() => listen(s.path, appSoundUrl(s))} title={playing === s.path ? 'Stop' : 'Listen'}>{playing === s.path ? '■' : '▶'}</button>
+                <button class="small ghost" onclick={() => listen(s.path, appSoundUrl(s))} aria-label="{playing === s.path ? 'Stop' : 'Listen to'} {s.preset.label}" title={playing === s.path ? 'Stop' : 'Listen'}>{playing === s.path ? '■' : '▶'}</button>
                 <button class="item ghost" onclick={() => pickLibrary(s.path)} disabled={busy} title={s.preset.help}><span>{s.preset.label}</span><small class="faint">{s.group === 'music' ? 'song' : 'scroll sound'}</small></button>
               </div>
             {/each}

@@ -192,7 +192,7 @@
           <div class="groups">
             {#each [{ id: 'all' as const, label: 'Show me everything' }, ...DESIGN_GROUPS] as g (g.id)}
               {@const picks = DESIGNS.filter((d) => g.id === 'all' || d.group === g.id).slice(0, 3)}
-              <button type="button" class="group" class:on={group === g.id} onclick={() => pickGroup(g.id)}>
+              <button type="button" class="group" class:on={group === g.id} aria-current={group === g.id ? 'true' : undefined} onclick={() => pickGroup(g.id)}>
                 <span class="mini">{#each picks as d (d.id)}<DesignThumb design={d} />{/each}</span>
                 <span class="dname">{g.label}</span>
               </button>
@@ -235,7 +235,7 @@
         </fieldset>
         <fieldset>
           <legend>Console logos and pictures</legend>
-          <select bind:value={artFrom} disabled={scanning}>
+          <select bind:value={artFrom} disabled={scanning} aria-label="Console logos and pictures">
             <option value="">{scanning ? 'Looking through your themes…' : 'None: show console names as text'}</option>
             {#each sources as s (s.theme.path)}
               <option value={s.theme.path}>Copy from {s.theme.name} ({s.logos} logos{s.consoles ? `, ${s.consoles} console pictures` : ''})</option>

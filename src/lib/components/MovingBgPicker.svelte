@@ -16,6 +16,20 @@
   const covers = $derived(ed.movingBgCovers());
   const currentLabel = $derived(MOVING_BGS.find((b) => b.id === current)?.label);
 
+  /** Arrow keys (and Home/End) move to the next kind and pick it; the chips are one Tab stop. */
+  function chipKeys(ev: KeyboardEvent) {
+    const steps: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    const step = steps[ev.key];
+    if (!step && ev.key !== 'Home' && ev.key !== 'End') return;
+    const items = [...(ev.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    ev.preventDefault();
+    const n = ev.key === 'Home' ? 0 : ev.key === 'End' ? items.length - 1 : (i + (step ?? 0) + items.length) % items.length;
+    items[n].focus();
+    items[n].click();
+  }
+
   const TW = 320;
   const TH = 180;
 
@@ -72,7 +86,7 @@
 <div class="flex flex-col gap-1.5">
   <div class="head">
     <span class="text-xs font-medium">Moving background</span>
-    <button class="still" class:on={current === null} disabled={busy} onclick={() => onpick(null)} title="The design’s own picture, not moving">
+    <button class="still" class:on={current === null} aria-current={current === null ? 'true' : undefined} disabled={busy} onclick={() => onpick(null)} title="The design’s own picture, not moving">
       {#if current === null}<Icon name="check" size={11} />{/if}Still
     </button>
   </div>
@@ -83,9 +97,9 @@
       <button class="small" onclick={() => ed.hideMovingBgCovers()}>Hide them</button>
     </p>
   {/if}
-  <div class="chips" role="radiogroup" aria-label="Kind of moving background">
-    {#each MOVING_GROUPS as g (g.id)}
-      <button type="button" role="radio" aria-checked={group === g.id} class:on={group === g.id} onclick={() => (group = g.id)}>
+  <div class="chips" role="radiogroup" aria-label="Kind of moving background" tabindex="-1" onkeydown={chipKeys}>
+    {#each MOVING_GROUPS as g, i (g.id)}
+      <button type="button" role="radio" aria-checked={group === g.id} tabindex={group === g.id || (i === 0 && !MOVING_GROUPS.some((x) => x.id === group)) ? 0 : -1} class:on={group === g.id} onclick={() => (group = g.id)}>
         {g.label}<span class="n">{MOVING_BGS.filter((b) => b.group === g.id).length}</span>
       </button>
     {/each}

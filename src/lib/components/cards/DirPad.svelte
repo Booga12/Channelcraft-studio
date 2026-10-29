@@ -7,12 +7,40 @@
   const cells = $derived(
     [-1, 0, 1].flatMap((y) => [-1, 0, 1].map((x) => dirs.find((d) => d.x === x && d.y === y) ?? null)),
   );
+  // One Tab stop (the chosen direction, or the first); the arrow keys move round the pad and choose.
+  const stop = $derived(dirs.some((d) => d.id === value) ? value : dirs[0]?.id);
+  let pad: HTMLDivElement;
+
+  function onkeydown(e: KeyboardEvent, d: Dir) {
+    if (e.key === 'Home' || e.key === 'End') {
+      // The first or last arrow on the pad, in reading order.
+      const order = cells.filter((c): c is Dir => !!c);
+      const t = e.key === 'Home' ? order[0] : order[order.length - 1];
+      if (!t) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pad.querySelector<HTMLButtonElement>(`[data-dir="${t.id}"]`)?.focus();
+      if (t.id !== value) onpick(t.id);
+      return;
+    }
+    const [dx, dy] = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, number[]>)[e.key] ?? [0, 0];
+    if (!dx && !dy) return;
+    // Kept from the editor's own arrow keys (they move the selected part).
+    e.preventDefault();
+    e.stopPropagation();
+    // Jumps over the middle letter.
+    const at = (k: number) => dirs.find((x) => x.x === d.x + dx * k && x.y === d.y + dy * k);
+    const t = at(1) ?? at(2);
+    if (!t) return;
+    pad.querySelector<HTMLButtonElement>(`[data-dir="${t.id}"]`)?.focus();
+    if (t.id !== value) onpick(t.id);
+  }
 </script>
 
-<div class="pad" role="radiogroup" aria-label="Shadow direction">
+<div class="pad" role="radiogroup" aria-label="Shadow direction" bind:this={pad}>
   {#each cells as d, i (i)}
     {#if d}
-      <button role="radio" aria-checked={d.id === value} class:on={d.id === value} title={d.label} aria-label={d.label} onclick={() => onpick(d.id)}>{ARROWS[d.id]}</button>
+      <button role="radio" aria-checked={d.id === value} tabindex={d.id === stop ? 0 : -1} data-dir={d.id} class:on={d.id === value} title={d.label} aria-label={d.label} onclick={() => onpick(d.id)} onkeydown={(e) => onkeydown(e, d)}>{ARROWS[d.id]}</button>
     {:else}
       <span class="mid">A</span>
     {/if}
@@ -48,6 +76,11 @@
     background: var(--brand);
     border-color: var(--brand);
     color: var(--brand-text, #fff);
+  }
+  /* The brand outline would vanish on the chosen (brand) arrow. */
+  button.on:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
   }
   .mid {
     font-weight: 700;
