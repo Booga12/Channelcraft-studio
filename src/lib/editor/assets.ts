@@ -14,6 +14,7 @@ import { catalogFont } from '../theme/fonts';
 import { elementLabel, propLabel } from '../friendly';
 import { isDataBound } from '../theme/library';
 import { zOf } from '../render';
+import { appSound } from '../theme/appSounds';
 
 export async function loadLibrary(this: Editor) {
   try {
@@ -24,12 +25,17 @@ export async function loadLibrary(this: Editor) {
   this.libraryLoaded = true;
 }
 
-/** Copies files into the library (checked like imports, never over an existing file). */
-export async function addToLibrary(this: Editor, paths: string[]) {
+/**
+ * Copies files into the library (checked like imports, never over an existing file). `quiet`:
+ * only problems are shown (when the file was also just used, which has its own message).
+ */
+export async function addToLibrary(this: Editor, paths: string[], quiet = false) {
   if (!paths.length) return;
   try {
     const r = await api.addLibraryAssets(paths);
     await this.loadLibrary();
+    // Quiet: the file was just used, and that message stays; a file Assets refuses is simply left out.
+    if (quiet) return;
     const parts: string[] = [];
     if (r.added.length) parts.push(`Added ${r.added.length} file${r.added.length === 1 ? '' : 's'} to Assets`);
     if (r.existing.length) parts.push(`${r.existing.length} ${r.existing.length === 1 ? 'was' : 'were'} already there`);
@@ -265,6 +271,14 @@ export async function importAsset(this: Editor, srcPath: string, kind: AssetKind
   if (!p) return null;
   // A file already inside the theme (dragged from the Explorer's "This theme") is used where it is.
   if (insideDir(srcPath, p.dir)) return srcPath;
+  // One of the app's own sounds is written into the theme as a .wav.
+  const own = appSound(srcPath);
+  if (own) {
+    const rel = await this.writeSound(own.dir, own.preset.id, own.preset.make);
+    if (!rel) return null;
+    this.rev++;
+    return join(p.dir, rel.replace(/^\.\//, ''));
+  }
   const dir = ASSET_THEME_DIR[kind];
   const rel = await api.importAsset(p.dir, srcPath, dir);
   p.setAssets(await api.listThemeFiles(p.dir));

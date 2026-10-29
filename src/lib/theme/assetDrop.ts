@@ -21,6 +21,11 @@ const EXT_KIND: Record<string, AssetKind> = {
   '.ttf': 'font', '.otf': 'font',
 };
 
+/** The file types of a kind, without the dot (for file pickers). */
+export function extensionsOf(kind: AssetKind): string[] {
+  return Object.keys(EXT_KIND).filter((e) => EXT_KIND[e] === kind).map((e) => e.slice(1));
+}
+
 export function kindOfFile(path: string): AssetKind | null {
   return EXT_KIND[extname(path)] ?? null;
 }

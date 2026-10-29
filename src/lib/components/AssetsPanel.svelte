@@ -1,18 +1,29 @@
 <script lang="ts">
-  // The user's own asset library. Drag a picture or video onto the preview to add it as a new
-  // element (Shift, a layer or a property row: replace that element's file instead). Each file is
-  // copied into the theme.
-  import { onMount } from 'svelte';
+  // The user's own asset library, and the app's own songs and scroll sounds ("Made by the app").
+  // Drag a picture or video onto the preview to add it as a new element (Shift, a layer or a
+  // property row: replace that element's file instead). Each file is copied into the theme.
+  import { onMount, type Snippet } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
   import { revealItemInDir } from '@tauri-apps/plugin-opener';
   import { ed } from '$lib/editor.svelte';
   import { api, fileUrl, type LibraryAsset } from '$lib/api';
   import { assetDrag } from '$lib/assetDrag.svelte';
-  import { addsAsNew, ASSET_KIND_LABEL, dropFit, type AssetKind } from '$lib/theme/assetDrop';
+  import { addsAsNew, ASSET_KIND_LABEL, dropFit, extensionsOf, type AssetKind } from '$lib/theme/assetDrop';
   import { basename } from '$lib/path';
   import { elementLabel } from '$lib/friendly';
   import Icon from './Icon.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
+  import { APP_SOUNDS, appSoundUrl, type AppSound } from '$lib/theme/appSounds';
+
+  /** A tile: one of your files, or one of the app's own sounds. */
+  interface Item {
+    path: string;
+    kind: AssetKind;
+    name: string;
+    app?: AppSound;
+  }
+  const own = (a: LibraryAsset): Item => ({ path: a.path, kind: a.kind, name: basename(a.rel) });
+  const made = (s: AppSound): Item => ({ path: s.path, kind: 'sound', name: s.preset.label, app: s });
 
   type Filter = 'all' | AssetKind;
   const FILTERS: { id: Filter; label: string }[] = [
@@ -39,14 +50,18 @@
     const q = query.trim().toLowerCase();
     return ed.library.filter((a) => (filter === 'all' || a.kind === filter) && (!q || a.rel.toLowerCase().includes(q)));
   });
+  /** The app's own sounds, under Sounds. */
+  const appShown = $derived.by(() => {
+    if (filter !== 'sound') return [];
+    const q = query.trim().toLowerCase();
+    return APP_SOUNDS.filter((s) => !q || s.preset.label.toLowerCase().includes(q) || s.preset.help.toLowerCase().includes(q));
+  });
 
   async function addFiles() {
     const picked = await open({
       title: 'Add files to your Assets',
       multiple: true,
-      filters: [
-        { name: 'Pictures, videos, sounds and fonts', extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'mp4', 'm4v', 'mov', 'mkv', 'webm', 'avi', 'mpg', 'mpeg', 'wav', 'ogg', 'mp3', 'flac', 'ttf', 'otf'] },
-      ],
+      filters: [{ name: 'Pictures, videos, sounds and fonts', extensions: (['image', 'video', 'sound', 'font'] as const).flatMap(extensionsOf) }],
     });
     const paths = Array.isArray(picked) ? picked : typeof picked === 'string' ? [picked] : [];
     await ed.addToLibrary(paths);
@@ -63,7 +78,7 @@
   }
 
   // ---- dragging a tile ----
-  function down(e: PointerEvent, a: LibraryAsset) {
+  function down(e: PointerEvent, a: Item) {
     if (e.button !== 0) return;
     const tile = e.currentTarget as HTMLElement;
     const sx = e.clientX;
@@ -74,7 +89,7 @@
         if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
         started = true;
         tile.setPointerCapture(ev.pointerId);
-        assetDrag.start({ path: a.path, kind: a.kind, name: basename(a.path) });
+        assetDrag.start({ path: a.path, kind: a.kind, name: a.name });
       }
       assetDrag.move(ev.clientX, ev.clientY);
     };
@@ -94,20 +109,20 @@
   }
 
   /** The selected element and the property this asset would set on it. */
-  function onSelected(a: LibraryAsset) {
+  function onSelected(a: Item) {
     const el = ed.selectedElement;
     if (!el) return null;
     return { el, fit: dropFit(el.type, el.name, a.kind) };
   }
 
-  function useOnSelected(a: LibraryAsset) {
+  function useOnSelected(a: Item) {
     const s = onSelected(a);
-    if (!s) return ed.notify('Select an element first, or drag the file onto one.');
+    if (!s) return ed.notify(a.kind === 'sound' ? 'Select an element first, or right-click the sound to use it as the menu music or scroll sound.' : 'Select an element first, or drag the file onto one.');
     ed.linkAsset(a.path, a.kind, s.el.name);
   }
 
   /** Double-click or Enter: pictures and videos become a new element; sounds and fonts go on the selected one. */
-  function use(a: LibraryAsset) {
+  function use(a: Item) {
     if (addsAsNew(a.kind)) ed.addAssets([{ path: a.path, kind: a.kind }]);
     else useOnSelected(a);
   }
@@ -115,13 +130,13 @@
   // ---- previews ----
   let playing = $state<string | null>(null);
   let audio: HTMLAudioElement | null = null;
-  function toggleSound(a: LibraryAsset) {
+  function toggleSound(a: Item) {
     audio?.pause();
     if (playing === a.path) {
       playing = null;
       return;
     }
-    audio = new Audio(fileUrl(a.path));
+    audio = new Audio(a.app ? appSoundUrl(a.app) : fileUrl(a.path));
     audio.onended = () => (playing = null);
     audio.play().catch(() => (playing = null));
     playing = a.path;
@@ -144,7 +159,7 @@
 
   const size = (n: number) => (n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-  let menu = $state<{ x: number; y: number; a: LibraryAsset } | null>(null);
+  let menu = $state<{ x: number; y: number; a: Item } | null>(null);
   const menuItems = $derived.by<MenuItem[]>(() => {
     if (!menu) return [];
     const a = menu.a;
@@ -156,12 +171,47 @@
         disabled: !s || !s.fit.ok,
         action: () => useOnSelected(a),
       },
-      { label: 'Show in folder', action: () => revealItemInDir(a.path).catch((e) => ed.notify(String(e), 'error')) },
-      { separator: true },
-      { label: 'Remove from Assets', danger: true, action: () => ed.removeFromLibrary(a.path) },
+      // The app's songs are menu music and its short sounds scroll sounds; your own can be either.
+      ...(a.kind === 'sound' && a.app?.group !== 'scroll' ? [{ label: 'Use as the menu music', action: () => ed.setMusic({ file: a.path }) }] : []),
+      ...(a.kind === 'sound' && a.app?.group !== 'music' ? [{ label: 'Use as the scroll sound', action: () => ed.setScrollSound({ file: a.path }) }] : []),
+      // The app's own sounds aren't files you can find or remove.
+      ...(a.app
+        ? []
+        : [
+            { label: 'Show in folder', action: () => revealItemInDir(a.path).catch((e) => ed.notify(String(e), 'error')) },
+            { separator: true as const },
+            { label: 'Remove from Assets', danger: true, action: () => ed.removeFromLibrary(a.path) },
+          ]),
     ];
   });
 </script>
+
+{#snippet tile(a: Item, title: string, thumb: Snippet)}
+  <div
+    class="tile"
+    role="button"
+    tabindex="0"
+    {title}
+    onpointerdown={(e) => down(e, a)}
+    ondblclick={() => use(a)}
+    onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && use(a)}
+    oncontextmenu={(e) => {
+      e.preventDefault();
+      menu = { x: e.clientX, y: e.clientY, a };
+    }}
+    onmouseenter={(e) => a.kind === 'video' && (e.currentTarget.querySelector('video') as HTMLVideoElement | null)?.play().catch(() => {})}
+    onmouseleave={(e) => a.kind === 'video' && (e.currentTarget.querySelector('video') as HTMLVideoElement | null)?.pause()}
+  >
+    {@render thumb()}
+    <span class="name">{a.name}</span>
+  </div>
+{/snippet}
+
+{#snippet playButton(a: Item)}
+  <button class="play ghost" class:on={playing === a.path} title={playing === a.path ? 'Stop' : 'Listen'} onpointerdown={(e) => e.stopPropagation()} onclick={() => toggleSound(a)}>
+    <Icon name={playing === a.path ? 'close' : 'sound'} size={20} />
+  </button>
+{/snippet}
 
 <div class="assets">
   <div class="bar">
@@ -185,24 +235,18 @@
       <button onclick={addFiles}><Icon name="plus" size={13} /> Add files…</button>
     </div>
   {:else}
-    <p class="hint faint">Drag a picture or video onto the preview, or double-click it, to add it to this screen. Hold Shift while dropping to replace the picture under it instead. Files are copied into the theme, so it keeps working on its own.</p>
+    <p class="hint faint">
+      {#if filter === 'sound'}
+        Drag a sound onto a carousel, grid or game list on the preview, or onto a sound field in Properties. Right-click it to use it as the menu music or scroll sound.
+      {:else}
+        Drag a picture or video onto the preview, or double-click it, to add it to this screen. Hold Shift while dropping to replace the picture under it instead. Files are copied into the theme, so it keeps working on its own.
+      {/if}
+    </p>
+    {#if appShown.length}<h5 class="group">Your files</h5>{/if}
     <div class="tiles">
       {#each shown as a (a.path)}
-        <div
-          class="tile"
-          role="button"
-          tabindex="0"
-          title="{a.rel} · {ASSET_KIND_LABEL[a.kind]}, {size(a.size)}"
-          onpointerdown={(e) => down(e, a)}
-          ondblclick={() => use(a)}
-          onkeydown={(e) => e.key === 'Enter' && use(a)}
-          oncontextmenu={(e) => {
-            e.preventDefault();
-            menu = { x: e.clientX, y: e.clientY, a };
-          }}
-          onmouseenter={(e) => a.kind === 'video' && (e.currentTarget.querySelector('video') as HTMLVideoElement | null)?.play().catch(() => {})}
-          onmouseleave={(e) => a.kind === 'video' && (e.currentTarget.querySelector('video') as HTMLVideoElement | null)?.pause()}
-        >
+        {@const item = own(a)}
+        {#snippet thumb()}
           <div class="thumb {a.kind}">
             {#if a.kind === 'image'}
               <img src={fileUrl(a.path)} alt="" loading="lazy" draggable="false" />
@@ -212,21 +256,29 @@
             {:else if a.kind === 'font'}
               <span class="aa" style:font-family="{fontFamily(a.path)}, sans-serif">Aa</span>
             {:else}
-              <button
-                class="play ghost"
-                class:on={playing === a.path}
-                title={playing === a.path ? 'Stop' : 'Listen'}
-                onpointerdown={(e) => e.stopPropagation()}
-                onclick={() => toggleSound(a)}
-              >
-                <Icon name={playing === a.path ? 'close' : 'sound'} size={20} />
-              </button>
+              {@render playButton(item)}
             {/if}
           </div>
-          <span class="name">{basename(a.rel)}</span>
-        </div>
+        {/snippet}
+        {@render tile(item, `${a.rel} · ${ASSET_KIND_LABEL[a.kind]}, ${size(a.size)}`, thumb)}
       {:else}
         <p class="faint pad">No {filter === 'all' ? 'assets' : FILTERS.find((f) => f.id === filter)?.label.toLowerCase()} match.</p>
+      {/each}
+    </div>
+  {/if}
+
+  {#if appShown.length}
+    <h5 class="group">Made by the app <span class="faint">free to use and share</span></h5>
+    <div class="tiles">
+      {#each appShown as s (s.path)}
+        {@const item = made(s)}
+        {#snippet thumb()}
+          <div class="thumb sound app">
+            {@render playButton(item)}
+            <span class="badge">{s.group === 'music' ? 'Song' : 'Scroll'}</span>
+          </div>
+        {/snippet}
+        {@render tile(item, `${s.preset.label} · ${s.preset.help}`, thumb)}
       {/each}
     </div>
   {/if}
@@ -368,6 +420,23 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-dim);
+  }
+  .group {
+    margin: 4px 2px 0;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+  }
+  .group span {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .thumb.app .badge {
+    font-size: 9px;
+    line-height: 1.2;
   }
   .pad {
     padding: 8px;

@@ -4,6 +4,9 @@
   import { api, fileUrl } from '$lib/api';
   import { join } from '$lib/path';
   import { FONT_CATALOG } from '$lib/theme/fonts';
+  import { APP_SOUNDS, appSoundUrl } from '$lib/theme/appSounds';
+  import { ASSET_KIND_LABEL, extensionsOf } from '$lib/theme/assetDrop';
+  import { basename } from '$lib/path';
 
   let {
     value,
@@ -37,23 +40,82 @@
     return p.assets.filter((a) => a.kind === want && (!q || a.rel.toLowerCase().includes(q))).slice(0, 400);
   });
 
-  const EXT: Record<string, string[]> = {
-    image: ['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp'],
-    font: ['ttf', 'otf'],
-    sound: ['ogg', 'wav', 'mp3'],
-    video: ['mp4', 'webm', 'mkv'],
-  };
 
+  const what = $derived(ASSET_KIND_LABEL[kind]);
+
+  /** A file from the PC: copied into the theme and used, and kept in Assets for next time. */
   async function importFile() {
-    const file = await open({ title: `Import ${kind} into the theme`, filters: [{ name: kind, extensions: EXT[kind] }] });
+    const file = await open({ title: `Choose a ${what} from your computer`, filters: [{ name: what, extensions: extensionsOf(kind) }] });
     if (typeof file !== 'string') return;
+    busy = true;
     try {
       const abs = await ed.importAsset(file, kind);
-      if (abs) onchange(toRelative(abs));
+      if (abs) {
+        browsing = false;
+        onchange(toRelative(abs));
+        await ed.addToLibrary([file], true);
+      }
     } catch (e) {
       ed.notify(String(e), 'error');
+    } finally {
+      busy = false;
     }
   }
+
+  // ---- your Assets (and the app's own sounds) ----
+  function toggleBrowse() {
+    browsing = !browsing;
+    if (browsing && !ed.libraryLoaded) ed.loadLibrary();
+  }
+  const library = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    return ed.library.filter((a) => a.kind === kind && (!q || a.rel.toLowerCase().includes(q)));
+  });
+  const appSounds = $derived.by(() => {
+    if (kind !== 'sound') return [];
+    const q = filter.trim().toLowerCase();
+    return APP_SOUNDS.filter((s) => !q || s.preset.label.toLowerCase().includes(q));
+  });
+
+  /** Copies a file from Assets (or writes one of the app's sounds) into the theme, and uses it. */
+  async function pickLibrary(path: string) {
+    busy = true;
+    try {
+      const abs = await ed.importAsset(path, kind);
+      if (abs) {
+        browsing = false;
+        onchange(toRelative(abs));
+      }
+    } catch (e) {
+      ed.notify(String(e), 'error');
+    } finally {
+      busy = false;
+    }
+  }
+
+  let playing = $state<string | null>(null);
+  let audio: HTMLAudioElement | null = null;
+  function listen(key: string, url: string) {
+    audio?.pause();
+    if (playing === key) {
+      playing = null;
+      return;
+    }
+    audio = new Audio(url);
+    audio.onended = () => (playing = null);
+    audio.play().catch(() => (playing = null));
+    playing = key;
+  }
+  function stopListening() {
+    audio?.pause();
+    audio = null;
+    playing = null;
+  }
+  // A sound playing from the list stops when the list closes (or the field goes away).
+  $effect(() => {
+    if (!browsing) stopListening();
+  });
+  $effect(() => () => audio?.pause());
 
   function pick(rel: string) {
     browsing = false;
@@ -61,7 +123,8 @@
   }
 
   // ---- fonts ----
-  let fontTab = $state<'theme' | 'free' | 'pc'>('theme');
+  /** Where the list comes from: your Assets first, then the theme (and for fonts, free and PC fonts). */
+  let fontTab = $state<'assets' | 'theme' | 'free' | 'pc'>('assets');
   let pcFonts = $state<{ name: string; path: string; source: string }[]>([]);
   let busy = $state(false);
 
@@ -134,22 +197,52 @@
       <span class="badge warn" title="File not found in the theme">missing</span>
     {/if}
     <input class="mono" bind:value={text} spellcheck="false" onchange={() => onchange(text.trim())} onkeydown={(e) => e.key === 'Enter' && onchange(text.trim())} />
-    <button class="small" onclick={() => (browsing = !browsing)} title="Choose a file from the theme">…</button>
+    <button class="small" onclick={toggleBrowse} title="Choose a {what} from your Assets or the theme">…</button>
   </div>
   {#if browsing}
     <div class="browser">
       <div class="bhead">
-        <input placeholder="Filter {kind}s…" bind:value={filter} />
-        <button class="small" onclick={importFile}>Import…</button>
+        <input placeholder="Filter {what}s…" bind:value={filter} />
+        <button class="small" onclick={importFile} disabled={busy} title="Pick a file on your PC. It's added to your Assets too.">From my computer…</button>
       </div>
-      {#if kind === 'font'}
-        <div class="ftabs" role="tablist">
-          <button class:on={fontTab === 'theme'} onclick={() => (fontTab = 'theme')}>In this theme</button>
-          <button class:on={fontTab === 'free'} onclick={() => ((fontTab = 'free'), loadGoogle())}>Free fonts</button>
-          <button class:on={fontTab === 'pc'} onclick={() => ((fontTab = 'pc'), loadPcFonts())}>On this PC</button>
+      <div class="ftabs" role="tablist">
+        <button class:on={fontTab === 'assets'} role="tab" aria-selected={fontTab === 'assets'} onclick={() => (fontTab = 'assets')}>Your Assets</button>
+        <button class:on={fontTab === 'theme'} role="tab" aria-selected={fontTab === 'theme'} onclick={() => (fontTab = 'theme')}>In this theme</button>
+        {#if kind === 'font'}
+          <button class:on={fontTab === 'free'} role="tab" aria-selected={fontTab === 'free'} onclick={() => ((fontTab = 'free'), loadGoogle())}>Free fonts</button>
+          <button class:on={fontTab === 'pc'} role="tab" aria-selected={fontTab === 'pc'} onclick={() => ((fontTab = 'pc'), loadPcFonts())}>On this PC</button>
+        {/if}
+      </div>
+      {#if fontTab === 'assets'}
+        <div class="items" class:imgs={kind === 'image'}>
+          {#each library as a (a.path)}
+            {#if kind === 'sound'}
+              <div class="srow">
+                <button class="small ghost" onclick={() => listen(a.path, fileUrl(a.path))} title={playing === a.path ? 'Stop' : 'Listen'}>{playing === a.path ? '■' : '▶'}</button>
+                <button class="item ghost" onclick={() => pickLibrary(a.path)} disabled={busy} title={a.rel}><span>{basename(a.rel)}</span></button>
+              </div>
+            {:else}
+              <button class="item ghost" onclick={() => pickLibrary(a.path)} disabled={busy} title={a.rel}>
+                {#if kind === 'image'}
+                  <img src={fileUrl(a.path)} alt="" loading="lazy" />
+                {/if}
+                <span>{basename(a.rel)}</span>
+              </button>
+            {/if}
+          {:else}
+            <p class="faint">{filter.trim() ? `No ${what}s in your Assets match.` : `No ${what}s in your Assets yet. Use From my computer…, or add some in Assets.`}</p>
+          {/each}
+          {#if appSounds.length}
+            <p class="faint gtitle">Made by the app</p>
+            {#each appSounds as s (s.path)}
+              <div class="srow">
+                <button class="small ghost" onclick={() => listen(s.path, appSoundUrl(s))} title={playing === s.path ? 'Stop' : 'Listen'}>{playing === s.path ? '■' : '▶'}</button>
+                <button class="item ghost" onclick={() => pickLibrary(s.path)} disabled={busy} title={s.preset.help}><span>{s.preset.label}</span><small class="faint">{s.group === 'music' ? 'song' : 'scroll sound'}</small></button>
+              </div>
+            {/each}
+          {/if}
         </div>
-      {/if}
-      {#if kind === 'font' && fontTab === 'free'}
+      {:else if kind === 'font' && fontTab === 'free'}
         <div class="items">
           {#each FONT_CATALOG.filter((f) => !filter || f.label.toLowerCase().includes(filter.toLowerCase())) as f (f.id)}
             <button class="item ghost font" onclick={() => pickCatalog(f.id)} disabled={busy}>
@@ -195,7 +288,7 @@
             <span class="mono">{a.rel}</span>
           </button>
         {:else}
-          <p class="faint">No {kind} files in this theme.</p>
+          <p class="faint">No {what} files in this theme.</p>
         {/each}
       </div>
       {/if}
@@ -280,6 +373,17 @@
   .ftabs button.on {
     background: var(--raised);
     color: var(--text);
+  }
+  .srow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px;
+    align-items: center;
+  }
+  .srow .item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
   }
   .item.font {
     display: flex;
