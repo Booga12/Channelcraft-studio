@@ -15,13 +15,28 @@
     const seen = new Set<string>();
     return list.filter((o) => !seen.has(o.hex) && seen.add(o.hex));
   });
+  // One Tab stop (the chosen colour, or the first); the arrow keys move along and choose, as radios do.
+  const stop = $derived(Math.max(0, options.findIndex((o) => o.hex === value.toUpperCase())));
+  let box: HTMLDivElement;
+
+  function onkeydown(e: KeyboardEvent, i: number) {
+    const n = options.length;
+    const k = e.key;
+    const j = k === 'ArrowRight' || k === 'ArrowDown' ? (i + 1) % n : k === 'ArrowLeft' || k === 'ArrowUp' ? (i - 1 + n) % n : k === 'Home' ? 0 : k === 'End' ? n - 1 : -1;
+    if (j < 0) return;
+    // Kept from the editor's own arrow keys (they move the selected part).
+    e.preventDefault();
+    e.stopPropagation();
+    box.querySelectorAll<HTMLButtonElement>(':scope > button')[j]?.focus();
+    if (options[j].hex !== value.toUpperCase()) onpick(options[j].hex);
+  }
 </script>
 
-<div class="sw" role="radiogroup" aria-label="Colour">
-  {#each options as o (o.hex)}
-    <button role="radio" aria-checked={o.hex === value.toUpperCase()} class:on={o.hex === value.toUpperCase()} style:background="#{o.hex}" title={o.title} aria-label={o.title} onclick={() => onpick(o.hex)}></button>
+<div class="sw" role="radiogroup" aria-label="Colour" bind:this={box}>
+  {#each options as o, i (o.hex)}
+    <button role="radio" aria-checked={o.hex === value.toUpperCase()} tabindex={i === stop ? 0 : -1} class:on={o.hex === value.toUpperCase()} style:background="#{o.hex}" title={o.title} aria-label={o.title} onclick={() => onpick(o.hex)} onkeydown={(e) => onkeydown(e, i)}></button>
   {/each}
-  <div class="any"><ColorInput value={value} onchange={(v) => onpick(v.trim().slice(0, 6).toUpperCase())} /></div>
+  <div class="any"><ColorInput value={value} label="Colour" onchange={(v) => onpick(v.trim().slice(0, 6).toUpperCase())} /></div>
 </div>
 
 <style>
@@ -40,6 +55,11 @@
   }
   button.on {
     outline: 2px solid var(--brand);
+    outline-offset: 1px;
+  }
+  /* Focus has to differ from the chosen colour's ring. */
+  button:focus-visible {
+    outline: 2px solid var(--text);
     outline-offset: 1px;
   }
   .any {

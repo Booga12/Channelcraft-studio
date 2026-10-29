@@ -29,6 +29,26 @@
     { id: 'about', label: 'About', icon: 'help' },
   ] as const;
   let section = $state<(typeof SECTIONS)[number]['id']>('general');
+  // The accent swatch that takes the Tab stop (the chosen one, or the first if none is).
+  const accentStop = $derived(prefs.v.accent in ACCENTS ? prefs.v.accent : Object.keys(ACCENTS)[0]);
+
+  /** Arrow keys (and Home/End) in the section list, the two-way switches and the swatches:
+   *  one Tab stop per group, arrows move to the next choice and pick it. */
+  function arrows(e: KeyboardEvent) {
+    const items = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="tab"], [role="radio"]')];
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    if (i < 0) return;
+    const n = items.length;
+    let j: number;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') j = (i - 1 + n) % n;
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') j = (i + 1) % n;
+    else if (e.key === 'Home') j = 0;
+    else if (e.key === 'End') j = n - 1;
+    else return;
+    e.preventDefault();
+    items[j].focus();
+    items[j].click();
+  }
 
   async function pickRoot() {
     const dir = await open({ directory: true, title: 'Choose your RetroBat folder (the one with RetroBat.exe)' });
@@ -58,11 +78,13 @@
     <Dialog.Title class="sr-only">Settings</Dialog.Title>
     <nav>
       <h2>Settings</h2>
-      {#each SECTIONS as s}
-        <button class="nav" class:on={section === s.id} onclick={() => (section = s.id)}><Icon name={s.icon} size={15} /> {s.label}</button>
-      {/each}
+      <div class="tabs" role="tablist" aria-orientation="vertical" aria-label="Settings sections" tabindex="-1" onkeydown={arrows}>
+        {#each SECTIONS as s}
+          <button class="nav" class:on={section === s.id} role="tab" id="settings-tab-{s.id}" aria-selected={section === s.id} aria-controls="settings-panel" tabindex={section === s.id ? 0 : -1} onclick={() => (section = s.id)}><Icon name={s.icon} size={15} /> {s.label}</button>
+        {/each}
+      </div>
     </nav>
-    <section>
+    <div class="panel" id="settings-panel" role="tabpanel" aria-labelledby="settings-tab-{section}">
       {#if section === 'general'}
         <h3>General</h3>
         <div class="row">
@@ -71,28 +93,28 @@
         </div>
         <div class="row">
           <div><strong>Editor mode</strong><small>Simple shows plain names and the most useful settings. Advanced shows everything, including the XML.</small></div>
-          <div class="seg">
-            <button class:sel={ed.simple} onclick={() => ed.setMode('simple')}>Simple</button>
-            <button class:sel={!ed.simple} onclick={() => ed.setMode('advanced')}>Advanced</button>
+          <div class="seg" role="radiogroup" aria-label="Editor mode" tabindex="-1" onkeydown={arrows}>
+            <button class:sel={ed.simple} role="radio" aria-checked={ed.simple} tabindex={ed.simple ? 0 : -1} onclick={() => ed.setMode('simple')}>Simple</button>
+            <button class:sel={!ed.simple} role="radio" aria-checked={!ed.simple} tabindex={ed.simple ? -1 : 0} onclick={() => ed.setMode('advanced')}>Advanced</button>
           </div>
         </div>
         <div class="row">
           <div><strong>Ask before editing an original theme</strong><small>Offers to make a copy first, so the original stays safe.</small></div>
-          <input type="checkbox" checked={ed.askCopy} onchange={(e) => ed.setAskCopy(e.currentTarget.checked)} />
+          <input type="checkbox" aria-label="Ask before editing an original theme" checked={ed.askCopy} onchange={(e) => ed.setAskCopy(e.currentTarget.checked)} />
         </div>
       {:else if section === 'canvas'}
         <h3>Canvas</h3>
         <div class="row">
           <div><strong>Snap to guides</strong><small>Edges and centres snap to the screen and to other elements while you move or resize. Hold Alt to switch it off for a moment.</small></div>
-          <input type="checkbox" checked={prefs.v.snap} onchange={(e) => prefs.set('snap', e.currentTarget.checked)} />
+          <input type="checkbox" aria-label="Snap to guides" checked={prefs.v.snap} onchange={(e) => prefs.set('snap', e.currentTarget.checked)} />
         </div>
         <div class="row">
           <div><strong>Show grid</strong><small>Elements also snap to the grid when it's showing.</small></div>
-          <input type="checkbox" checked={prefs.v.showGrid} onchange={(e) => prefs.set('showGrid', e.currentTarget.checked)} />
+          <input type="checkbox" aria-label="Show grid" checked={prefs.v.showGrid} onchange={(e) => prefs.set('showGrid', e.currentTarget.checked)} />
         </div>
         <div class="row">
           <div><strong>Grid size</strong></div>
-          <select value={String(prefs.v.gridSize)} onchange={(e) => prefs.set('gridSize', Number(e.currentTarget.value))}>
+          <select aria-label="Grid size" value={String(prefs.v.gridSize)} onchange={(e) => prefs.set('gridSize', Number(e.currentTarget.value))}>
             <option value="0.025">2.5% of the screen</option>
             <option value="0.05">5% of the screen</option>
             <option value="0.1">10% of the screen</option>
@@ -100,24 +122,24 @@
         </div>
         <div class="row">
           <div><strong>Show TV safe area</strong><small>Old TVs cut off the edges. Keep important things inside the inner line.</small></div>
-          <input type="checkbox" checked={prefs.v.showSafeArea} onchange={(e) => prefs.set('showSafeArea', e.currentTarget.checked)} />
+          <input type="checkbox" aria-label="Show TV safe area" checked={prefs.v.showSafeArea} onchange={(e) => prefs.set('showSafeArea', e.currentTarget.checked)} />
         </div>
         <div class="row">
           <div><strong>Show rulers</strong></div>
-          <input type="checkbox" checked={prefs.v.showRulers} onchange={(e) => prefs.set('showRulers', e.currentTarget.checked)} />
+          <input type="checkbox" aria-label="Show rulers" checked={prefs.v.showRulers} onchange={(e) => prefs.set('showRulers', e.currentTarget.checked)} />
         </div>
         <div class="row">
           <div><strong>Units</strong><small>Themes store sizes as a share of the screen. Pixels assume the preview's screen size.</small></div>
-          <div class="seg">
-            <button class:sel={prefs.v.units === '%'} onclick={() => prefs.set('units', '%')}>Percent</button>
-            <button class:sel={prefs.v.units === 'px'} onclick={() => prefs.set('units', 'px')}>Pixels</button>
+          <div class="seg" role="radiogroup" aria-label="Units" tabindex="-1" onkeydown={arrows}>
+            <button class:sel={prefs.v.units === '%'} role="radio" aria-checked={prefs.v.units === '%'} tabindex={prefs.v.units === 'px' ? -1 : 0} onclick={() => prefs.set('units', '%')}>Percent</button>
+            <button class:sel={prefs.v.units === 'px'} role="radio" aria-checked={prefs.v.units === 'px'} tabindex={prefs.v.units === 'px' ? 0 : -1} onclick={() => prefs.set('units', 'px')}>Pixels</button>
           </div>
         </div>
       {:else if section === 'saving'}
         <h3>Saving & backups</h3>
         <div class="row">
           <div><strong>Autosave</strong><small>Saves the theme for you. A backup is still made before the first save of each session.</small></div>
-          <select value={String(prefs.v.autosaveMinutes)} onchange={(e) => prefs.set('autosaveMinutes', Number(e.currentTarget.value))}>
+          <select aria-label="Autosave" value={String(prefs.v.autosaveMinutes)} onchange={(e) => prefs.set('autosaveMinutes', Number(e.currentTarget.value))}>
             <option value="0">Off</option>
             <option value="1">Every minute</option>
             <option value="5">Every 5 minutes</option>
@@ -126,11 +148,11 @@
         </div>
         <div class="row">
           <div><strong>Keep unsaved changes if the app closes</strong><small>Unsaved work is kept on the side and offered back next time you open the theme.</small></div>
-          <input type="checkbox" checked={prefs.v.keepRecovery} onchange={(e) => prefs.set('keepRecovery', e.currentTarget.checked)} />
+          <input type="checkbox" aria-label="Keep unsaved changes if the app closes" checked={prefs.v.keepRecovery} onchange={(e) => prefs.set('keepRecovery', e.currentTarget.checked)} />
         </div>
         <div class="row">
           <div><strong>Backups to keep per theme</strong><small>Older backup zips are removed.</small></div>
-          <select value={String(prefs.v.backupsKeep)} onchange={(e) => prefs.set('backupsKeep', Number(e.currentTarget.value))}>
+          <select aria-label="Backups to keep per theme" value={String(prefs.v.backupsKeep)} onchange={(e) => prefs.set('backupsKeep', Number(e.currentTarget.value))}>
             {#each [3, 5, 10, 25, 0] as n}
               <option value={String(n)}>{n === 0 ? 'Keep all' : n}</option>
             {/each}
@@ -150,7 +172,7 @@
         <h3>Appearance</h3>
         <div class="row">
           <div><strong>Light or dark</strong><small>System follows the Windows setting.</small></div>
-          <select value={prefs.v.mode} onchange={(e) => prefs.setMode(e.currentTarget.value as Mode)}>
+          <select aria-label="Light or dark" value={prefs.v.mode} onchange={(e) => prefs.setMode(e.currentTarget.value as Mode)}>
             <option value="system">System</option>
             <option value="light">Light</option>
             <option value="dark">Dark</option>
@@ -158,15 +180,15 @@
         </div>
         <div class="row">
           <div><strong>Accent colour</strong></div>
-          <div class="accents">
+          <div class="accents" role="radiogroup" aria-label="Accent colour" tabindex="-1" onkeydown={arrows}>
             {#each Object.entries(ACCENTS) as [id, a]}
-              <button class="swatch" class:sel={prefs.v.accent === id} style:background={a.base} title={a.label} aria-label={a.label} onclick={() => prefs.set('accent', id)}></button>
+              <button class="swatch" class:sel={prefs.v.accent === id} style:background={a.base} title={a.label} aria-label={a.label} role="radio" aria-checked={prefs.v.accent === id} tabindex={accentStop === id ? 0 : -1} onclick={() => prefs.set('accent', id)}></button>
             {/each}
           </div>
         </div>
         <div class="row">
           <div><strong>Interface size</strong><small>Makes all text and buttons bigger or smaller.</small></div>
-          <select value={String(prefs.v.uiScale)} onchange={(e) => prefs.set('uiScale', Number(e.currentTarget.value))}>
+          <select aria-label="Interface size" value={String(prefs.v.uiScale)} onchange={(e) => prefs.set('uiScale', Number(e.currentTarget.value))}>
             <option value="0.9">Compact (90%)</option>
             <option value="1">Normal</option>
             <option value="1.1">Large (110%)</option>
@@ -201,14 +223,14 @@
         <h3>Preview</h3>
         <div class="row">
           <div><strong>Show my own games</strong><small>Uses the box art, screenshots, videos and descriptions RetroBat scraped for your games ({ed.gameSystems.length} systems have them). Off shows sample games.</small></div>
-          <input type="checkbox" checked={prefs.v.realArtwork} onchange={(e) => prefs.set('realArtwork', e.currentTarget.checked)} />
+          <input type="checkbox" aria-label="Show my own games" checked={prefs.v.realArtwork} onchange={(e) => prefs.set('realArtwork', e.currentTarget.checked)} />
         </div>
         <div class="row">
           <div><strong>Fill missing pictures from libretro-thumbnails</strong><small>Games RetroBat hasn't scraped pictures for get free box art, title screens and screenshots from the libretro-thumbnails project online, found by the game's file name. Preview only: nothing is downloaded into your theme or RetroBat.</small></div>
-          <input type="checkbox" checked={prefs.v.onlineArt} onchange={(e) => prefs.set('onlineArt', e.currentTarget.checked)} />
+          <input type="checkbox" aria-label="Fill missing pictures from libretro-thumbnails" checked={prefs.v.onlineArt} onchange={(e) => prefs.set('onlineArt', e.currentTarget.checked)} />
         </div>
       {/if}
-    </section>
+    </div>
   </Dialog.Content>
 </Dialog.Root>
 
@@ -249,7 +271,7 @@
     background: var(--raised);
     color: var(--text);
   }
-  section {
+  .panel {
     padding: 20px 26px;
     overflow: auto;
   }
@@ -292,6 +314,10 @@
   .seg button.sel {
     background: var(--raised);
     color: var(--text);
+  }
+  .tabs {
+    display: grid;
+    gap: 2px;
   }
   .accents {
     display: flex;

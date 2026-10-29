@@ -7,17 +7,37 @@
     value,
     onpick,
     label,
+    followFocus = true,
   }: {
     options: { id: T; label: string; icon?: Component; title?: string }[];
     value: T | null;
     onpick: (id: T) => void;
     label: string;
+    /** False when picking undoes work (the arrow keys then only move; Enter or Space picks). */
+    followFocus?: boolean;
   } = $props();
+
+  let box: HTMLDivElement;
+  // One Tab stop (the chosen option, or the first); the arrow keys move along and choose, as radios do
+  // (or only move, without followFocus).
+  const stop = $derived(Math.max(0, options.findIndex((o) => o.id === value)));
+
+  function onkeydown(e: KeyboardEvent, i: number) {
+    const n = options.length;
+    const k = e.key;
+    const j = k === 'ArrowRight' || k === 'ArrowDown' ? (i + 1) % n : k === 'ArrowLeft' || k === 'ArrowUp' ? (i - 1 + n) % n : k === 'Home' ? 0 : k === 'End' ? n - 1 : -1;
+    if (j < 0) return;
+    // Kept from the editor's own arrow keys (they move the selected part).
+    e.preventDefault();
+    e.stopPropagation();
+    box.querySelectorAll<HTMLButtonElement>(':scope > button')[j]?.focus();
+    if (followFocus && options[j].id !== value) onpick(options[j].id);
+  }
 </script>
 
-<div class="seg" role="radiogroup" aria-label={label}>
-  {#each options as o (o.id)}
-    <button role="radio" aria-checked={o.id === value} class:on={o.id === value} title={o.title ?? o.label} onclick={() => onpick(o.id)}>
+<div class="seg" role="radiogroup" aria-label={label} bind:this={box}>
+  {#each options as o, i (o.id)}
+    <button role="radio" aria-checked={o.id === value} aria-label={o.icon ? o.label : undefined} tabindex={i === stop ? 0 : -1} class:on={o.id === value} title={o.title ?? o.label} onclick={() => onpick(o.id)} onkeydown={(e) => onkeydown(e, i)}>
       {#if o.icon}<o.icon size={14} />{/if}
       {#if !o.icon}{o.label}{/if}
     </button>
@@ -55,5 +75,10 @@
   .seg button.on {
     background: var(--brand-strong);
     color: #fff;
+  }
+  /* The brand outline would vanish on the chosen (brand) option. */
+  .seg button.on:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: -2px;
   }
 </style>

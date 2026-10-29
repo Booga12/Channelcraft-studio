@@ -76,7 +76,7 @@
                 · {games.length} game{games.length === 1 ? '' : 's'} with a video and cover
               </small>
             </div>
-            <select bind:value={choices[s.name]} disabled={working}>
+            <select bind:value={choices[s.name]} disabled={working} aria-label={s.fullName}>
               <option value="none">Off (RetroBat's random picks)</option>
               <option value="auto" disabled={!games.length}>Automatic (first complete game)</option>
               {#if games.length}

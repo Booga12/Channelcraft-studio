@@ -757,14 +757,14 @@
   {/if}
   <footer class="status ui-new">
     <div class="pill" role="group" aria-label="Preview console and game">
-      <button class="ic" onclick={() => ed.stepSystem(-1)} title="Previous console (Page Up)"><ChevronLeftIcon /></button>
+      <button class="ic" onclick={() => ed.stepSystem(-1)} title="Previous console (Page Up)" aria-label="Previous console"><ChevronLeftIcon /></button>
       <span class="sys" title="The console shown in the preview">{ed.settings.system.fullName}</span>
-      <button class="ic" onclick={() => ed.stepSystem(1)} title="Next console (Page Down)"><ChevronRightIcon /></button>
+      <button class="ic" onclick={() => ed.stepSystem(1)} title="Next console (Page Down)" aria-label="Next console"><ChevronRightIcon /></button>
       <span class="div"></span>
       {#if gamesHere}
-        <button class="ic" onclick={() => (ed.gameIndex = (ed.gameIndex - 1 + gamesHere) % gamesHere)} title="Previous game"><ChevronLeftIcon /></button>
+        <button class="ic" onclick={() => (ed.gameIndex = (ed.gameIndex - 1 + gamesHere) % gamesHere)} title="Previous game" aria-label="Previous game"><ChevronLeftIcon /></button>
         <span class="sys game" title="One of your own scraped games ({(ed.gameIndex % gamesHere) + 1} of {gamesHere})"><Gamepad2Icon />{ed.currentGame?.name}</span>
-        <button class="ic" onclick={() => (ed.gameIndex = (ed.gameIndex + 1) % gamesHere)} title="Next game"><ChevronRightIcon /></button>
+        <button class="ic" onclick={() => (ed.gameIndex = (ed.gameIndex + 1) % gamesHere)} title="Next game" aria-label="Next game"><ChevronRightIcon /></button>
       {:else}
         <span class="sample" title="This console has no scraped games in RetroBat, so made-up sample details are shown. Scrape it in RetroBat to preview your own games.">Sample game</span>
       {/if}
@@ -787,18 +787,18 @@
     <span class="spacer"></span>
     <div class="pill tools" role="group" aria-label="Canvas options">
       <button class="ic wide" class:on={ed.playAnimations} onclick={() => (ed.playAnimations = !ed.playAnimations)} title={ed.playAnimations ? 'Animations are playing. Click (or press P) to stop them.' : 'Animations are stopped. Click (or press P) to play them.'} aria-pressed={ed.playAnimations}>{#if ed.playAnimations}<PauseIcon />{:else}<PlayIcon />{/if}<span>{ed.playAnimations ? 'Animations on' : 'Animations off'}</span></button>
-      <button class="ic" onclick={() => ed.replayAnimations()} title="Play the animations again, as when you move to a game in RetroBat (R, or ↓ ↑ to change game)"><RotateCcwIcon /></button>
-      <button class="ic" class:on={prefs.v.boostMotion} onclick={() => prefs.set('boostMotion', !prefs.v.boostMotion)} title="Show small movements bigger, to check them. Preview only: RetroBat plays them as they are." aria-pressed={prefs.v.boostMotion}><MoveIcon /></button>
-      <button class="ic" class:on={prefs.v.snap} onclick={() => prefs.set('snap', !prefs.v.snap)} title="Snap to guides (hold Alt to switch off while dragging)"><MagnetIcon /></button>
-      <button class="ic" class:on={prefs.v.showGrid} onclick={() => prefs.set('showGrid', !prefs.v.showGrid)} title="Grid (Ctrl+')"><Grid3x3Icon /></button>
-      <button class="ic" class:on={prefs.v.showSafeArea} onclick={() => prefs.set('showSafeArea', !prefs.v.showSafeArea)} title="TV safe area"><TvIcon /></button>
-      <button class="ic" class:on={prefs.v.showRulers} onclick={() => prefs.set('showRulers', !prefs.v.showRulers)} title="Rulers"><RulerIcon /></button>
-      <button class="ic" class:on={ed.contactSheet} onclick={() => (ed.contactSheet = !ed.contactSheet)} title="Show six consoles at once"><LayoutDashboardIcon /></button>
+      <button class="ic" onclick={() => ed.replayAnimations()} title="Play the animations again, as when you move to a game in RetroBat (R, or ↓ ↑ to change game)" aria-label="Replay animations"><RotateCcwIcon /></button>
+      <button class="ic" class:on={prefs.v.boostMotion} onclick={() => prefs.set('boostMotion', !prefs.v.boostMotion)} title="Show small movements bigger, to check them. Preview only: RetroBat plays them as they are." aria-pressed={prefs.v.boostMotion} aria-label="Show small movements bigger"><MoveIcon /></button>
+      <button class="ic" class:on={prefs.v.snap} onclick={() => prefs.set('snap', !prefs.v.snap)} title="Snap to guides (hold Alt to switch off while dragging)" aria-label="Snap to guides" aria-pressed={prefs.v.snap}><MagnetIcon /></button>
+      <button class="ic" class:on={prefs.v.showGrid} onclick={() => prefs.set('showGrid', !prefs.v.showGrid)} title="Grid (Ctrl+')" aria-label="Grid" aria-pressed={prefs.v.showGrid}><Grid3x3Icon /></button>
+      <button class="ic" class:on={prefs.v.showSafeArea} onclick={() => prefs.set('showSafeArea', !prefs.v.showSafeArea)} title="TV safe area" aria-label="TV safe area" aria-pressed={prefs.v.showSafeArea}><TvIcon /></button>
+      <button class="ic" class:on={prefs.v.showRulers} onclick={() => prefs.set('showRulers', !prefs.v.showRulers)} title="Rulers" aria-label="Rulers" aria-pressed={prefs.v.showRulers}><RulerIcon /></button>
+      <button class="ic" class:on={ed.contactSheet} onclick={() => (ed.contactSheet = !ed.contactSheet)} title="Show six consoles at once" aria-label="Show six consoles at once" aria-pressed={ed.contactSheet}><LayoutDashboardIcon /></button>
       <span class="div"></span>
-      <button class="ic" onclick={() => zoomBy(-1)} title="Zoom out (Ctrl+−)"><ZoomOutIcon /></button>
+      <button class="ic" onclick={() => zoomBy(-1)} title="Zoom out (Ctrl+−)" aria-label="Zoom out"><ZoomOutIcon /></button>
       <button class="pct" onclick={() => (ed.zoom = ed.zoom === 'fit' ? 1 : 'fit')} title={ed.zoom === 'fit' ? 'Fitted to the window; click for actual size (Ctrl+1)' : 'Click to fit to the window (Ctrl+0)'}>{Math.round(scale * 100)}%</button>
-      <button class="ic" onclick={() => zoomBy(1)} title="Zoom in (Ctrl++)"><ZoomInIcon /></button>
-      <button class="ic" class:on={ed.zoom === 'fit'} onclick={() => (ed.zoom = 'fit')} title="Fit to window (Ctrl+0)"><MaximizeIcon /></button>
+      <button class="ic" onclick={() => zoomBy(1)} title="Zoom in (Ctrl++)" aria-label="Zoom in"><ZoomInIcon /></button>
+      <button class="ic" class:on={ed.zoom === 'fit'} onclick={() => (ed.zoom = 'fit')} title="Fit to window (Ctrl+0)" aria-label="Fit to window" aria-current={ed.zoom === 'fit' ? 'true' : undefined}><MaximizeIcon /></button>
     </div>
   </footer>
 </div>
@@ -1084,6 +1084,11 @@
     transition:
       background var(--dur-fast) var(--ease-out),
       color var(--dur-fast) var(--ease-out);
+  }
+  /* Inside the pills (which clip), the keyboard focus outline sits just inside the button. */
+  .pill .ic:focus-visible,
+  .pill .pct:focus-visible {
+    outline-offset: -2px;
   }
   .pill .ic :global(svg) {
     width: 15px;

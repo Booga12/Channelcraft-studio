@@ -86,7 +86,7 @@
         {#snippet child({ props: tip })}
           <DropdownMenu.Trigger>
             {#snippet child({ props })}
-              <button {...mergeProps(tip, props)} class={cn(item, 'text-foreground aria-expanded:bg-muted')}>
+              <button {...mergeProps(tip, props)} data-tour="add" class={cn(item, 'text-foreground aria-expanded:bg-muted')}>
                 <span class="grid size-7 place-items-center rounded-lg bg-primary text-primary-foreground shadow-elev-1"><PlusIcon /></span>
                 Add
               </button>

@@ -46,14 +46,14 @@
 
 <div class="source">
   <div class="bar">
-    <select value={file?.key} onchange={(e) => ((ed.sourceFile = e.currentTarget.value), (ed.sourceLine = 1))}>
+    <select aria-label="File" value={file?.key} onchange={(e) => ((ed.sourceFile = e.currentTarget.value), (ed.sourceLine = 1))}>
       {#each ed.project?.xmlFiles ?? [] as f (f.key)}
         <option value={f.key}>{f.rel}{f.dirty ? ' •' : ''}</option>
       {/each}
     </select>
     <span class="faint">{lines.length} lines · {file?.bom ? 'UTF-8 with BOM' : 'UTF-8'} · {file?.src.includes('\r\n') ? 'CRLF' : 'LF'} · read-only</span>
     <span class="spacer"></span>
-    <button class="ghost small" onclick={() => (ed.showSource = false)} title="Hide">✕</button>
+    <button class="ghost small" onclick={() => (ed.showSource = false)} title="Hide" aria-label="Hide">✕</button>
   </div>
   <div class="code" bind:this={box}>
     {#each lines as l, i}
@@ -93,6 +93,11 @@
     line-height: 1.55;
     background: var(--bg);
     padding: 4px 0;
+  }
+  /* The code scrolls with the keyboard once focused (WebView2 makes scrollers focusable). */
+  .code:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: -2px;
   }
   .ln {
     display: flex;

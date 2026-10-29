@@ -35,6 +35,25 @@
   const delay = $derived(tuning ? delayName(entranceDelay(tuning)) : 'now');
   const kindWord = $derived(['text', 'datetime', 'clock'].includes(el.type) ? 'texts' : el.type === 'image' || el.type === 'video' ? 'pictures' : 'parts like this');
 
+  const shown = $derived(still ? tiles.filter((a) => a.kind === 'entrance') : tiles);
+  // The tiles are one Tab stop (the chosen one, or "None"); the arrow keys move round the grid and
+  // Enter or Space picks.
+  const stop = $derived(id && shown.some((a) => a.id === id) ? id : '');
+  function rove(e: KeyboardEvent) {
+    const me = e.currentTarget as HTMLElement;
+    const items = [...me.parentElement!.querySelectorAll<HTMLElement>(':scope > button')];
+    const i = items.indexOf(me);
+    const n = items.length;
+    const cols = Math.max(1, items.filter((b) => b.offsetTop === items[0].offsetTop).length);
+    const k = e.key;
+    const j = k === 'ArrowRight' ? i + 1 : k === 'ArrowLeft' ? i - 1 : k === 'ArrowDown' ? i + cols : k === 'ArrowUp' ? i - cols : k === 'Home' ? 0 : k === 'End' ? n - 1 : null;
+    if (j === null) return;
+    // Kept from the editor's own arrow keys (they move the selected part).
+    e.preventDefault();
+    e.stopPropagation();
+    items[Math.min(n - 1, Math.max(0, j))].focus();
+  }
+
   function pick(a: AnimPreset | null) {
     ed.setAnimation(el.name, a?.id ?? null);
   }
@@ -53,9 +72,9 @@
     <Seg label="Kind of animation" options={GROUPS} value={group} onpick={(g) => (group = g)} />
   {/if}
   <div class="tiles motion-ok">
-    <button class:on={!id} onclick={() => pick(null)}><span class="demo none"></span>None</button>
-    {#each still ? tiles.filter((a) => a.kind === 'entrance') : tiles as a (a.id)}
-      <button class:on={id === a.id} title={a.help} onclick={() => pick(a)}><span class="demo {animDemo(a.id)}"></span>{a.label}</button>
+    <button class:on={!id} aria-current={!id ? 'true' : undefined} tabindex={stop === '' ? 0 : -1} onclick={() => pick(null)} onkeydown={rove}><span class="demo none"></span>None</button>
+    {#each shown as a (a.id)}
+      <button class:on={id === a.id} aria-current={id === a.id ? 'true' : undefined} tabindex={stop === a.id ? 0 : -1} title={a.help} onclick={() => pick(a)} onkeydown={rove}><span class="demo {animDemo(a.id)}"></span>{a.label}</button>
     {/each}
   </div>
   {#if id === 'custom'}<p class="note">This part has its own animation from the theme. Picking one here replaces it.</p>{/if}
@@ -138,34 +157,44 @@
   .demo.none {
     background: var(--line-strong);
   }
-  .tiles button:hover .demo.fade {
+  .tiles button:hover .demo.fade,
+  .tiles button:focus-visible .demo.fade {
     animation: d-fade 1.1s ease-out infinite;
   }
-  .tiles button:hover .demo.slide {
+  .tiles button:hover .demo.slide,
+  .tiles button:focus-visible .demo.slide {
     animation: d-slide 1.1s ease-out infinite;
   }
-  .tiles button:hover .demo.rise {
+  .tiles button:hover .demo.rise,
+  .tiles button:focus-visible .demo.rise {
     animation: d-rise 1.1s ease-out infinite;
   }
-  .tiles button:hover .demo.pop {
+  .tiles button:hover .demo.pop,
+  .tiles button:focus-visible .demo.pop {
     animation: d-pop 1.1s ease-out infinite;
   }
-  .tiles button:hover .demo.tilt {
+  .tiles button:hover .demo.tilt,
+  .tiles button:focus-visible .demo.tilt {
     animation: d-tilt 1.1s ease-out infinite;
   }
-  .tiles button:hover .demo.bob {
+  .tiles button:hover .demo.bob,
+  .tiles button:focus-visible .demo.bob {
     animation: d-bob 1.4s ease-in-out infinite;
   }
-  .tiles button:hover .demo.sway {
+  .tiles button:hover .demo.sway,
+  .tiles button:focus-visible .demo.sway {
     animation: d-sway 1.4s ease-in-out infinite;
   }
-  .tiles button:hover .demo.pulse {
+  .tiles button:hover .demo.pulse,
+  .tiles button:focus-visible .demo.pulse {
     animation: d-pulse 1.2s ease-in-out infinite;
   }
-  .tiles button:hover .demo.spin {
+  .tiles button:hover .demo.spin,
+  .tiles button:focus-visible .demo.spin {
     animation: d-spin 1.6s linear infinite;
   }
-  .tiles button:hover .demo.drift {
+  .tiles button:hover .demo.drift,
+  .tiles button:focus-visible .demo.drift {
     animation: d-drift 2s ease-in-out infinite;
   }
   @keyframes d-fade {

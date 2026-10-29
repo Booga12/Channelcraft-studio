@@ -61,6 +61,30 @@
   const mb = (n: number) => `${(n / 1024 / 1024).toFixed(n > 100 * 1024 * 1024 ? 0 : 1)} MB`;
   const pretty = (name: string) => name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
 
+  // The video grid is one Tab stop: arrow keys move between the videos, Enter or Space picks one.
+  let gridFocus = $state(-1);
+  const gridStop = $derived.by(() => {
+    const n = info?.videos.length ?? 0;
+    if (gridFocus >= 0 && gridFocus < n) return gridFocus;
+    return Math.max(0, info?.videos.findIndex((v) => !s?.randomVideo && v.name.toLowerCase() === s?.fileName.toLowerCase()) ?? 0);
+  });
+
+  function gridKeys(e: KeyboardEvent, i: number) {
+    const n = info?.videos.length ?? 0;
+    const cols = 3;
+    let j: number;
+    if (e.key === 'ArrowRight') j = i + 1;
+    else if (e.key === 'ArrowLeft') j = i - 1;
+    else if (e.key === 'ArrowDown') j = i + cols;
+    else if (e.key === 'ArrowUp') j = i - cols;
+    else if (e.key === 'Home') j = 0;
+    else if (e.key === 'End') j = n - 1;
+    else return;
+    e.preventDefault();
+    j = Math.max(0, Math.min(n - 1, j));
+    ((e.currentTarget as HTMLElement).parentElement?.children[j] as HTMLElement | undefined)?.focus();
+  }
+
   function hover(e: PointerEvent, play: boolean) {
     const v = (e.currentTarget as HTMLElement).querySelector('video');
     if (!v) return;
@@ -98,7 +122,7 @@
       <Switch checked={s.enableIntro} onCheckedChange={(v) => change({ enableIntro: v })} />
     </label>
 
-    <div class={cn('flex flex-col gap-4 transition-opacity duration-200', !s.enableIntro && 'pointer-events-none opacity-45')} aria-disabled={!s.enableIntro}>
+    <div class={cn('flex flex-col gap-4 transition-opacity duration-200', !s.enableIntro && 'pointer-events-none opacity-45')} aria-disabled={!s.enableIntro} inert={!s.enableIntro}>
       {#if current && !s.randomVideo}
         {#key current.path}
           <!-- svelte-ignore a11y_media_has_caption -->
@@ -127,14 +151,19 @@
       </label>
 
       {#if info.videos.length}
-        <div class={cn('grid grid-cols-3 gap-2.5 transition-opacity duration-200', s.randomVideo && 'opacity-60')}>
-          {#each info.videos as v (v.path)}
+        <div class={cn('grid grid-cols-3 gap-2.5 transition-opacity duration-200', s.randomVideo && 'opacity-60')} role="radiogroup" aria-label="Which video">
+          {#each info.videos as v, i (v.path)}
             {@const on = !s.randomVideo && v.name.toLowerCase() === s.fileName.toLowerCase()}
             <button
               class={cn(
                 'group relative flex flex-col overflow-hidden rounded-xl bg-card text-left shadow-elev-1 ring-1 ring-foreground/8 transition-all duration-200 ease-out-soft hover:-translate-y-0.5 hover:shadow-elev-3',
                 on && 'ring-2 ring-primary',
               )}
+              role="radio"
+              aria-checked={on}
+              tabindex={i === gridStop ? 0 : -1}
+              onfocus={() => (gridFocus = i)}
+              onkeydown={(e) => gridKeys(e, i)}
               onclick={() => change({ fileName: v.name, randomVideo: false })}
               onpointerenter={(e) => hover(e, true)}
               onpointerleave={(e) => hover(e, false)}
@@ -187,7 +216,7 @@
             </span>
             <span class="font-mono text-xs text-muted-foreground tabular-nums">{(s.videoDelay / 1000).toFixed(1)} s</span>
           </span>
-          <Slider type="single" min={0} max={5000} step={100} value={s.videoDelay} onValueCommit={(v: number) => change({ videoDelay: v })} />
+          <Slider type="single" thumbLabel="Delay before the menus start" min={0} max={5000} step={100} value={s.videoDelay} onValueCommit={(v: number) => change({ videoDelay: v })} />
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@
   import { basename } from '$lib/path';
   import { elementLabel } from '$lib/friendly';
   import Icon from './Icon.svelte';
-  import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
+  import ContextMenu, { menuPoint, type MenuItem } from './ContextMenu.svelte';
   import { APP_SOUNDS, appSoundUrl, type AppSound } from '$lib/theme/appSounds';
 
   /** A tile: one of your files, or one of the app's own sounds. */
@@ -36,6 +36,19 @@
 
   let filter = $state<Filter>('all');
   let query = $state('');
+
+  /** The filter chips are tabs: one Tab stop, Left/Right (Home/End) pick the next one. */
+  function chipsKey(e: KeyboardEvent) {
+    const i = FILTERS.findIndex((f) => f.id === filter);
+    const keys: Record<string, number> = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: FILTERS.length - 1 };
+    const n = keys[e.key];
+    if (n === undefined) return;
+    // Not the editor's arrows (which move the selection).
+    e.preventDefault();
+    e.stopPropagation();
+    filter = FILTERS[(n + FILTERS.length) % FILTERS.length].id;
+    (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="tab"]')[FILTERS.findIndex((f) => f.id === filter)]?.focus();
+  }
 
   onMount(() => {
     if (!ed.libraryLoaded) ed.loadLibrary();
@@ -93,11 +106,18 @@
       }
       assetDrag.move(ev.clientX, ev.clientY);
     };
-    const key = (ev: KeyboardEvent) => ev.key === 'Escape' && (assetDrag.cancel(), stop());
+    // Escape cancels the drag only (not the editor's Escape): caught on the way down, before EditorView.
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      assetDrag.cancel();
+      stop();
+    };
     const stop = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      window.removeEventListener('keydown', key);
+      window.removeEventListener('keydown', key, true);
     };
     const up = () => {
       stop();
@@ -105,7 +125,7 @@
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-    window.addEventListener('keydown', key);
+    window.addEventListener('keydown', key, true);
   }
 
   /** The selected element and the property this asset would set on it. */
@@ -194,10 +214,11 @@
     {title}
     onpointerdown={(e) => down(e, a)}
     ondblclick={() => use(a)}
-    onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && use(a)}
+    onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && (e.preventDefault(), use(a))}
     oncontextmenu={(e) => {
       e.preventDefault();
-      menu = { x: e.clientX, y: e.clientY, a };
+      // Also opened from the keyboard (menu key or Shift+F10) on a focused tile.
+      menu = { ...menuPoint(e), a };
     }}
     onmouseenter={(e) => a.kind === 'video' && (e.currentTarget.querySelector('video') as HTMLVideoElement | null)?.play().catch(() => {})}
     onmouseleave={(e) => a.kind === 'video' && (e.currentTarget.querySelector('video') as HTMLVideoElement | null)?.pause()}
@@ -208,20 +229,20 @@
 {/snippet}
 
 {#snippet playButton(a: Item)}
-  <button class="play ghost" class:on={playing === a.path} title={playing === a.path ? 'Stop' : 'Listen'} onpointerdown={(e) => e.stopPropagation()} onclick={() => toggleSound(a)}>
+  <button class="play ghost" class:on={playing === a.path} title={playing === a.path ? 'Stop' : 'Listen'} aria-label={playing === a.path ? `Stop ${a.name}` : `Listen to ${a.name}`} onpointerdown={(e) => e.stopPropagation()} onclick={() => toggleSound(a)}>
     <Icon name={playing === a.path ? 'close' : 'sound'} size={20} />
   </button>
 {/snippet}
 
 <div class="assets">
   <div class="bar">
-    <input placeholder="Find an asset…" bind:value={query} />
+    <input placeholder="Find an asset…" aria-label="Find an asset" bind:value={query} />
     <button class="small" onclick={addFiles} title="Copy files into your Assets"><Icon name="plus" size={13} /> Add</button>
-    <button class="small ghost" onclick={openFolder} title="Open the Assets folder in Explorer"><Icon name="folder" size={14} /></button>
+    <button class="small ghost" onclick={openFolder} title="Open the Assets folder in Explorer" aria-label="Open the Assets folder in Explorer"><Icon name="folder" size={14} /></button>
   </div>
-  <div class="chips" role="tablist">
+  <div class="chips" role="tablist" aria-label="Show" tabindex="-1" onkeydown={chipsKey}>
     {#each FILTERS as f (f.id)}
-      <button class:on={filter === f.id} role="tab" aria-selected={filter === f.id} onclick={() => (filter = f.id)}>
+      <button class:on={filter === f.id} role="tab" aria-selected={filter === f.id} tabindex={filter === f.id ? 0 : -1} onclick={() => (filter = f.id)}>
         {f.label}{#if counts[f.id]}<span class="n">{counts[f.id]}</span>{/if}
       </button>
     {/each}

@@ -34,6 +34,20 @@
   const near = $derived(layers.slice(Math.max(0, idx - 2), idx + 3));
   const above = $derived(Math.max(0, idx - 2));
   const below = $derived(Math.max(0, layers.length - (idx + 3)));
+  // The snap spots are one Tab stop (the spot it sits at, or the top left); the arrow keys move
+  // round the 3 by 3 grid and Enter or Space snaps.
+  const stop = $derived(Math.max(0, spots.findIndex((s) => at?.x === s.x && at?.y === s.y)));
+  function rove(e: KeyboardEvent, i: number) {
+    const [dx, dy] = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, number[]>)[e.key] ?? [0, 0];
+    if (!dx && !dy) return;
+    // Kept from the editor's own arrow keys (they would nudge the part).
+    e.preventDefault();
+    e.stopPropagation();
+    const x = (i % 3) + dx;
+    const y = Math.floor(i / 3) + dy;
+    if (x < 0 || x > 2 || y < 0 || y > 2) return;
+    ((e.currentTarget as HTMLElement).parentElement!.children[y * 3 + x] as HTMLElement).focus();
+  }
   const place = $derived(idx <= 0 ? 'Top layer' : idx === layers.length - 1 ? 'Bottom layer' : `${idx + 1} of ${layers.length}`);
 </script>
 
@@ -55,8 +69,17 @@
     <div class="row">
       <div class="lbl">Snap to</div>
       <div class="snap">
-        {#each spots as s (s.x + s.y)}
-          <button class:on={at?.x === s.x && at?.y === s.y} disabled={locked || !rect} title="Move to {s.name}" aria-label="Move to {s.name}" onclick={() => ed.snapTo(el.name, s.x, s.y)}><span></span></button>
+        {#each spots as s, i (s.x + s.y)}
+          <button
+            class:on={at?.x === s.x && at?.y === s.y}
+            aria-current={at?.x === s.x && at?.y === s.y ? 'true' : undefined}
+            tabindex={i === stop ? 0 : -1}
+            disabled={locked || !rect}
+            title="Move to {s.name}"
+            aria-label="Move to {s.name}"
+            onclick={() => ed.snapTo(el.name, s.x, s.y)}
+            onkeydown={(e) => rove(e, i)}><span></span></button
+          >
         {/each}
       </div>
     </div>
@@ -93,7 +116,7 @@
     <div class="stack">
       {#if above}<div class="more">{above} more above</div>{/if}
       {#each near as l (l.name)}
-        <button class:me={l.name === el.name} onclick={() => ed.select(l.name)} title={l.name === el.name ? 'This part' : `Pick ${elementLabel(l.name)}`}>{elementLabel(l.name)}{ed.locked[l.name] ? ' · locked' : ''}</button>
+        <button class:me={l.name === el.name} aria-current={l.name === el.name ? 'true' : undefined} onclick={() => ed.select(l.name)} title={l.name === el.name ? 'This part' : `Pick ${elementLabel(l.name)}`}>{elementLabel(l.name)}{ed.locked[l.name] ? ' · locked' : ''}</button>
       {/each}
       {#if below}<div class="more">{below} more below</div>{/if}
     </div>

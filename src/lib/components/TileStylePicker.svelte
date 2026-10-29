@@ -23,6 +23,7 @@
       <button
         class="group flex flex-col gap-1.5 rounded-lg p-1.5 text-left text-xs ring-1 ring-border transition-[box-shadow,background-color] duration-150 hover:bg-muted hover:ring-foreground/20 data-[on=true]:bg-primary/10 data-[on=true]:ring-2 data-[on=true]:ring-primary"
         data-on={current === s.id}
+        aria-current={current === s.id ? 'true' : undefined}
         onclick={() => ed.applyTileStyle(s.id)}
         title={s.help}
       >

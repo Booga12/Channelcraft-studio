@@ -328,7 +328,8 @@
   input:focus:where(:not([data-slot], .ui-new, .ui-new *)),
   select:focus:where(:not([data-slot], .ui-new, .ui-new *)),
   textarea:focus:where(:not([data-slot], .ui-new, .ui-new *)),
-  button:focus-visible:where(:not([data-slot], .ui-new, .ui-new *)) {
+  button:focus-visible:where(:not([data-slot], .ui-new, .ui-new *)),
+  :where(a[href], summary, [contenteditable]:not([contenteditable='false']), [role='button'], [role='tab'], [role='radio'], [role='checkbox'], [role='switch'], [role='option'], [role='menuitem'], [role='slider'], [tabindex]:not([tabindex='-1'])):focus-visible:where(:not([data-slot], .ui-new, .ui-new *)) {
     outline: 2px solid var(--brand);
     outline-offset: -1px;
   }
@@ -404,7 +405,8 @@
 /* Keyboard use: whatever has focus from the keyboard shows a clear outline, also in the new
    markup. Zero specificity, so components with their own focus ring (shadcn) keep it. */
 @layer base {
-  :where(.ui-new) :where(button, a[href], summary, select, [role='button'], [role='tab'], [tabindex]:not([tabindex='-1'])):focus-visible {
+  :where(.ui-new) :where(button, a[href], summary, select, [contenteditable]:not([contenteditable='false']), [role='button'], [role='tab'], [role='radio'], [role='checkbox'], [role='switch'], [role='option'], [role='menuitem'], [role='slider'], [tabindex]:not([tabindex='-1'])):focus-visible,
+  :where(.ui-new[tabindex]:not([tabindex='-1'])):focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }

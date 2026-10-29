@@ -73,7 +73,7 @@
 
   <div class="row">
     <div class="lbl">Effect</div>
-    <Seg label="Effect" options={TEXT_FX_KINDS} value={fx.kind} onpick={pickKind} />
+    <Seg label="Effect" followFocus={false} options={TEXT_FX_KINDS} value={fx.kind} onpick={pickKind} />
   </div>
 
   {#if fx.kind !== 'none'}
@@ -81,7 +81,7 @@
       <div class="lbl">Quick picks</div>
       <div class="chips">
         {#each TEXT_FX_PRESETS[fx.kind] as p (p.id)}
-          <button class="chip" class:on={presetOn(p)} onclick={() => set({ ...p.fx, dx: fx.kind === 'shadow' ? p.fx.dx : 0, dy: fx.kind === 'shadow' ? p.fx.dy : 0 })}>{p.label}</button>
+          <button class="chip" class:on={presetOn(p)} aria-current={presetOn(p) ? 'true' : undefined} onclick={() => set({ ...p.fx, dx: fx.kind === 'shadow' ? p.fx.dx : 0, dy: fx.kind === 'shadow' ? p.fx.dy : 0 })}>{p.label}</button>
         {/each}
       </div>
     </div>

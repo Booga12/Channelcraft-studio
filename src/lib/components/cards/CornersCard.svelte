@@ -89,7 +89,7 @@
   {:else}
     <div class="row">
       <div class="lbl">Effect</div>
-      <Seg label="Effect" options={kinds} value={kind} onpick={pick} />
+      <Seg label="Effect" followFocus={false} options={kinds} value={kind} onpick={pick} />
     </div>
 
     {#if kind === 'shadow' && shader}
@@ -97,7 +97,7 @@
         <div class="lbl">Quick picks</div>
         <div class="chips">
           {#each SHADOWS as s (s.id)}
-            <button class="chip" class:on={shadowDist === s.d} onclick={() => ed.setShadow(el.name, shadowUp ? -s.d : s.d)}>{s.label}</button>
+            <button class="chip" class:on={shadowDist === s.d} aria-current={shadowDist === s.d ? 'true' : undefined} onclick={() => ed.setShadow(el.name, shadowUp ? -s.d : s.d)}>{s.label}</button>
           {/each}
         </div>
       </div>
@@ -123,7 +123,11 @@
         <div class="lbl">Quick picks</div>
         <div class="chips">
           {#each GLOWS as g (g.id)}
-            <button class="chip" class:on={frame.frame.shadow === g.size && Math.abs(alphaOf(frame.frame.shadowColor) - g.a) < 0.05} onclick={() => change({ shadow: g.size, shadowColor: shown(frame.frame.shadowColor).slice(0, 6) + hexA(g.a) })}>{g.label}</button>
+            <button
+              class="chip"
+              class:on={frame.frame.shadow === g.size && Math.abs(alphaOf(frame.frame.shadowColor) - g.a) < 0.05}
+              aria-current={frame.frame.shadow === g.size && Math.abs(alphaOf(frame.frame.shadowColor) - g.a) < 0.05 ? 'true' : undefined}
+              onclick={() => change({ shadow: g.size, shadowColor: shown(frame.frame.shadowColor).slice(0, 6) + hexA(g.a) })}>{g.label}</button>
           {/each}
         </div>
       </div>
@@ -145,7 +149,7 @@
         <div class="lbl">Quick picks</div>
         <div class="chips">
           {#each FRAMES as f (f.id)}
-            <button class="chip" class:on={frame.frame.border === f.border && frame.frame.shadow === f.shadow} onclick={() => change({ border: f.border, shadow: f.shadow })}>{f.label}</button>
+            <button class="chip" class:on={frame.frame.border === f.border && frame.frame.shadow === f.shadow} aria-current={frame.frame.border === f.border && frame.frame.shadow === f.shadow ? 'true' : undefined} onclick={() => change({ border: f.border, shadow: f.shadow })}>{f.label}</button>
           {/each}
         </div>
       </div>

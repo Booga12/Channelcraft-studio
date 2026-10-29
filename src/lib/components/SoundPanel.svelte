@@ -1,7 +1,7 @@
 <script lang="ts">
   // Sound: the theme's menu music and the sound when you scroll, from the app's own free sounds
   // or your own files. Everything can be listened to here first.
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { open as openDialog } from '@tauri-apps/plugin-dialog';
   import PlayIcon from '@lucide/svelte/icons/play';
   import SquareIcon from '@lucide/svelte/icons/square';
@@ -80,9 +80,23 @@
     }
   }
 
+  /** Closes the list from the keyboard (Cancel or Escape) and puts focus back on the button that opened it. */
+  function closePicker(from: EventTarget | null) {
+    const opener = (from as HTMLElement | null)?.closest('section')?.querySelector<HTMLElement>('[data-own-toggle]');
+    setPicking(null);
+    opener?.focus();
+  }
+
+  /** After a pick closes the list (and the buttons were busy), focus goes back to the button that opened it. */
+  async function backToOpener(kind: 'music' | 'scroll') {
+    await tick();
+    if (!document.activeElement || document.activeElement === document.body) document.querySelector<HTMLElement>(`[data-own-toggle="${kind}"]`)?.focus();
+  }
+
   async function useOwn(kind: 'music' | 'scroll', file: string) {
     setPicking(null);
     await run(async () => void (await useFile(kind, file)));
+    await backToOpener(kind);
   }
 
   /** A file from the PC: used, and added to Assets so it's there next time. */
@@ -93,6 +107,7 @@
     await run(async () => {
       if (await useFile(kind, file)) await ed.addToLibrary([file], true);
     });
+    await backToOpener(kind);
   }
 </script>
 
@@ -111,12 +126,13 @@
 {/snippet}
 
 {#snippet picker(kind: 'music' | 'scroll')}
-  <div class="picker">
+  <!-- svelte-ignore a11y_no_static_element_interactions (only catches Escape from the buttons inside) -->
+  <div class="picker" onkeydown={(e) => e.key === 'Escape' && (e.preventDefault(), closePicker(e.currentTarget))}>
     <p class="ptitle">Your sounds in Assets</p>
     {#each ownSounds as a (a.path)}
       {@const key = `lib:${a.path}`}
       <div class="row">
-        <button class="play" onclick={() => listen(key, () => fileUrl(a.path))} aria-label={playing === key ? 'Stop' : `Listen to ${basename(a.rel)}`} title={playing === key ? 'Stop' : 'Listen'}>
+        <button class="play" onclick={() => listen(key, () => fileUrl(a.path))} aria-label={playing === key ? `Stop ${basename(a.rel)}` : `Listen to ${basename(a.rel)}`} title={playing === key ? 'Stop' : 'Listen'}>
           {#if playing === key}<SquareIcon size={13} />{:else}<PlayIcon size={13} />{/if}
         </button>
         <span class="what"><b title={a.rel}>{basename(a.rel)}</b></span>
@@ -127,7 +143,7 @@
     {/each}
     <div class="tools">
       <button class="secondary small" disabled={busy} onclick={() => fromComputer(kind)}>From my computer…</button>
-      <button class="ghost small" onclick={() => setPicking(null)}>Cancel</button>
+      <button class="ghost small" onclick={(e) => closePicker(e.currentTarget)}>Cancel</button>
     </div>
     <p class="faint note">Files from your computer are added to your Assets too.</p>
   </div>
@@ -160,7 +176,7 @@
       {@render row(m, `music:${m.id}`, music?.preset === m.id, () => ed.setMusic({ preset: m.id }))}
     {/each}
     <div class="tools">
-      <button class="secondary small" disabled={busy} aria-expanded={picking === 'music'} onclick={() => setPicking(picking === 'music' ? null : 'music')}>Use my own song…</button>
+      <button class="secondary small" data-own-toggle="music" disabled={busy} aria-expanded={picking === 'music'} onkeydown={(e) => e.key === 'Escape' && picking === 'music' && (e.preventDefault(), setPicking(null))} onclick={() => setPicking(picking === 'music' ? null : 'music')}>Use my own song…</button>
       {#if music}<button class="ghost small" disabled={busy} onclick={() => run(() => ed.setMusic(null))}>No music</button>{/if}
     </div>
     {#if picking === 'music'}{@render picker('music')}{/if}
@@ -181,7 +197,7 @@
       {@render row(s, `scroll:${s.id}`, scroll?.preset === s.id, () => ed.setScrollSound({ preset: s.id }))}
     {/each}
     <div class="tools">
-      <button class="secondary small" disabled={busy} aria-expanded={picking === 'scroll'} onclick={() => setPicking(picking === 'scroll' ? null : 'scroll')}>Use my own sound…</button>
+      <button class="secondary small" data-own-toggle="scroll" disabled={busy} aria-expanded={picking === 'scroll'} onkeydown={(e) => e.key === 'Escape' && picking === 'scroll' && (e.preventDefault(), setPicking(null))} onclick={() => setPicking(picking === 'scroll' ? null : 'scroll')}>Use my own sound…</button>
       {#if scroll}<button class="ghost small" disabled={busy} onclick={() => run(() => ed.setScrollSound(null))}>RetroBat's own</button>{/if}
     </div>
     {#if picking === 'scroll'}{@render picker('scroll')}{/if}

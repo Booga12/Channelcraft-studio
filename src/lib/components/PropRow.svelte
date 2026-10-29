@@ -56,6 +56,8 @@
   // "What's this?": the plain-words help, always shown in Simple mode, one click away in Advanced.
   const help = $derived(propHelp(spec.name) ?? spec.hint);
   let showHelp = $state(false);
+  /** The setting's name, for screen readers on the field (the row's label isn't a <label>). */
+  const fieldName = $derived(propLabel(spec.name));
 </script>
 
 <div class="row" data-asset-prop={assetKind ? spec.name : undefined} data-asset-element={assetKind ? el.name : undefined}>
@@ -79,7 +81,7 @@
     <span class="spacer"></span>
     {#if !ed.simple}
       <button class="src ghost small mono" title="Show in source: {def.file.rel} line {line}" onclick={() => ed.showInSource(def.file, def.node.start)}>{def.file.rel.split('/').pop()}:{line}</button>
-      <button class="ghost small x" title="Remove this property from the file" onclick={() => ed.removeProp(el.name, spec.name)}>✕</button>
+      <button class="ghost small x" aria-label="Remove {spec.name} from the file" title="Remove this property from the file" onclick={() => ed.removeProp(el.name, spec.name)}>✕</button>
     {/if}
   </div>
   {#if help && (ed.simple || showHelp)}
@@ -118,36 +120,37 @@
         <button class="ghost small" onclick={() => (editAnyway = true)}>Edit anyway</button>
       </div>
     {:else if dynamic}
-      <input class="mono wide" value={editValue} spellcheck="false" onchange={(e) => set(e.currentTarget.value)} title="Contains variables or an expression" />
+      <input class="mono wide" aria-label={fieldName} value={editValue} spellcheck="false" onchange={(e) => set(e.currentTarget.value)} title="Contains variables or an expression" />
       {#if def.value !== editValue}<div class="faint mono resolved">= {def.value}</div>{/if}
     {:else if spec.kind === 'color'}
-      <ColorInput value={editValue} onchange={set} />
+      <ColorInput label={fieldName} value={editValue} onchange={set} />
     {:else if spec.kind === 'pair'}
       {@const isPos = spec.name === 'pos'}
       {@const screenPair = ed.simple && ['pos', 'size', 'maxSize', 'minSize'].includes(spec.name)}
       <PairInput
         value={editValue}
         onchange={set}
+        label={fieldName}
         percent={screenPair}
         labels={ed.simple ? (isPos ? ['from left', 'from top'] : spec.name.toLowerCase().includes('size') ? ['width', 'height'] : ['x', 'y']) : spec.name.toLowerCase().includes('size') ? ['w', 'h'] : ['x', 'y']}
       />
     {:else if spec.kind === 'bool'}
       {@const on = editValue.trim().toLowerCase() === 'true' || editValue.trim() === '1'}
-      <label class="chk"><input type="checkbox" checked={on} onchange={(e) => set(e.currentTarget.checked ? 'true' : 'false')} /> {ed.simple ? (on ? 'Yes' : 'No') : editValue}</label>
+      <label class="chk"><input type="checkbox" aria-label={fieldName} checked={on} onchange={(e) => set(e.currentTarget.checked ? 'true' : 'false')} /> {ed.simple ? (on ? 'Yes' : 'No') : editValue}</label>
     {:else if spec.kind === 'float' || spec.kind === 'int'}
-      <input type="number" class="num" step={spec.kind === 'int' || spec.name === 'zIndex' ? 1 : 0.001} value={editValue} oninput={(e) => !Number.isNaN(e.currentTarget.valueAsNumber) && set(String(e.currentTarget.valueAsNumber))} />
+      <input type="number" class="num" aria-label={fieldName} step={spec.kind === 'int' || spec.name === 'zIndex' ? 1 : 0.001} value={editValue} oninput={(e) => !Number.isNaN(e.currentTarget.valueAsNumber) && set(String(e.currentTarget.valueAsNumber))} />
     {:else if spec.kind === 'alignment' || spec.kind === 'valign' || spec.kind === 'enum'}
       {@const opts = spec.kind === 'alignment' ? ['left', 'center', 'right', 'justify'] : spec.kind === 'valign' ? ['top', 'center', 'bottom'] : (spec.options ?? [])}
-      <select value={editValue} onchange={(e) => set(e.currentTarget.value)}>
+      <select aria-label={fieldName} value={editValue} onchange={(e) => set(e.currentTarget.value)}>
         {#if !opts.includes(editValue)}<option value={editValue}>{editValue}</option>{/if}
         {#each opts as o}<option value={o}>{ed.simple ? humanize(o) : o}</option>{/each}
       </select>
     {:else if assetKind}
       <AssetInput value={editValue} kind={assetKind} {resolved} {toRelative} onchange={set} />
     {:else if spec.kind === 'text' || editValue.length > 40 || editValue.includes('\n')}
-      <textarea class="wide" rows="3" value={editValue} onchange={(e) => set(e.currentTarget.value)}></textarea>
+      <textarea class="wide" rows="3" aria-label={fieldName} value={editValue} onchange={(e) => set(e.currentTarget.value)}></textarea>
     {:else}
-      <input class="wide" value={editValue} spellcheck="false" onchange={(e) => set(e.currentTarget.value)} />
+      <input class="wide" aria-label={fieldName} value={editValue} spellcheck="false" onchange={(e) => set(e.currentTarget.value)} />
     {/if}
   </div>
 </div>

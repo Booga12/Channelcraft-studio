@@ -129,7 +129,7 @@
     </div>
     <Button class="shadow-elev-2" onclick={() => (dialog = { mode: 'new' })} disabled={!ed.root}><PlusIcon data-icon="inline-start" />New theme</Button>
     <nav class="flex flex-col gap-0.5">
-      <Button variant="secondary" class="justify-start"><HouseIcon data-icon="inline-start" />Home</Button>
+      <Button variant="secondary" class="justify-start" aria-current="page"><HouseIcon data-icon="inline-start" />Home</Button>
       <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => ed.refreshThemes()} disabled={!ed.root}><RefreshCwIcon data-icon="inline-start" />Refresh themes</Button>
       <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => (ed.showSettings = true)}><SettingsIcon data-icon="inline-start" />Settings</Button>
       <Button variant="ghost" class="justify-start text-muted-foreground" onclick={() => (ed.showShortcuts = true)}><KeyboardIcon data-icon="inline-start" />Keyboard shortcuts</Button>
@@ -194,7 +194,7 @@
               {@const active = ed.root.activeTheme?.toLowerCase() === t.name.toLowerCase()}
               {@const busy = ed.loading && opening === t.path}
               <article class="group flex flex-col overflow-hidden rounded-2xl bg-card shadow-elev-1 ring-1 ring-foreground/8 transition-all duration-200 ease-out-soft hover:-translate-y-0.5 hover:shadow-elev-3">
-                <button class="thumb relative aspect-video overflow-hidden bg-black" onclick={() => openTheme(t)} title="Open {t.name}" disabled={ed.loading}>
+                <button class="thumb relative aspect-video overflow-hidden bg-black" onclick={() => openTheme(t)} title="Open {t.name}" aria-label="Open {t.name}{active ? ' (active in RetroBat)' : ''}{busy ? ', opening…' : ''}" aria-busy={busy} disabled={ed.loading}>
                   {#if t.preview}
                     <img class="size-full object-cover transition-transform duration-500 ease-out-soft group-hover:scale-[1.03]" src={fileUrl(t.preview)} alt="" loading="lazy" />
                   {:else}

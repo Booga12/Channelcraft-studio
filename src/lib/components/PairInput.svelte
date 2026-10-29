@@ -7,6 +7,7 @@
     labels = ['x', 'y'],
     step = 0.001,
     percent = false,
+    label = '',
   }: {
     value: string;
     onchange: (v: string) => void;
@@ -14,6 +15,8 @@
     step?: number;
     /** Show and edit as percentages of the screen (stored as fractions). */
     percent?: boolean;
+    /** Names the setting for screen readers (nothing visible). */
+    label?: string;
   } = $props();
 
   const pair = $derived(parsePair(value));
@@ -37,13 +40,13 @@
     {#each [0, 1] as const as i}
       <label>
         <span>{labels[i]}</span>
-        <input type="number" step={percent ? 0.1 : step} value={shown(pair[i])} oninput={(e) => set(i, e.currentTarget.valueAsNumber)} />
+        <input type="number" aria-label={label ? `${label}: ${labels[i]}` : undefined} step={percent ? 0.1 : step} value={shown(pair[i])} oninput={(e) => set(i, e.currentTarget.valueAsNumber)} />
         {#if percent}<em>%</em>{/if}
       </label>
     {/each}
   </div>
 {:else}
-  <input class="mono raw" bind:value={raw} spellcheck="false" onchange={() => onchange(raw.trim())} />
+  <input class="mono raw" aria-label={label || 'Value'} bind:value={raw} spellcheck="false" onchange={() => onchange(raw.trim())} />
 {/if}
 
 <style>
