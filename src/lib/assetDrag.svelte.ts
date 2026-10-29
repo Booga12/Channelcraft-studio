@@ -7,6 +7,7 @@ import { ed } from './editor.svelte';
 import { prefs } from './prefs.svelte';
 import { addsAsNew, ASSET_KIND_LABEL, dropFit, dropPropLabel, kindOfFile, type AssetKind, type DropFit } from './theme/assetDrop';
 import { elementLabel, propLabel } from './friendly';
+import { appSound } from './theme/appSounds';
 
 export interface DropTarget {
   element: string;
@@ -17,7 +18,11 @@ export interface DropTarget {
   rect: { x: number; y: number; w: number; h: number };
   /** Add as a new element centred here (0–1 of the screen). `element` is then the one under it, if any. */
   add?: { x: number; y: number };
+  /** The Sound panel's menu music or scroll sound (no element). */
+  slot?: 'music' | 'scroll';
 }
+
+const SLOT_LABEL = { music: 'menu music', scroll: 'scroll sound' } as const;
 
 export interface DragItem {
   path: string;
@@ -76,10 +81,16 @@ function previewElementAt(stack: Element[], kind: AssetKind): DropTarget | null 
  * the element under it); a sound or font goes on the element under it.
  */
 export function targetAt(x: number, y: number, kind: AssetKind, replace = shift): DropTarget | null {
-  const view = ed.currentView;
-  if (!view) return null;
   const stack = document.elementsFromPoint(x, y);
   const top = stack[0] as HTMLElement | undefined;
+  const slotBox = top?.closest<HTMLElement>('[data-sound-slot]');
+  const slot = slotBox?.dataset.soundSlot;
+  if (slotBox && (slot === 'music' || slot === 'scroll')) {
+    const fit: DropFit = kind === 'sound' ? { ok: true, prop: slot } : { ok: false, hint: `Only a sound can be the ${SLOT_LABEL[slot]}.` };
+    return { element: '', slot, fit, rect: rectOf(slotBox) };
+  }
+  const view = ed.currentView;
+  if (!view) return null;
   const propRow = top?.closest<HTMLElement>('[data-asset-prop]');
   if (propRow) {
     const el = view.elements.get(propRow.dataset.assetElement ?? '');
@@ -111,6 +122,7 @@ export function describe(t: DropTarget | null, item: DragItem, count = 1): strin
     const adding = count > 1 ? `Add ${count} new layers here` : `Add as a new ${what} here`;
     return t.element ? `${adding} · hold Shift to replace ${elementLabel(t.element)}` : adding;
   }
+  if (t?.slot) return t.fit.ok ? `Use as the ${SLOT_LABEL[t.slot]}` : t.fit.hint;
   if (!t) return addsAsNew(item.kind) ? `Drop on the preview to add this ${what}` : `Drop on an element to use this ${what}`;
   if (!t.fit.ok) return t.fit.hint;
   return `Replace ${dropPropLabel(t.fit.prop, item.kind, propLabel)} of ${elementLabel(t.element)}${t.fit.note ? ` (${t.fit.note})` : ''}`;
@@ -168,10 +180,16 @@ class AssetDrag {
     const item = this.item;
     const t = this.target;
     const many = paths?.length ? paths : this.paths;
+    const external = this.external;
     this.cancel();
     if (!item || !t) return false;
     if (!t.fit.ok) {
       ed.notify(t.fit.hint, 'error');
+      return true;
+    }
+    if (t.slot) {
+      const used = await (t.slot === 'music' ? ed.setMusic({ file: item.path }) : ed.setScrollSound({ file: item.path }));
+      if (used) await keep(item.path, external);
       return true;
     }
     if (t.add) {
@@ -179,9 +197,14 @@ class AssetDrag {
       await ed.addAssets(files, t.add, placed);
       return true;
     }
-    await ed.linkAsset(item.path, item.kind, t.element, t.prop);
+    if (await ed.linkAsset(item.path, item.kind, t.element, t.prop)) await keep(item.path, external);
     return true;
   }
+}
+
+/** A file from Windows that was just used is kept in Assets too, so it's there next time. */
+async function keep(path: string, external: boolean) {
+  if (external && !appSound(path) && !ed.library.some((a) => a.path === path)) await ed.addToLibrary([path], true);
 }
 
 export const assetDrag = new AssetDrag();

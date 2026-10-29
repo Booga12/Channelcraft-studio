@@ -10,8 +10,9 @@ import { basename, join } from '../path';
 import { addElementChange, addPropChange, insertTarget, setTextChange, type Change } from '../theme/edits';
 import { resolveAsset, type PropDef, type ResolvedElement } from '../theme/resolver';
 import type { ThemeProject, ThemeFile } from '../theme/project';
-import { MUSIC, MUSIC_DIR, SCROLL_SOUNDS, SCROLL_TYPES, SOUND_DIR, toBase64, wavBytes } from '../theme/sounds';
+import { MUSIC, MUSIC_DIR, SCROLL_SOUNDS, SCROLL_TYPES, SOUND_DIR, toBase64, wavBytes, type SoundPreset } from '../theme/sounds';
 import { patchRemoveNode } from '../xml/cst';
+import { appSound } from '../theme/appSounds';
 
 /** What the theme plays: a song or sound of the app's own (by id), a file of its own, or nothing. */
 export interface SoundChoice {
@@ -102,6 +103,21 @@ async function copySound(this: Editor, dir: string, file: string): Promise<strin
   }
 }
 
+/**
+ * The theme path for a sound choice: one of the app's own (by id, or by its made-up path from
+ * Assets) is written into the theme, a file is copied in. Null when that failed.
+ */
+async function soundPath(this: Editor, choice: { preset: string } | { file: string }, dir: string, list: SoundPreset[]): Promise<string | null> {
+  if ('preset' in choice) {
+    const s = list.find((x) => x.id === choice.preset);
+    return s ? this.writeSound(dir, s.id, s.make) : null;
+  }
+  // Written into this slot's folder, so a song used as a scroll sound sits with the sounds.
+  const own = appSound(choice.file);
+  if (own) return this.writeSound(dir, own.preset.id, own.preset.make);
+  return this.copySound(dir, choice.file);
+}
+
 /** Whether a file is one of this theme's own (not RetroBat's or another theme's). */
 const own = (p: ThemeProject, f: ThemeFile) => p.files.get(f.key) === f;
 
@@ -112,20 +128,15 @@ function removeDefs(defs: PropDef[] | undefined): Change[] {
 
 /**
  * Sets the theme's menu music: one of the app's own songs (by id), a file you chose, or none.
- * One undo step. RetroBat plays it on every screen.
+ * One undo step. RetroBat plays it on every screen. Returns whether the theme changed.
  */
-export async function setMusic(this: Editor, choice: { preset: string } | { file: string } | null) {
+export async function setMusic(this: Editor, choice: { preset: string } | { file: string } | null): Promise<boolean> {
   const p = this.project;
-  if (!p || this.sharedOnly('Music')) return;
-  let path: string | null = null;
-  if (choice && 'preset' in choice) {
-    const m = MUSIC.find((x) => x.id === choice.preset);
-    if (!m) return;
-    path = await this.writeSound(MUSIC_DIR, m.id, m.make);
-  } else if (choice) path = await this.copySound(MUSIC_DIR, choice.file);
-  if (choice && !path) return;
+  if (!p || this.sharedOnly('Music')) return false;
+  const path = choice ? await this.soundPath(choice, MUSIC_DIR, MUSIC) : null;
+  if (choice && !path) return false;
   const res = this.themeRes ?? this.res;
-  if (!res || this.project !== p) return;
+  if (!res || this.project !== p) return false;
   const el = res.views.get('system')?.elements.get('bgsound');
   const defs = el?.history.get('path')?.filter((d) => own(p, d.file));
   let changes: Change[];
@@ -135,25 +146,26 @@ export async function setMusic(this: Editor, choice: { preset: string } | { file
     const target = el ? insertTarget(el, 'system') : null;
     changes = [target ? addPropChange(target, 'path', path) : addElementChange(p, res, 'system', 'sound', 'bgsound', `<path>${path}</path>`, false)];
   }
-  if (!changes.length) return;
+  if (!changes.length) return false;
   this.commit(path ? 'menu music' : 'no menu music', changes);
-  const name = choice && 'preset' in choice ? `“${MUSIC.find((x) => x.id === choice.preset)!.label}”` : path ? `“${basename(path)}”` : '';
+  const presetId = choice && ('preset' in choice ? choice.preset : appSound(choice.file)?.preset.id);
+  const preset = MUSIC.find((x) => x.id === presetId);
+  const name = preset ? `“${preset.label}”` : path ? `“${basename(path)}”` : '';
   this.notify(path ? `Menu music set to ${name}. Save, then Try in RetroBat to hear it.` : 'The theme has no menu music now; RetroBat plays its own music folder.', 'info', 5000, path && !this.retrobatMusicOn() ? { label: 'Turn music on in RetroBat', run: () => void this.enableRetrobatMusic() } : undefined);
+  return true;
 }
 
-/** Sets the scroll sound of every carousel, grid and game list: one of the app's own, a file, or none. */
-export async function setScrollSound(this: Editor, choice: { preset: string } | { file: string } | null) {
+/**
+ * Sets the scroll sound of every carousel, grid and game list: one of the app's own, a file, or
+ * none. Returns whether the theme changed.
+ */
+export async function setScrollSound(this: Editor, choice: { preset: string } | { file: string } | null): Promise<boolean> {
   const p = this.project;
-  if (!p || this.sharedOnly('Sounds')) return;
-  let path: string | null = null;
-  if (choice && 'preset' in choice) {
-    const s = SCROLL_SOUNDS.find((x) => x.id === choice.preset);
-    if (!s) return;
-    path = await this.writeSound(SOUND_DIR, s.id, s.make);
-  } else if (choice) path = await this.copySound(SOUND_DIR, choice.file);
-  if (choice && !path) return;
+  if (!p || this.sharedOnly('Sounds')) return false;
+  const path = choice ? await this.soundPath(choice, SOUND_DIR, SCROLL_SOUNDS) : null;
+  if (choice && !path) return false;
   const res = this.themeRes ?? this.res;
-  if (!res || this.project !== p) return;
+  if (!res || this.project !== p) return false;
   const changes: Change[] = [];
   // A definition shared by several screens (or parts) is changed once.
   const done = new Set<object>();
@@ -176,9 +188,13 @@ export async function setScrollSound(this: Editor, choice: { preset: string } | 
       done.add(target.node);
     } else changes.push(addElementChange(p, res, view, el.type, el.name, `<scrollSound>${path}</scrollSound>`, false));
   }
-  if (!changes.length) return void this.notify(path ? 'This theme has no carousel or list to give a scroll sound.' : 'There was no scroll sound to remove.');
+  if (!changes.length) {
+    this.notify(path ? 'This theme has no carousel or list to give a scroll sound.' : 'There was no scroll sound to remove.');
+    return false;
+  }
   this.commit(path ? 'scroll sound' : 'no scroll sound', changes);
   this.notify(path ? 'Scroll sound set for the console carousel and the game lists. Save to keep it.' : 'Scroll sounds removed: RetroBat uses its own.');
+  return true;
 }
 
 /** Whether RetroBat plays menu music and lets the theme choose it. */
@@ -203,4 +219,4 @@ export async function enableRetrobatMusic(this: Editor) {
   }
 }
 
-export { choiceOf, scrollParts, writeSound, copySound };
+export { choiceOf, scrollParts, writeSound, copySound, soundPath };

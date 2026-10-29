@@ -371,6 +371,22 @@ describe('sound and music (starter theme, in memory)', () => {
     expect(ed.project!.entry!.src).toBe(before);
   });
 
+  it('uses the app’s own sounds picked from Assets (by their made-up path) like the presets', async () => {
+    const { appSound, APP_SOUNDS } = await import('./theme/appSounds');
+    expect(appSound('ccs-sound:music/nope.wav')).toBeNull();
+    expect(appSound('C:\\Music\\lofi.wav')).toBeNull();
+    expect(APP_SOUNDS.some((s) => s.group === 'music') && APP_SOUNDS.some((s) => s.group === 'scroll')).toBe(true);
+    const from = calls.length;
+    await ed.setMusic({ file: 'ccs-sound:music/lofi.wav' });
+    expect(ed.themeMusic()?.preset).toBe('lofi');
+    expect(calls.slice(from).some((c) => c.cmd === 'copy_sound_into_theme')).toBe(false);
+    await ed.setScrollSound({ file: 'ccs-sound:scroll/blip.wav' });
+    expect(ed.themeScrollSound()?.preset).toBe('blip');
+    // On an element (a drop, or a file field in Properties) it is written into the theme too.
+    const abs = await ed.importAsset('ccs-sound:scroll/blip.wav', 'sound');
+    expect(abs?.replace(/\\/g, '/').endsWith('_inc/ccs/sounds/blip.wav')).toBe(true);
+  });
+
   it('gives the console carousel and the game lists one scroll sound', async () => {
     await ed.setScrollSound({ preset: 'blip' });
     expect(ed.themeScrollSound()?.preset).toBe('blip');
