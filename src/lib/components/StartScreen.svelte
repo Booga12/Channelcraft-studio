@@ -3,6 +3,7 @@
   import { ask, open } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
   import { fileUrl, type ThemeInfo } from '$lib/api';
+  import Logo from './Logo.svelte';
   import NewThemeDialog, { type StarterChoice } from './NewThemeDialog.svelte';
   import { fade } from 'svelte/transition';
   import PlusIcon from '@lucide/svelte/icons/plus';
@@ -121,7 +122,7 @@
 <div class="ui-new flex h-screen overflow-hidden bg-[var(--canvas)]">
   <aside class="flex w-60 shrink-0 flex-col gap-4 border-r bg-card/60 p-4 backdrop-blur-xl">
     <div class="flex items-center gap-2.5 px-1">
-      <div class="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-brand-from to-brand-to text-sm font-bold text-white shadow-elev-2" aria-hidden="true">Cc</div>
+      <Logo class="size-9 drop-shadow-sm" />
       <div class="leading-tight">
         <div class="text-sm font-semibold">ChannelCraft Studio</div>
         <div class="text-xs text-muted-foreground">Theme editor for RetroBat</div>

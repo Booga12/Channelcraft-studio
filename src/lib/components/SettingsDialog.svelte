@@ -6,6 +6,7 @@
   import { revealItemInDir } from '@tauri-apps/plugin-opener';
   import { ed } from '$lib/editor.svelte';
   import { ACCENTS, prefs, type Mode } from '$lib/prefs.svelte';
+  import { DEFAULT_LOGO, LOGO_COLOURS, logoGradient } from '$lib/logo';
   import { api } from '$lib/api';
   import Icon from './Icon.svelte';
   import IntroVideoSettings from './IntroVideoSettings.svelte';
@@ -29,8 +30,9 @@
     { id: 'about', label: 'About', icon: 'help' },
   ] as const;
   let section = $state<(typeof SECTIONS)[number]['id']>('general');
-  // The accent swatch that takes the Tab stop (the chosen one, or the first if none is).
+  // The accent and logo swatches that take the Tab stop (the chosen one, or the first if none is).
   const accentStop = $derived(prefs.v.accent in ACCENTS ? prefs.v.accent : Object.keys(ACCENTS)[0]);
+  const logoStop = $derived(prefs.v.logoColour in LOGO_COLOURS ? prefs.v.logoColour : DEFAULT_LOGO);
 
   /** Arrow keys (and Home/End) in the section list, the two-way switches and the swatches:
    *  one Tab stop per group, arrows move to the next choice and pick it. */
@@ -187,6 +189,14 @@
           </div>
         </div>
         <div class="row">
+          <div><strong>Logo colour</strong><small>The logo in the app, the title bar and the taskbar. Shortcuts and the Start menu keep {LOGO_COLOURS[DEFAULT_LOGO].label}.</small></div>
+          <div class="accents" role="radiogroup" aria-label="Logo colour" tabindex="-1" onkeydown={arrows}>
+            {#each Object.entries(LOGO_COLOURS) as [id, c]}
+              <button class="swatch" class:sel={logoStop === id} style:background={logoGradient(id)} title={c.label} aria-label={c.label} role="radio" aria-checked={logoStop === id} tabindex={logoStop === id ? 0 : -1} onclick={() => prefs.set('logoColour', id)}></button>
+            {/each}
+          </div>
+        </div>
+        <div class="row">
           <div><strong>Interface size</strong><small>Makes all text and buttons bigger or smaller.</small></div>
           <select aria-label="Interface size" value={String(prefs.v.uiScale)} onchange={(e) => prefs.set('uiScale', Number(e.currentTarget.value))}>
             <option value="0.9">Compact (90%)</option>
@@ -322,6 +332,8 @@
   .accents {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .swatch {
     width: 24px;

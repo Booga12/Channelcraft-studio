@@ -1,5 +1,7 @@
 // User preferences, kept in the webview's local storage.
 
+import { applyWindowLogo, DEFAULT_LOGO } from './logo';
+
 /** The panels that open from the tool dock beside the preview. */
 export type PanelId = 'elements' | 'library' | 'assets' | 'presets' | 'sound' | 'variables' | 'options' | 'history' | 'explorer' | 'files';
 
@@ -25,6 +27,8 @@ const DEFAULTS = {
   keepRecovery: true,
   backupsKeep: 10,
   accent: 'channelcraft',
+  /** The logo's colour (in the app, the title bar and the taskbar). */
+  logoColour: DEFAULT_LOGO,
   /** Light, dark, or whatever Windows uses. */
   mode: 'system' as Mode,
   uiScale: 1,
@@ -80,7 +84,7 @@ class Prefs {
   dark = $state(false);
   #watching = false;
 
-  /** Light or dark, accent colour and UI size, applied to the document and the window frame. */
+  /** Light or dark, accent colour, logo colour and UI size, applied to the document and the window frame. */
   applyLook() {
     if (typeof document === 'undefined') return;
     const media = window.matchMedia?.('(prefers-color-scheme: dark)');
@@ -105,6 +109,7 @@ class Prefs {
         .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(mode === 'system' ? null : mode))
         .catch(() => {});
     }
+    void applyWindowLogo(this.v.logoColour);
   }
 
   setMode(mode: Mode) {
