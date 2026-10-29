@@ -1,6 +1,7 @@
 <script lang="ts">
   // The theme menu behind the logo: everything the old menu bar had, as one menu with submenus.
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import Logo from '../Logo.svelte';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import { ed } from '$lib/editor.svelte';
   import { prefs } from '$lib/prefs.svelte';
@@ -124,7 +125,7 @@
   <DropdownMenu.Trigger>
     {#snippet child({ props })}
       <button {...props} class="group flex h-8 items-center gap-1.5 rounded-lg pr-1.5 pl-1 transition-colors hover:bg-muted aria-expanded:bg-muted" aria-label="Theme menu">
-        <span class="grid size-6 place-items-center rounded-md bg-gradient-to-br from-brand-from to-brand-to text-[11px] font-bold text-white shadow-elev-1">Cc</span>
+        <Logo class="size-6" />
         <ChevronDownIcon class="size-3.5 text-muted-foreground transition-transform duration-200 group-aria-expanded:rotate-180" />
       </button>
     {/snippet}
