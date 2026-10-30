@@ -1,4 +1,4 @@
-import { MOCK_GAME, type SystemInfo } from './systems';
+import { MOCK_GAME, MOCK_GAMES, type SystemInfo } from './systems';
 import type { Value } from './expr';
 import { gameBinding, type GameInfo } from './games';
 
@@ -35,6 +35,35 @@ export interface Environment {
   gameNames?: string[];
   /** The console's games with their media, for grids and carousels of games. */
   games?: GameInfo[];
+}
+
+/** Where the shown game sits in the preview's game list (env.games, else the row names). */
+export function currentGameIndex(env: Pick<Environment, 'game' | 'games' | 'gameNames'>): number {
+  const path = env.game?.path;
+  if (path && env.games?.length) {
+    const i = env.games.findIndex((g) => g.path === path);
+    if (i >= 0) return i;
+  }
+  return Math.max(0, (env.gameNames ?? MOCK_GAMES).indexOf(env.game?.name ?? MOCK_GAME.name));
+}
+
+/**
+ * The rows a text list shows, as RetroBat draws them: the list doesn't wrap or repeat,
+ * the current game sits in the middle when it can, and the list stops at its top and bottom.
+ */
+export function listWindow(names: string[], cur: number, count: number): { rows: string[]; sel: number } {
+  const n = names.length;
+  if (!n || count < 1) return { rows: [], sel: -1 };
+  const c = Math.min(Math.max(0, cur), n - 1);
+  const start = Math.max(0, Math.min(c - Math.floor(count / 2), n - count));
+  return { rows: names.slice(start, start + count), sel: c - start };
+}
+
+/** `count` row names for a game grid, turned so the current game (`cur`) is on tile `sel`. */
+export function listRows(names: string[], cur: number, count: number, sel: number): string[] {
+  const n = names.length;
+  if (!n) return [];
+  return Array.from({ length: count }, (_, i) => names[(((cur - sel + i) % n) + n) % n]);
 }
 
 export const ARCH = ['windows', 'win32', 'x86_64', 'x64', 'win64'];
