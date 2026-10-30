@@ -1,8 +1,11 @@
 // @ts-nocheck — plain dev-server JS, not part of the app bundle.
 // Development only: a read-only stand-in for the Rust commands, so the UI can run in a plain
 // browser (`pnpm dev`) against real themes. It never writes anything; write commands fail.
+// The one exception is demo mode (CCS_DEMO_ROOT set, for recording the website's how-to clips):
+// then dev/demo-bridge.js adds the write commands, confined to that demo folder.
 import { existsSync, readdirSync, readFileSync, statSync, createReadStream } from 'node:fs';
 import { join, relative, resolve, extname, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const MIME = {
   '.png': 'image/png',
@@ -14,6 +17,11 @@ const MIME = {
   '.ttf': 'font/ttf',
   '.otf': 'font/otf',
   '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.ogg': 'audio/ogg',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.flac': 'audio/flac',
 };
 
 function kind(p) {
@@ -44,9 +52,11 @@ function readText(p) {
 
 export function devFs() {
   let root = null;
+  // Demo mode: set up in configureServer, only when CCS_DEMO_ROOT is set (see dev/guides/README.md).
+  let demo = null;
   const esHome = () => join(root, 'emulationstation', '.emulationstation');
   const themesDir = () => join(esHome(), 'themes');
-  const inside = (p) => root && resolve(p).toLowerCase().startsWith(resolve(root).toLowerCase() + '\\');
+  const inside = (p) => (demo ? demo.insideDemo(p) : root && resolve(p).toLowerCase().startsWith(resolve(root).toLowerCase() + '\\'));
   const activeTheme = () => {
     try {
       const m = readFileSync(join(esHome(), 'es_settings.cfg'), 'utf8').match(/name="ThemeSet" value="([^"]*)"/);
@@ -62,7 +72,10 @@ export function devFs() {
       cfg = readFileSync(join(esHome(), 'es_settings.cfg'), 'utf8');
     } catch {}
     const get = (n) => cfg.match(new RegExp(`name="${n}" value="([^"]*)"`))?.[1];
-    return { clock12: get('ClockMode12') === 'true', drawClock: get('DrawClock') !== 'false', transitionStyle: get('TransitionStyle') || 'auto', powerSaver: get('PowerSaverMode') || 'disabled' };
+    const es = { clock12: get('ClockMode12') === 'true', drawClock: get('DrawClock') !== 'false', transitionStyle: get('TransitionStyle') || 'auto', powerSaver: get('PowerSaverMode') || 'disabled' };
+    // The demo answers like the app does (commands.rs es_settings), music settings included.
+    if (demo) Object.assign(es, { music: get('audio.bgmusic') !== 'false', themeMusic: get('audio.thememusics') !== 'false' });
+    return es;
   };
   const rootInfo = () => ({ root, themesDir: themesDir(), esHome: esHome(), resourcesDir: join(root, 'emulationstation', 'resources'), activeTheme: activeTheme(), es: esSettings() });
   const guard = (p) => {
@@ -170,15 +183,45 @@ export function devFs() {
         .map((p) => ({ name: basename(p).replace(/\.[^.]+$/, ''), path: p, source: `Theme: ${relative(themesDir(), p).split(/[\\/]/)[0]}` })),
   };
 
+  // Real demo paths in error messages are shown as the page sees them (C:\RetroBat...).
+  const virtualText = (text) => {
+    if (!demo) return text;
+    let t = String(text);
+    for (const [r, v] of demo.virtualPairs) t = t.split(r).join(v);
+    return t;
+  };
+
   return {
     name: 'channelcraft-dev-fs',
     apply: 'serve',
-    configureServer(server) {
+    async configureServer(server) {
+      if (process.env.CCS_DEMO_ROOT) {
+        // Loaded only in demo mode, so the normal dev bridge stays exactly as it was.
+        const { demoBridge } = await import('./demo-bridge.js');
+        demo = demoBridge(process.env.CCS_DEMO_ROOT, {
+          kind,
+          readText,
+          activeTheme,
+          commands,
+          starterDir: fileURLToPath(new URL('../src-tauri/resources/starter-theme', import.meta.url)),
+        });
+        Object.assign(commands, demo.commands);
+        server.config.logger.info(`
+  ChannelCraft demo mode: writes go only to ${demo.layout.demo}
+`);
+      }
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url, 'http://localhost');
         if (url.pathname === '/__dev/file') {
-          const p = url.searchParams.get('path') ?? '';
-          if (!inside(p) || !existsSync(p)) {
+          let p = url.searchParams.get('path') ?? '';
+          if (demo) {
+            try {
+              p = demo.toReal(p);
+            } catch {
+              p = '';
+            }
+          }
+          if (!p || !inside(p) || !existsSync(p)) {
             res.statusCode = 404;
             return res.end();
           }
@@ -193,9 +236,13 @@ export function devFs() {
           try {
             const fn = commands[cmd];
             if (!fn) throw new Error(`Browser preview is read-only: "${cmd}" is only available in the desktop app`);
-            res.end(JSON.stringify({ ok: true, value: fn(body ? JSON.parse(body) : {}) ?? null }));
+            if (demo) {
+              const value = await fn(demo.toRealArgs(body ? JSON.parse(body) : {}));
+              res.end(JSON.stringify({ ok: true, value: demo.toVirtualValue(value ?? null) }));
+            } else res.end(JSON.stringify({ ok: true, value: fn(body ? JSON.parse(body) : {}) ?? null }));
           } catch (e) {
-            res.end(JSON.stringify({ ok: false, error: String(e.message ?? e) }));
+            res.end(JSON.stringify({ ok: false, error: virtualText(String(e?.message ?? e)) }));
+            if (demo) console.warn(`[demo] ${cmd} failed:`, virtualText(String(e?.message ?? e)));
           }
           return;
         }
