@@ -36,7 +36,7 @@
     if (!p) return [];
     return systems.map((sys) => {
       const games = ed.games[sys.name] ?? [];
-      const env: Environment = { ...ed.env, settings: { ...$state.snapshot(ed.settings), system: sys }, game: games[0], gameNames: games.length ? games.map((g) => g.name) : undefined };
+      const env: Environment = { ...ed.env, settings: { ...$state.snapshot(ed.settings), system: sys }, game: games[0], games: games.length ? games : undefined, gameNames: games.length ? games.map((g) => g.name) : undefined };
       const res = resolveTheme(p, env);
       const view = res.views.get(ed.view);
       const sysView = res.views.get('system');

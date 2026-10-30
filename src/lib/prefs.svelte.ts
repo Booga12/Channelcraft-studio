@@ -33,8 +33,8 @@ const DEFAULTS = {
   mode: 'system' as Mode,
   uiScale: 1,
   realArtwork: true,
-  /** Games without scraped pictures get box art, title screens and snaps from libretro-thumbnails (preview only). */
-  onlineArt: true,
+  /** Games without scraped pictures get box art, title screens and snaps from libretro-thumbnails (preview only). Off until turned on, so the app stays offline. */
+  onlineArt: false,
   /** Animations play in the preview. */
   playAnimations: true,
   /** Small movements are shown bigger in the preview, to check them (never saved into the theme). */
@@ -48,8 +48,18 @@ const DEFAULTS = {
 type Values = typeof DEFAULTS;
 
 function load(): Values {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem('ccs.prefs');
+    raw = localStorage.getItem('ccs.prefs');
+  } catch {
+    // No storage: use the defaults.
+  }
+  return readPrefs(raw);
+}
+
+/** Saved preferences over the defaults: saved values are kept, missing ones get the default. */
+export function readPrefs(raw: string | null): Values {
+  try {
     if (raw) {
       const saved = JSON.parse(raw) as Record<string, unknown>;
       // The docked-panel workspaces of older versions no longer apply.

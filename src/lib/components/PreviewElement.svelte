@@ -8,7 +8,7 @@
   import { MOCK_GAME, MOCK_GAMES, type SystemInfo } from '$lib/theme/systems';
   import { gameArt } from '$lib/theme/games';
   import type { Resolution } from '$lib/theme/resolver';
-  import type { Environment } from '$lib/theme/context';
+  import { currentGameIndex, listRows, listWindow, type Environment } from '$lib/theme/context';
   import { animationCss, screenOf } from '$lib/theme/animations';
   import { shaderOf, shadowCss, SHADOW_TYPES } from '$lib/theme/shadow';
   import { glowCss as textGlowCss, textFxOf } from '$lib/theme/simpleProps';
@@ -289,13 +289,11 @@
   const tintEnd = $derived(val('colorEnd'));
 
   // ---- textlist ----
-  const rows = $derived.by(() => {
-    if (el.type !== 'textlist') return [];
-    const rowH = fontPx * num('lineSpacing', 1.5);
-    const count = Math.max(1, Math.floor((box.h ?? H * 0.5) / rowH));
-    const names = env.gameNames ?? MOCK_GAMES;
-    return Array.from({ length: count }, (_, i) => names[i % names.length]);
-  });
+  // The highlighted row shows the game whose details are on screen.
+  const listCount = $derived(el.type === 'textlist' ? Math.max(1, Math.floor((box.h ?? H * 0.5) / (fontPx * num('lineSpacing', 1.5)))) : 0);
+  const textRows = $derived(el.type === 'textlist' ? listWindow(env.gameNames ?? MOCK_GAMES, currentGameIndex(env), listCount) : { rows: [], sel: -1 });
+  const rows = $derived(textRows.rows);
+  const selRow = $derived(textRows.sel);
 
   // ---- carousel ----
 
@@ -335,7 +333,7 @@
     const realGames = env.games ?? [];
     const gameNames = env.gameNames ?? MOCK_GAMES;
     const count = ofGames ? realGames.length || gameNames.length : list.length;
-    const cur = ofGames ? Math.max(0, realGames.findIndex((g) => g.path === env.game?.path)) : Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
+    const cur = ofGames ? currentGameIndex(env) : Math.max(0, list.findIndex((s) => s.name === env.settings.system.name));
     const source = val('imageSource') ?? 'marquee';
     const entry = (i: number) => {
       const j = ((i % Math.max(1, count)) + count) % Math.max(1, count);
@@ -500,8 +498,8 @@
           class="li"
           style:height="{fontPx * num('lineSpacing', 1.5)}px"
           style:padding="0 {num('horizontalMargin', 0) * W}px"
-          style:color={i === 2 ? cssColor(val('selectedColor'), '#fff') : i === 5 ? cssColor(val('secondaryColor'), '#ccc') : cssColor(val('primaryColor'), '#ddd')}
-          style:background={i === 2 ? cssColor(val('selectorColor'), 'rgba(255,255,255,0.15)') : 'transparent'}
+          style:color={i === selRow ? cssColor(val('selectedColor'), '#fff') : i === 5 ? cssColor(val('secondaryColor'), '#ccc') : cssColor(val('primaryColor'), '#ddd')}
+          style:background={i === selRow ? cssColor(val('selectorColor'), 'rgba(255,255,255,0.15)') : 'transparent'}
         >
           {r}
         </div>
@@ -585,6 +583,8 @@
     {@const systemGrid = view === 'system'}
     {@const list = carousel.systems}
     {@const cur = Math.max(0, list.findIndex((s) => s.name === env.settings.system.name))}
+    {@const curGame = currentGameIndex(env)}
+    {@const gridNames = listRows(env.gameNames ?? MOCK_GAMES, curGame, grid.cols * grid.rows, grid.selIndex)}
     <div
       class="tiles"
       style:grid-template-columns="repeat({grid.cols}, minmax(0, 1fr))"
@@ -595,7 +595,7 @@
       {#each Array(grid.cols * grid.rows) as _, i}
         {@const on = i === grid.selIndex}
         {@const sys = list[(cur + i - grid.selIndex + list.length * 10) % Math.max(1, list.length)]}
-        {@const g = !systemGrid && env.games?.length ? env.games[(Math.max(0, env.games.findIndex((x) => x.path === env.game?.path)) + i - grid.selIndex + env.games.length * 10) % env.games.length] : null}
+        {@const g = !systemGrid && env.games?.length ? env.games[(curGame + i - grid.selIndex + env.games.length * 10) % env.games.length] : null}
         {@const logo = systemGrid && sys ? logoFor(sys) : g ? gameArt(g, val('imageSource') ?? 'thumbnail') : null}
         {@const art = on ? grid.selArt : grid.art}
         <div
@@ -615,7 +615,7 @@
             <img src={fileUrl(logo)} alt="" draggable="false" style:opacity={on ? grid.selLogoAlpha : grid.logoAlpha} style:-webkit-box-reflect={reflectCss((on ? grid.sel : grid.tile)?.props.get('reflexion')?.value ?? grid.tile?.props.get('reflexion')?.value)} onerror={(e) => ((e.currentTarget as HTMLImageElement).dataset.failed = '1')} />
             <span class="fallback">{systemGrid ? (sys?.fullName ?? '') : (g?.name ?? '')}</span>
           {:else}
-            <span>{systemGrid ? (sys?.fullName ?? '') : (env.gameNames ?? MOCK_GAMES)[i % (env.gameNames ?? MOCK_GAMES).length]}</span>
+            <span>{systemGrid ? (sys?.fullName ?? '') : (g?.name ?? gridNames[i])}</span>
           {/if}
         </div>
       {/each}

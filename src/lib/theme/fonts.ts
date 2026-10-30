@@ -54,6 +54,21 @@ export const FONT_CATALOG: CatalogFont[] = [
   f('creepster', 'Creepster', 'creepster/Creepster-Regular.ttf', 'Spooky drips (titles)'),
 ];
 
+/** A font's name from its file path: "Inter_opsz_wght_.ttf" and "Inter[opsz,wght].ttf" give "Inter". */
+export function fontName(path: string): string {
+  return (
+    path
+      .replace(/^.*[\\/]/, '')
+      .replace(/\.[^.]+$/, '')
+      // Variable-font axis tags, as [wght] or saved as _wght_ (the catalogue swaps [ ] , for _).
+      .replace(/_(?:[a-z]{4}|[A-Z]{4})(?:_(?:[a-z]{4}|[A-Z]{4}))*_$/, '')
+      .replace(/\[.*?\]|-(Regular|VariableFont.*)$/gi, '')
+      .replace(/[-_]+/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .trim() || 'Font'
+  );
+}
+
 export function catalogFont(id: string): CatalogFont | undefined {
   return FONT_CATALOG.find((x) => x.id === id);
 }

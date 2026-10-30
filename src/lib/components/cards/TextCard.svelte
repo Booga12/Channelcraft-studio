@@ -10,6 +10,7 @@
   import { cards } from '$lib/simpleCards.svelte';
   import { familyFor, fontState } from '$lib/preview.svelte';
   import { join } from '$lib/path';
+  import { fontName } from '$lib/theme/fonts';
   import { fmtNum } from '$lib/theme/schema';
   import { resolveAsset, type ResolvedElement } from '$lib/theme/resolver';
   import { FONT_SIZES, sizeName, TEXT_SOURCES, textKind, type FontSizeName } from '$lib/theme/simpleProps';
@@ -85,14 +86,6 @@
   // ---- font ----
   const fontDef = $derived(el.props.get('fontPath'));
   const fontAbs = $derived(ed.res && ed.project ? resolveAsset(fontDef, ed.res, ed.project, ed.env) : null);
-  const fontName = (path: string) =>
-    path
-      .replace(/^.*[\\/]/, '')
-      .replace(/\.[^.]+$/, '')
-      .replace(/\[.*?\]|-(Regular|VariableFont.*)$/gi, '')
-      .replace(/[-_]+/g, ' ')
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .trim() || 'Font';
   const themeFonts = $derived.by(() => {
     ed.rev;
     const p = ed.project;
