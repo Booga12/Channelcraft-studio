@@ -3,7 +3,7 @@
   import { ask } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
   import { sharing } from '$lib/theme/edits';
-  import { ELEMENT_LABELS, SCHEMA, specFor, inferSpec, type PropSpec } from '$lib/theme/schema';
+  import { SCHEMA, specFor, inferSpec, type PropSpec } from '$lib/theme/schema';
   import { TYPE_ICON } from '$lib/render';
   import { lineOf } from '$lib/xml/cst';
   import PropRow from './PropRow.svelte';
@@ -13,7 +13,7 @@
   import { SHADOW_DEFAULT, SHADOW_TYPES, shaderOf } from '$lib/theme/shadow';
   import { FRAME_DEFAULT, FRAME_TYPES, frameOf, type Frame } from '$lib/theme/frame';
   import ColorInput from './ColorInput.svelte';
-  import { elementLabel, propLabel, SIMPLE_PROPS, TYPE_LABELS, typeLabel, viewHelp, viewLabel } from '$lib/friendly';
+  import { elementLabel, knownLabel, propLabel, SIMPLE_PROPS, TYPE_LABELS, typeLabel, viewHelp, viewLabel } from '$lib/friendly';
 
   const GROUPS: { id: PropSpec['group']; label: string }[] = [
     { id: 'layout', label: 'Layout' },
@@ -146,7 +146,7 @@
     <div class="title" class:hide={inInspector}>
       <span class="ic">{TYPE_ICON[el.type] ?? '•'}</span>
       <div>
-        <div class="label">{ed.simple ? elementLabel(el.name) : (ELEMENT_LABELS[el.name] ?? el.name)}</div>
+        <div class="label">{ed.simple ? elementLabel(el.name, ed.view) : (knownLabel(el.name, ed.view) ?? el.name)}</div>
         {#if ed.simple}
           <div class="faint small">{typeLabel(el.type)}{TYPE_LABELS[el.type]?.help ? ` · ${TYPE_LABELS[el.type].help}` : ''}</div>
         {:else}

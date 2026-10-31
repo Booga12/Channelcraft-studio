@@ -5,6 +5,7 @@ import { join, dirname } from './path';
 import { parseGamelist, type GameInfo } from './theme/games';
 import { type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
+import { placeNew } from './theme/placement';
 import { ThemeProject, type ThemeFile } from './theme/project';
 import { isGameListView, isOwnGamePath, resolveTheme, romStem, type ResolvedElement, type Resolution, type Source } from './theme/resolver';
 import { STARTER_PROPS, VIEW_ORDER } from './theme/schema';
@@ -910,8 +911,12 @@ export class Editor {
     const p = this.project;
     const res = this.res;
     if (!p || !res) return;
-    const name = uniqueName(res, this.view, type === 'text' ? 'label' : type);
-    const body = STARTER_PROPS[type] ?? '<pos>0.4 0.4</pos>\n<size>0.2 0.2</size>';
+    // Named in the words Simple mode uses (a ninepatch is a "Panel"), and never `label`: that's the
+    // loading screens' text, and every added text used to be called "Loading text" (#21).
+    const name = uniqueName(res, this.view, ({ ninepatch: 'panel', image: 'picture' } as Record<string, string>)[type] ?? type);
+    // On top of everything on the screen, in its emptiest spot (the clock keeps its corner).
+    const here = [...(this.currentView?.elements.values() ?? [])];
+    const body = placeNew(STARTER_PROPS[type] ?? '<pos>0.4 0.4</pos>\n<size>0.2 0.2</size>', here, type === 'clock');
     if (this.gameEditing) {
       if (this.gameSet(`adding ${typeLabel(type).toLowerCase()}`, [{ name, type, props: {}, extra: true, body }])) this.selected = name;
       return;

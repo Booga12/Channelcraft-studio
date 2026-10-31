@@ -164,6 +164,8 @@ export function humanize(name: string): string {
     .replace(/^md_/, '')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[-_.:]+/g, ' ')
+    // text2 → "Text 2"
+    .replace(/([a-z])(\d+)$/i, '$1 $2')
     .trim()
     .toLowerCase();
   return s ? s[0].toUpperCase() + s.slice(1) : name;
@@ -185,8 +187,19 @@ export function viewHelp(name: string): string | undefined {
   return VIEWS[name]?.help;
 }
 
-export function elementLabel(name: string): string {
-  return ELEMENT_LABELS[name] ?? humanize(name);
+/**
+ * The known plain name of an element, if it has one. `label` is the loading text only on the
+ * loading screens (splash.xml, gamesplash.xml); elsewhere it's just a text (older versions named
+ * every added text `label`).
+ */
+export function knownLabel(name: string, view?: string): string | undefined {
+  if (name === 'label' && view && view !== 'splash') return undefined;
+  return ELEMENT_LABELS[name];
+}
+
+export function elementLabel(name: string, view?: string): string {
+  if (name === 'label' && view && view !== 'splash') return 'Text';
+  return knownLabel(name, view) ?? humanize(name);
 }
 
 export function typeLabel(type: string): string {
