@@ -8,7 +8,7 @@ import { applyChanges } from './edits';
 import { appliedGameLayout, appliedSystemLayout, designChanges, designVarsChange } from './presets';
 import { GAME_LAYOUTS } from './gameLayouts';
 import { SYSTEM_LAYOUTS, systemLayout } from './systemLayouts';
-import { DESIGNS, DESIGN_GROUPS, designAssets, designElements, designVars, recoloured, type DesignContext } from './designs';
+import { DESIGNS, DESIGN_GROUPS, DETAIL_LABELS, designAssets, designElements, designVars, recoloured, type DesignContext, type DesignEl } from './designs';
 import { BACKGROUNDS } from './designArt';
 import { catalogFont } from './fonts';
 import { ANIMATIONS } from './animations';
@@ -24,7 +24,7 @@ const env: Environment = {
 
 const ctx = (id: string, logos = false): DesignContext => ({ art: `./_inc/ccs/${id}`, font: './_inc/fonts/x.ttf', titleFont: null, logos: logos ? './_inc/systems/logos' : null, consoles: null });
 
-const GAME_DATA = ['md_image', 'ccs_boxart', 'md_marquee', 'ccs_fanart', 'ccs_title', 'md_description', 'md_rating', 'md_releasedate', 'md_genre', 'md_developer', 'md_players', 'ccs_favorite', 'gamelist', 'logo', 'help'];
+const GAME_DATA = ['md_image', 'ccs_boxart', 'md_marquee', 'ccs_fanart', 'ccs_title', 'md_description', 'md_rating', 'md_releasedate', 'md_genre', 'md_developer', 'md_players', 'md_lbl_genre', 'md_lbl_developer', 'md_lbl_players', 'ccs_favorite', 'gamelist', 'logo', 'help'];
 const SYSTEM_DATA = ['ccs_console', 'ccs_systemname', 'ccs_systemmaker', 'ccs_systemcount', 'ccs_systemart', 'help'];
 
 describe('designs on the starter theme (in memory)', () => {
@@ -162,6 +162,66 @@ describe('designs on the starter theme (in memory)', () => {
       // Tilted: the design's own angle, or the one its layout sets (cards, stickers).
       if (d.tilt) expect(els.find((e) => e.name === 'ccs_boxart')!.props.rotation).toBeTruthy();
       expect(els.find((e) => e.name === 'ccs_reflection')?.props.rotation).toBeUndefined();
+    }
+  });
+
+  it('labels every game detail, without labels, values or the block running into anything', () => {
+    const DETAILS = new Set(['md_rating', 'md_releasedate', 'md_genre', 'md_developer', 'md_players', 'ccs_favorite', ...DETAIL_LABELS]);
+    // Parts the details must stay clear of (decorations and panels may sit behind them).
+    const NEIGHBOURS = ['md_description', 'ccs_title', 'md_image', 'md_video', 'ccs_boxart', 'md_marquee', 'gamelist', 'logo', 'ccs_vs'];
+    type Box = [number, number, number, number];
+    const nums = (v: unknown) => String(v ?? '0 0').split(' ').map(Number);
+    const box = (e: DesignEl): Box => {
+      const [x, y] = nums(e.props.pos);
+      const [w, h] = nums(e.props.size ?? e.props.maxSize);
+      const [ox, oy] = nums(e.props.origin ?? '0 0');
+      return [x - ox * w, y - oy * h, w, h];
+    };
+    const meets = (a: Box, b: Box) => a[0] < b[0] + b[2] - 0.001 && b[0] < a[0] + a[2] - 0.001 && a[1] < b[1] + b[3] - 0.001 && b[1] < a[1] + a[3] - 0.001;
+    // The widest label RetroBat writes in English, "Developer: ", at a generous character width.
+    const developerW = (fs: number, font: string) => 11 * (['pressstart', 'silkscreen'].includes(font) ? 1 : 0.58) * fs * (9 / 16);
+    for (const d of DESIGNS) {
+      for (const g of GAME_LAYOUTS) {
+        for (const view of ['detailed', 'grid', 'gamecarousel']) {
+          const els = designElements(d, ctx(d.id), view, undefined, g.id);
+          const at = (n: string) => els.find((e) => e.name === n)!;
+          const where = `${d.id}/${g.id}/${view}`;
+          for (const n of DETAIL_LABELS) {
+            const e = at(n);
+            expect(e?.type, `${where} ${n}`).toBe('text');
+            expect(e.props.visible).toBe('true');
+            // RetroBat fills the label in itself, in its own language.
+            expect(e.props.text).toBeUndefined();
+          }
+          const rows: [string, string][] = [['md_lbl_genre', 'md_genre'], ['md_lbl_developer', 'md_developer'], ['md_lbl_players', 'md_players']];
+          for (const [l, v] of rows) {
+            const lb = box(at(l));
+            const vb = box(at(v));
+            expect(lb[1], `${where} ${l} on its value's row`).toBe(vb[1]);
+            expect(meets(lb, vb), `${where} ${l} clear of ${v}`).toBe(false);
+            expect(Number(at(l).props.fontSize)).toBeLessThan(Number(at(v).props.fontSize));
+            // The label column fits "Developer: " unless the block is too narrow, where RetroBat cuts it with "...".
+            const narrow = box(at('md_genre'))[0] + box(at('md_genre'))[2] - lb[0] < 0.2;
+            if (!narrow && !['pressstart', 'silkscreen'].includes(d.font)) expect(lb[2], `${where} ${l} wide enough`).toBeGreaterThanOrEqual(developerW(Number(at(l).props.fontSize), d.font));
+          }
+          expect(meets(box(at('md_players')), box(at('ccs_favorite'))), `${where} favourite clear of players`).toBe(false);
+          // Rows don't overlap each other.
+          for (let i = 1; i < rows.length; i++) expect(box(at(rows[i][0]))[1]).toBeGreaterThanOrEqual(box(at(rows[i - 1][0]))[1] + box(at(rows[i - 1][0]))[3] - 0.001);
+          // The whole block: on screen, above the help prompts, clear of what's around it.
+          const parts = els.filter((e) => DETAILS.has(e.name) && e.props.size).map(box);
+          const left = Math.min(...parts.map((b) => b[0]));
+          const top = Math.min(box(at('md_rating'))[1], ...parts.map((b) => b[1]));
+          const right = Math.max(...parts.map((b) => b[0] + b[2]));
+          const bottom = Math.max(...parts.map((b) => b[1] + b[3]));
+          expect(left >= 0 && right <= 1.001 && bottom <= 0.95, `${where} details on screen (${left} ${top} ${right} ${bottom})`).toBe(true);
+          const block: Box = [left, top, right - left, bottom - top];
+          for (const n of NEIGHBOURS) {
+            const e = els.find((x) => x.name === n);
+            if (!e || e.props.visible === 'false' || !(e.props.size ?? e.props.maxSize)) continue;
+            expect(meets(block, box(e)), `${where} details clear of ${n} (${block} vs ${box(e)})`).toBe(false);
+          }
+        }
+      }
     }
   });
 

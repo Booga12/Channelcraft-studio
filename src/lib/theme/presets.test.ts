@@ -36,6 +36,27 @@ describe('starter theme with presets (in memory)', () => {
   });
 });
 
+describe('plain game layouts (in memory)', () => {
+  it('put RetroBat’s own labels in front of genre, developer and players', async () => {
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    const l = LAYOUTS.find((x) => x.id === 'showcase')!;
+    applyChanges(p, layoutChanges(p, resolveTheme(p, env), l, ['detailed']));
+    const els = resolveTheme(p, env).views.get('detailed')!.elements;
+    for (const f of ['genre', 'developer', 'players']) {
+      const lbl = els.get(`md_lbl_${f}`)!;
+      const val = els.get(`md_${f}`)!;
+      expect(lbl.props.get('visible')!.value, f).toBe('true');
+      // No text of its own: RetroBat writes the label in its language.
+      expect(lbl.props.has('text')).toBe(false);
+      const [lx, ly] = lbl.props.get('pos')!.value.split(' ').map(Number);
+      const [vx, vy] = val.props.get('pos')!.value.split(' ').map(Number);
+      const lw = Number(lbl.props.get('size')!.value.split(' ')[0]);
+      expect(ly).toBe(vy);
+      expect(lx + lw).toBeLessThanOrEqual(vx + 0.001);
+    }
+  });
+});
+
 describe('system grid layouts (in memory)', () => {
   it('write an imagegrid with tile styles RetroBat understands', async () => {
     const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
