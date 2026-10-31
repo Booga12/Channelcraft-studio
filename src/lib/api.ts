@@ -16,6 +16,8 @@ export interface ThemeInfo {
   path: string;
   preview: string | null;
   modified: number;
+  /** Made or changed in ChannelCraft (it has the app's _inc/ccs folder). */
+  made?: boolean;
 }
 
 export interface FileEntry {

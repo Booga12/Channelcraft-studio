@@ -163,6 +163,8 @@ pub struct ThemeInfo {
     path: String,
     preview: Option<String>,
     modified: u64,
+    /// Made or changed in ChannelCraft (it has the app's _inc/ccs folder).
+    made: bool,
 }
 
 #[derive(Serialize)]
@@ -287,6 +289,7 @@ pub fn list_themes(roots: State<Roots>) -> CmdResult<Vec<ThemeInfo>> {
             path: p.to_string_lossy().into_owned(),
             preview,
             modified,
+            made: p.join("_inc").join("ccs").is_dir(),
         });
     }
     out.sort_by_key(|t| t.name.to_lowercase());

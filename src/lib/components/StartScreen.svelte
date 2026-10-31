@@ -42,7 +42,9 @@
   }
 
   function openTheme(t: ThemeInfo) {
-    if (ed.askCopy) choosing = t;
+    // A theme made in ChannelCraft has no original to keep safe, unless RetroBat is using it (#32).
+    const own = t.made && ed.root?.activeTheme?.toLowerCase() !== t.name.toLowerCase();
+    if (ed.askCopy && !own) choosing = t;
     else open_(t.path);
   }
 
