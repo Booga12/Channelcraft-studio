@@ -13,6 +13,7 @@ import { BUILT_IN_DESIGNS } from '../theme/designCatalog';
 import { designFileText, myDesigns, newDesignId, putMyDesign, readDesignFile, type SavedDesign } from '../theme/designList.svelte';
 import { appliedDesign, appliedGameLayout, appliedSystemLayout } from '../theme/presets';
 import { FONT_CATALOG } from '../theme/fonts';
+import { GALLERY_SITE } from '../gallery';
 
 /** The catalog font a part of the theme uses, by its file name. */
 function fontOf(ed: Editor, view: string, names: string[]): string | undefined {
@@ -113,4 +114,23 @@ export async function shareTheme(this: Editor) {
   } catch (e) {
     this.notify(`Sharing failed: ${e}`, 'error');
   }
+}
+
+/** Whether the theme has a preview.png to show in the gallery. */
+export function hasPreview(this: Editor): boolean {
+  void this.rev;
+  return !!this.project?.assets.some((a) => a.rel.toLowerCase() === 'preview.png');
+}
+
+/**
+ * Publishes the theme to the gallery as Share theme makes it: saved first, with a preview
+ * picture (taken from the screen when the theme has none). Throws a sentence to show.
+ */
+export async function publishToGallery(this: Editor, name: string, maker: string): Promise<{ slug: string; url: string; leftOut: string[] }> {
+  const p = this.project;
+  if (!p) throw 'Open a theme first.';
+  if (this.dirtyCount) await this.save();
+  if (this.dirtyCount) throw 'The theme couldn’t be saved, so it wasn’t published.';
+  if (!this.hasPreview()) await this.makePreviewImage();
+  return api.publishTheme(p.dir, name.trim(), maker.trim(), GALLERY_SITE, this.systems.map((s) => s.theme));
 }

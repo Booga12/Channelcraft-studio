@@ -11,6 +11,7 @@
 // and never over an existing theme.
 
 use crate::commands::{err, is_inside, new_theme_path, themes_dir, CmdResult, Roots};
+use crate::gallery::{fill_console_art, GalleryManifest, GALLERY_MANIFEST};
 use crate::storage::{safe_rel, unique_id, WORK_PREFIX};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -128,7 +129,7 @@ pub(crate) fn check_content(name: &str, kind: Kind, head: &[u8], size: u64) -> R
 }
 
 /// System clutter that zips and copied folders often carry.
-fn is_clutter(rel: &str) -> bool {
+pub(crate) fn is_clutter(rel: &str) -> bool {
     rel.split('/').any(|p| {
         let l = p.to_ascii_lowercase();
         l == "__macosx" || l == ".git" || l == ".svn" || l == ".github" || l == ".ds_store" || l == "thumbs.db" || l == "desktop.ini" || p.starts_with("._") || p.starts_with(WORK_PREFIX) || l.ends_with(".ccs-tmp")
@@ -266,7 +267,7 @@ fn reader<'a>(src: &'a mut Source, e: &Entry) -> CmdResult<Box<dyn Read + 'a>> {
     })
 }
 
-fn read_head(r: &mut dyn Read) -> CmdResult<Vec<u8>> {
+pub(crate) fn read_head(r: &mut dyn Read) -> CmdResult<Vec<u8>> {
     let mut head = vec![0u8; HEAD];
     let mut n = 0;
     while n < HEAD {
@@ -283,6 +284,8 @@ fn read_head(r: &mut dyn Read) -> CmdResult<Vec<u8>> {
 struct Planned {
     plan: ImportPlan,
     keep: Vec<(String, Entry)>,
+    /// A gallery download's manifest (not imported itself): its console art is filled back in.
+    gallery: Option<GalleryManifest>,
 }
 
 fn source_name(src: &Source) -> String {
@@ -368,6 +371,16 @@ fn plan(src: &mut Source, themes: &Path) -> CmdResult<Planned> {
     if !keep.iter().any(|(r, _)| r.eq_ignore_ascii_case("theme.xml")) {
         return Err("Its theme.xml didn't pass the checks, so nothing can be imported.".into());
     }
+    let mut gallery = None;
+    if let Some(i) = keep.iter().position(|(r, e)| r.eq_ignore_ascii_case(GALLERY_MANIFEST) && e.size <= 64 * 1024) {
+        let mut text = String::new();
+        if reader(src, &keep[i].1)?.read_to_string(&mut text).is_ok() {
+            gallery = serde_json::from_str::<GalleryManifest>(&text).ok().filter(|m| m.gallery >= 1);
+        }
+        if gallery.is_some() {
+            bytes -= keep.remove(i).1.size;
+        }
+    }
     let outer = source_name(src);
     let base = clean_name(if root.is_empty() { &outer } else { root.rsplit('/').next().unwrap() });
     let plan = ImportPlan {
@@ -379,7 +392,7 @@ fn plan(src: &mut Source, themes: &Path) -> CmdResult<Planned> {
         skipped,
         outside,
     };
-    Ok(Planned { plan, keep })
+    Ok(Planned { plan, keep, gallery })
 }
 
 fn check_source(roots: &Roots, source: &Path) -> CmdResult<PathBuf> {
@@ -399,17 +412,26 @@ pub fn inspect_theme_import(roots: State<Roots>, source: String) -> CmdResult<Im
     Ok(plan(&mut src, &themes)?.plan)
 }
 
-/// Imports a theme .zip or folder as a new theme folder named `name`. Returns its path.
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Imported {
+    pub path: String,
+    /// A sentence about the console art of a gallery download, if it was one.
+    pub note: Option<String>,
+}
+
+/// Imports a theme .zip or folder as a new theme folder named `name`. `systems` are the systems'
+/// theme names (as in es_systems.cfg), used to find console art for a gallery download.
 #[tauri::command(async)]
-pub fn import_theme(roots: State<Roots>, source: String, name: String) -> CmdResult<String> {
+pub fn import_theme(roots: State<Roots>, source: String, name: String, systems: Option<Vec<String>>) -> CmdResult<Imported> {
     let source = PathBuf::from(source);
     let themes = check_source(&roots, &source)?;
     let dest = new_theme_path(&roots, &name)?;
-    import_into(&source, &themes, &dest)?;
-    Ok(dest.to_string_lossy().into_owned())
+    let note = import_into(&source, &themes, &dest, &systems.unwrap_or_default())?;
+    Ok(Imported { path: dest.to_string_lossy().into_owned(), note })
 }
 
-fn import_into(source: &Path, themes: &Path, dest: &Path) -> CmdResult<()> {
+fn import_into(source: &Path, themes: &Path, dest: &Path, systems: &[String]) -> CmdResult<Option<String>> {
     let mut src = open_source(source)?;
     let planned = plan(&mut src, themes)?;
     let stage = themes.join(format!("{WORK_PREFIX}import-{}", unique_id()));
@@ -425,10 +447,18 @@ fn import_into(source: &Path, themes: &Path, dest: &Path) -> CmdResult<()> {
             }
             out.flush().map_err(err)?;
         }
+        let note = match &planned.gallery {
+            Some(m) => {
+                let names: HashSet<String> = systems.iter().map(|s| s.to_lowercase()).collect();
+                fill_console_art(m, themes, &stage, dest, &names)?
+            }
+            None => None,
+        };
         if dest.exists() {
             return Err(format!("{} already exists. Nothing was imported.", dest.display()));
         }
-        fs::rename(&stage, dest).map_err(err)
+        fs::rename(&stage, dest).map_err(err)?;
+        Ok(note)
     })();
     if result.is_err() && stage.exists() {
         let _ = fs::remove_dir_all(&stage);
@@ -457,7 +487,7 @@ pub(crate) fn check_file(src: &Path, want: Option<Kind>) -> CmdResult<Kind> {
     Ok(kind)
 }
 
-fn file_hash(p: &Path) -> CmdResult<Vec<u8>> {
+pub(crate) fn file_hash(p: &Path) -> CmdResult<Vec<u8>> {
     let mut h = Sha256::new();
     std::io::copy(&mut fs::File::open(p).map_err(err)?, &mut h).map_err(err)?;
     Ok(h.finalize().to_vec())
@@ -566,14 +596,14 @@ mod tests {
         assert!(reasons.iter().any(|r| r.starts_with("_inc/fake.png: it isn't really a picture")), "{reasons:?}");
         assert!(reasons.iter().any(|r| r.starts_with("tools/setup.exe: programs")), "{reasons:?}");
         let dest = themes.join(&p.suggested_name);
-        import_into(&zip, &themes, &dest).unwrap();
+        import_into(&zip, &themes, &dest, &[]).unwrap();
         assert!(dest.join("theme.xml").is_file());
         assert!(dest.join("_inc/logo.png").is_file());
         assert!(!dest.join("_inc/fake.png").exists());
         assert!(!dest.join("tools").exists());
         // No staging folder is left behind, and an existing theme is never overwritten.
         assert_eq!(fs::read_dir(&themes).unwrap().count(), 2);
-        assert!(import_into(&zip, &themes, &dest).unwrap_err().contains("already exists"));
+        assert!(import_into(&zip, &themes, &dest, &[]).unwrap_err().contains("already exists"));
         assert_eq!(fs::read_dir(&themes).unwrap().count(), 2);
         fs::remove_dir_all(&work).unwrap();
     }
@@ -601,6 +631,79 @@ mod tests {
         fs::remove_dir_all(&work).unwrap();
     }
 
+    /// A gallery download (art left out) imported into a made-up RetroBat that has a theme with
+    /// system logos and console pictures to borrow.
+    #[test]
+    fn a_gallery_download_gets_its_console_art_back() {
+        let work = tmp("gallery");
+        let themes = work.join("RetroBat").join("emulationstation").join(".emulationstation").join("themes");
+        let systems: Vec<String> = (1..=12).map(|i| format!("sys{i}")).collect();
+        // Two installed themes: one with art (in its own folders), one with too few logos.
+        let carbon = themes.join("carbon");
+        for d in ["art/logos", "art/consoles", "art/background"] {
+            fs::create_dir_all(carbon.join(d)).unwrap();
+        }
+        fs::write(carbon.join("theme.xml"), "<theme/>").unwrap();
+        for s in &systems {
+            fs::write(carbon.join(format!("art/logos/{s}.png")), PNG).unwrap();
+            fs::write(carbon.join(format!("art/consoles/{s}.png")), PNG).unwrap();
+            fs::write(carbon.join(format!("art/background/{s}.jpg")), [0xFFu8, 0xD8, 0xFF]).unwrap();
+        }
+        fs::write(carbon.join("art/logos/notes.txt"), "not a picture").unwrap();
+        let small = themes.join("small");
+        fs::create_dir_all(small.join("logos")).unwrap();
+        fs::write(small.join("theme.xml"), "<theme/>").unwrap();
+        fs::write(small.join("logos/sys1.png"), PNG).unwrap();
+        // A wizard-made theme somewhere else, zipped for the gallery.
+        let made = work.join("Made").join("Neon");
+        fs::create_dir_all(made.join("_inc/systems/logos")).unwrap();
+        fs::create_dir_all(made.join("_inc/systems/consoles")).unwrap();
+        fs::write(made.join("theme.xml"), "<theme/>").unwrap();
+        fs::write(made.join("_inc/systems/logos/sys1.png"), PNG).unwrap();
+        fs::write(made.join("_inc/systems/consoles/sys1.png"), PNG).unwrap();
+        // The maker's own logo, under a name carbon has too: it's sent, and kept.
+        let mine = [PNG, b"mine"].concat();
+        fs::write(made.join("_inc/systems/logos/sys2.png"), &mine).unwrap();
+        let zip = work.join("neon.zip");
+        let names: HashSet<String> = systems.iter().cloned().collect();
+        let made_zip = crate::gallery::gallery_zip(&made, "Neon", &zip, &themes, &names).unwrap();
+        assert_eq!(made_zip.folders, vec!["logos", "consoles"]);
+
+        let mut src = open_source(&zip).unwrap();
+        let p = plan(&mut src, &themes).unwrap();
+        assert!(p.gallery.is_some());
+        // The manifest itself isn't imported.
+        assert_eq!(p.plan.files, 2);
+        let dest = themes.join("Neon");
+        let note = import_into(&zip, &themes, &dest, &systems).unwrap().unwrap();
+        assert!(note.contains("23 were copied from your theme “carbon”"), "{note}");
+        let names = |d: &str| {
+            let mut v: Vec<String> = fs::read_dir(dest.join(d)).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+            v.sort();
+            v
+        };
+        assert_eq!(names("_inc/systems/logos").len(), 12);
+        assert_eq!(names("_inc/systems/consoles").len(), 12);
+        assert!(!dest.join("_inc/systems/logos/notes.txt").exists());
+        // Only what was missing is filled in: the maker's logo isn't overwritten.
+        assert_eq!(fs::read(dest.join("_inc/systems/logos/sys2.png")).unwrap(), mine);
+        assert!(!dest.join(crate::gallery::GALLERY_MANIFEST).exists());
+
+        // No theme to borrow from: it's imported anyway, and says the logos are missing.
+        fs::remove_dir_all(&carbon).unwrap();
+        fs::remove_dir_all(&dest).unwrap();
+        let dest2 = themes.join("Neon 2");
+        let note = import_into(&zip, &themes, &dest2, &systems).unwrap().unwrap();
+        assert!(note.contains("console logos are missing"), "{note}");
+        assert!(dest2.join("theme.xml").is_file());
+        // A normal zip says nothing.
+        let shared = work.join("shared.zip");
+        crate::storage::zip_theme(&made, "Neon", &shared, None).unwrap();
+        assert_eq!(import_into(&shared, &themes, &themes.join("Neon 3"), &systems).unwrap(), None);
+        assert!(themes.join("Neon 3/_inc/systems/logos/sys1.png").is_file());
+        fs::remove_dir_all(&work).unwrap();
+    }
+
     /// Imports a real theme folder (read only) into a temp folder and reports what was left out:
     /// CCS_REAL_THEME="M:\...\themes\X" cargo test --release real_theme_import -- --ignored --nocapture
     #[test]
@@ -619,7 +722,7 @@ mod tests {
         }
         let dest = themes.join(&p.suggested_name);
         let t = std::time::Instant::now();
-        import_into(&src, &themes, &dest).unwrap();
+        import_into(&src, &themes, &dest, &[]).unwrap();
         println!("import: {:?}", t.elapsed());
         // Every kept file is byte-identical to the original.
         let mut n = 0;
@@ -630,6 +733,29 @@ mod tests {
         }
         assert_eq!(n, p.files);
         fs::remove_dir_all(&work).unwrap();
+    }
+
+    /// A gallery download imported into a copy of a RetroBat, as Import a theme does it:
+    /// CCS_IMPORT_ZIP=<downloaded .zip> CCS_IMPORT_ES=<copy of ...\emulationstation\.emulationstation>
+    /// cargo test gallery_download_import -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn gallery_download_import() {
+        let zip = PathBuf::from(std::env::var("CCS_IMPORT_ZIP").expect("CCS_IMPORT_ZIP"));
+        let es = PathBuf::from(std::env::var("CCS_IMPORT_ES").expect("CCS_IMPORT_ES"));
+        let themes = es.join("themes");
+        let cfg = fs::read_to_string(es.join("es_systems.cfg")).unwrap();
+        let systems: Vec<String> = cfg.split("<theme>").skip(1).filter_map(|s| s.split_once("</theme>")).map(|(t, _)| t.trim().to_string()).collect();
+        let p = plan(&mut open_source(&zip).unwrap(), &themes).unwrap();
+        println!("plan: {} files, {} bytes, gallery manifest {:?}, {} left out, name {:?}", p.plan.files, p.plan.bytes, p.gallery, p.plan.skipped.len(), p.plan.suggested_name);
+        let dest = themes.join(&p.plan.suggested_name);
+        let note = import_into(&zip, &themes, &dest, &systems).unwrap();
+        println!("imported to {}", dest.display());
+        println!("note: {note:?}");
+        for d in ["_inc/systems/logos", "_inc/systems/consoles"] {
+            println!("{d}: {} files", fs::read_dir(dest.join(d)).map(|r| r.count()).unwrap_or(0));
+        }
+        println!("manifest kept: {}", dest.join(crate::gallery::GALLERY_MANIFEST).exists());
     }
 
     #[test]
@@ -643,7 +769,7 @@ mod tests {
         fs::write(theme.join("art/bg.png"), PNG).unwrap();
         fs::write(theme.join("Thumbs.db"), b"junk").unwrap();
         let dest = themes.join("My Downloaded Theme");
-        import_into(&theme, &themes, &dest).unwrap();
+        import_into(&theme, &themes, &dest, &[]).unwrap();
         assert!(dest.join("art/bg.png").is_file());
         assert!(!dest.join("Thumbs.db").exists());
         // Single files: right kind, real contents, the same file reused.

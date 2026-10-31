@@ -5,7 +5,7 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import { ed } from '$lib/editor.svelte';
   import { prefs } from '$lib/prefs.svelte';
-  import { closeTheme, exportTheme, isActiveTheme, launchRetroBat, reloadFromDisk, shareTheme, tryInRetroBat } from './actions';
+  import { closeTheme, exportTheme, isActiveTheme, launchRetroBat, publishTheme, reloadFromDisk, shareTheme, tryInRetroBat } from './actions';
 
   interface Item {
     label: string;
@@ -24,6 +24,7 @@
       items: [
         { label: 'Save', shortcut: 'Ctrl+S', action: () => ed.save(), disabled: ed.dirtyCount === 0 },
         { label: 'Share theme…', action: shareTheme },
+        { label: 'Publish to the gallery…', action: publishTheme },
         { label: 'Export as zip…', action: exportTheme },
         { label: 'Save as my design…', action: () => (ed.showSaveDesign = true), disabled: !ed.canSaveDesign() },
         { label: 'Make preview.png from this screen', action: () => ed.makePreviewImage() },

@@ -46,3 +46,6 @@ export const exportTheme = () => ed.checkFirst('Export anyway', () => ed.exportZ
 
 /** Share the theme as one .zip with its preview, after the health check when it found something. */
 export const shareTheme = () => ed.checkFirst('Share anyway', () => ed.shareTheme());
+
+/** Publish to the gallery, after the health check when it found something. */
+export const publishTheme = () => ed.checkFirst('Publish anyway', () => (ed.showPublish = true));
