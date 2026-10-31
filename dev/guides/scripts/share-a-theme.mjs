@@ -15,7 +15,7 @@ export default {
     {
       id: 'share',
       title: 'Share your theme as one zip',
-      shows: 'File > "Share theme…" saves the theme first, adds a preview picture taken from the screen if it has none, and packs the theme into one .zip (here "Arcade Nights.zip" on the Desktop). Console logos copied from another theme are left out; Import adds them back from the other person's themes. The message says it is ready to share and that others add it with "Import a theme". In the real app a Windows save window asks where to put the zip; the clip skips it.',
+      shows: 'File > "Share theme…" saves the theme first, adds a preview picture taken from the screen if it has none, and packs the theme into one .zip (here "Arcade Nights.zip" on the Desktop). Console logos copied from another theme are left out; Import adds them back from the other person’s themes. The message says it is ready to share and that others add it with "Import a theme". In the real app a Windows save window asks where to put the zip; the clip skips it.',
       uiLabels: ['File', 'Share theme…', 'Show file'],
       hold: 2200,
       async run(ctx) {
