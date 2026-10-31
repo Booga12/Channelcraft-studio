@@ -45,6 +45,8 @@ describe('designs on the starter theme (in memory)', () => {
         expect(els.get('ccs_title')!.props.get('text')!.value).toBe('{game:name}');
         // The starter's own decorations are hidden by the design.
         expect(els.get('background')!.props.get('visible')!.value).toBe('false');
+        // RetroBat shows md_image on the video screen too when the theme has one: the starter's is hidden there.
+        if (v === 'video') expect(els.get('md_image')?.props.get('visible')?.value ?? 'false').toBe('false');
         // Everything sits on the screen.
         for (const e of els.values()) {
           const pos = e.props.get('pos')?.value.split(' ').map(Number);
@@ -134,6 +136,26 @@ describe('designs on the starter theme (in memory)', () => {
     }
     expect(p.entry!.src.split('ChannelCraft layout preset (detailed)').length).toBe(2);
   }, 120_000);
+
+  it('hides the theme’s own game parts it doesn’t place, even when the theme keeps its decorations', async () => {
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    const d = DESIGNS[0];
+    applyChanges(p, designChanges(p, resolveTheme(p, env), d, ctx(d.id), ['basic', 'detailed', 'video'], false));
+    const video = resolveTheme(p, env).views.get('video')!.elements;
+    // RetroBat shows md_image on the video screen when the theme has one, over the design's video.
+    expect(video.get('md_image')!.props.get('visible')!.value).toBe('false');
+    expect(video.get('md_video')!.props.get('visible')?.value ?? 'true').not.toBe('false');
+  });
+
+  it('keeps the theme’s own game parts hidden when one design replaces another', async () => {
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    const [a, b] = [DESIGNS[0], DESIGNS[1]];
+    applyChanges(p, designChanges(p, resolveTheme(p, env), a, ctx(a.id), ['basic', 'detailed', 'video'], true));
+    // The first design's block hides the starter's md_image; the second one replaces that block.
+    applyChanges(p, designChanges(p, resolveTheme(p, env), b, ctx(b.id), ['basic', 'detailed', 'video'], true));
+    const video = resolveTheme(p, env).views.get('video')!.elements;
+    expect(video.get('md_image')!.props.get('visible')!.value).toBe('false');
+  });
 
   it('swaps one design for another instead of stacking them', async () => {
     const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
