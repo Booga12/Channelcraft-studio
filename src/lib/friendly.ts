@@ -130,7 +130,7 @@ export const SIMPLE_PROPS = new Set([
 /** "fontPath" → "Font path", "system-console-name" → "System console name". */
 /** Names of the parts ChannelCraft designs add. */
 const DESIGN_NAMES: Record<string, string> = {
-  ccs_background: 'Background',
+  ccs_background: 'Backdrop',
   staticBackground: 'Background',
   staticBackgroundMoving: 'Moving background',
   ccs_movingbg: 'Moving background',
@@ -154,10 +154,31 @@ const DESIGN_NAMES: Record<string, string> = {
   ccs_column: 'Logo column',
   ccs_scanlines: 'Scanlines',
   ccs_bezel: 'Screen bezel',
+  ccs_deco: 'Decoration',
+  ccs_cardpanel: 'Card panel',
+  ccs_coverpanel: 'Cover panel',
+  ccs_shotpanel: 'Screenshot panel',
+  ccs_heroband: 'Banner band',
+  ccs_device: 'Handheld frame',
+  ccs_screen: 'Handheld screen',
+  ccs_dpad_h: 'D-pad (across)',
+  ccs_dpad_v: 'D-pad (down)',
+  ccs_btn_a: 'A button',
+  ccs_btn_b: 'B button',
+  ccs_arrow_left: 'Left arrow',
+  ccs_arrow_right: 'Right arrow',
+  ccs_slash: 'Slash',
+  ccs_vs: 'VS badge',
+  ccs_screenfx: 'Screen effect',
+  ccs_featured_cover: 'Featured cover',
+  ccs_featured_video: 'Featured video',
 };
 
 export function humanize(name: string): string {
   if (DESIGN_NAMES[name]) return DESIGN_NAMES[name];
+  // The soft shadow a design puts under each panel: "Info panel shadow" (#35).
+  const shadowOf = /^(.+)_shadow$/.exec(name)?.[1];
+  if (shadowOf && DESIGN_NAMES[shadowOf]) return `${DESIGN_NAMES[shadowOf]} shadow`;
   const s = name
     .replace(/^ccs_/, '')
     .replace(/^md_lbl_/, 'label ')
