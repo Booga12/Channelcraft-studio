@@ -818,7 +818,14 @@ export function demoBridge(demoRoot, h) {
       if (lower(h.activeTheme() ?? '') === lower(name)) throw `"${name}" is the theme RetroBat is using. Pick another theme in RetroBat (or use “Use in RetroBat” on another one) before deleting it.`;
       // The demo's own "Recycle Bin".
       mkdirSync(L.recycle, { recursive: true });
-      renameSync(dir, must(join(L.recycle, `${name} (${uniqueId()})`)));
+      try {
+        renameSync(dir, must(join(L.recycle, `${name} (${uniqueId()})`)));
+      } catch (e) {
+        // In plain words, as commands.rs delete_theme says it (no paths, no EBUSY).
+        if (['EBUSY', 'EPERM', 'EACCES'].includes(e?.code))
+          throw "Couldn't move the theme to the Recycle Bin. Close any window or program showing this theme's folder (File Explorer, RetroBat, a command prompt) and try again.";
+        throw e;
+      }
     },
     set_active_theme: ({ theme }) => {
       if (!existsSync(join(themesDir(), theme, 'theme.xml'))) throw `Theme "${theme}" not found`;
