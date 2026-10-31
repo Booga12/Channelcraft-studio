@@ -61,7 +61,7 @@ export function gameSet(this: Editor, label: string, edits: GameEdit[], coalesce
     else refused.push(e.name);
   }
   if (refused.length) {
-    const names = refused.map(elementLabel).join(', ');
+    const names = refused.map((n) => elementLabel(n)).join(', ');
     this.notify(`RetroBat draws ${names} once for the whole game list, so ${refused.length === 1 ? 'it' : 'they'} can’t change for one game. The game parts (cover, video, name, description…) can, and so can anything you add while “Only this game” is on.`, 'error');
   }
   if (!ok.length) return false;

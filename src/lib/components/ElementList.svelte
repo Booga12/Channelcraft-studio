@@ -1,8 +1,8 @@
 <script lang="ts">
   // Layers panel: every element on the screen, top layer first.
   import { ed } from '$lib/editor.svelte';
-  import { ADDABLE_TYPES, ELEMENT_LABELS } from '$lib/theme/schema';
-  import { elementLabel, TYPE_LABELS, typeLabel } from '$lib/friendly';
+  import { ADDABLE_TYPES } from '$lib/theme/schema';
+  import { elementLabel, knownLabel, TYPE_LABELS, typeLabel } from '$lib/friendly';
   import { isVisible, zOf } from '$lib/render';
   import { BUILT_IN_SPLASH, isSplashExtra } from '$lib/theme/splash';
   import Icon, { TYPE_ICONS } from './Icon.svelte';
@@ -284,8 +284,8 @@
             />
           {:else}
             <span class="name">
-              {ed.simple ? elementLabel(el.name) : (ELEMENT_LABELS[el.name] ?? el.name)}
-              {#if !ed.simple && ELEMENT_LABELS[el.name]}<span class="faint mono">{el.name}</span>{/if}
+              {ed.simple ? elementLabel(el.name, ed.view) : (knownLabel(el.name, ed.view) ?? el.name)}
+              {#if !ed.simple && knownLabel(el.name, ed.view)}<span class="faint mono">{el.name}</span>{/if}
             </span>
           {/if}
           {#if hidden}<span class="tag" title="Hidden on this screen in the theme">hidden</span>{/if}
