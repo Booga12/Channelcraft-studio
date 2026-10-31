@@ -242,10 +242,10 @@ describe('designs on the starter theme (in memory)', () => {
             const e = els.find((x) => x.name === n);
             if (!e || e.props.visible === 'false' || !(e.props.size ?? e.props.maxSize)) continue;
             expect(meets(block, box(e)), `${where} details clear of ${n} (${block} vs ${box(e)})`).toBe(false);
-            // In the Cover layout the screenshot or video's frame (border and shadow, drawn outside
-            // its box) clears the details too (#39). Other layouts: see the follow-up issue.
-            if (g.id.startsWith('cover') && e.blocks?.length) {
-              const f = designFrame(d);
+            // The screenshot or video's frame (border and shadow, drawn outside its box) clears the
+            // details too, even at its biggest with Strong depth (#39, #42).
+            if ((n === 'md_image' || n === 'md_video') && e.blocks?.length) {
+              const f = designFrame(d, undefined, 'strong');
               const grow = (f.border + f.shadow) / 1080;
               const [ex, ey, ew, eh] = box(e);
               const around: Box = [ex - grow, ey - grow, ew + 2 * grow, eh + 2 * grow];

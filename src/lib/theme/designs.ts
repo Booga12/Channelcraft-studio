@@ -464,7 +464,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         gameList(d, c, '0.05 0.54', '0.42 0.38'),
         ...details(0.53, 0.52, 0.42, 0.03),
         boxart('0.6 0.745', '0.1 0.2'),
-        screenshot('0.81 0.745', '0.2 0.2'),
+        screenshot('0.81 0.745', '0.2 0.15'),
         desc('0.53 0.855', '0.43 0.085', '0.015'),
       );
       break;
@@ -545,7 +545,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         title('0.42 0.14', '0.31 0.06', '0.042'),
         marquee('0.42 0.22', '0.2 0.07', '0 0'),
         ...details(0.42, 0.31, 0.31, 0.034),
-        screenshot('0.575 0.56', '0.3 0.2'),
+        screenshot('0.575 0.57', '0.3 0.2'),
         desc('0.42 0.7', '0.31 0.2', '0.016'),
         panel(d, c, 'ccs_listpanel', '0.76 0.12', '0.21 0.8', 20, K(d, c, 'designListPanel')),
         gameList(d, c, '0.77 0.14', '0.19 0.76'),
@@ -577,7 +577,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         title('0.63 0.14', '0.32 0.05', '0.03'),
         ...details(0.63, 0.21, 0.32, 0.03),
         boxart('0.7 0.44', '0.12 0.2'),
-        screenshot('0.87 0.44', '0.16 0.2'),
+        screenshot('0.87 0.44', '0.16 0.16'),
         marquee('0.63 0.56', '0.32 0.06', '0 0'),
         desc('0.63 0.64', '0.32 0.26', '0.016'),
       );
@@ -640,10 +640,10 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         panel(d, c, 'ccs_listpanel', '0.2 0.14', '0.6 0.6', 20, K(d, c, 'designListPanel')),
         gameList(d, c, '0.22 0.16', '0.56 0.56', 'center'),
         panel(d, c, 'ccs_infopanel', '0.06 0.76', '0.88 0.18', 10),
-        boxart('0.11 0.85', '0.07 0.14'),
-        screenshot('0.2 0.85', '0.1 0.14'),
-        title('0.26 0.77', '0.36 0.045', '0.03'),
-        ...details(0.26, 0.82, 0.36, 0.026),
+        boxart('0.105 0.85', '0.07 0.14'),
+        screenshot('0.195 0.85', '0.09 0.14'),
+        title('0.27 0.77', '0.35 0.045', '0.03'),
+        ...details(0.27, 0.82, 0.35, 0.026),
         desc('0.64 0.775', '0.22 0.15', '0.015'),
         marquee('0.935 0.85', '0.06 0.06', '1 0.5'),
       );
