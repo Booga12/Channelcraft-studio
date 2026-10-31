@@ -270,16 +270,18 @@ export function demoBridge(demoRoot, h) {
 
   const MANIFEST = 'channelcraft-backup.json';
   const themeName = (dir) => basename(dir) || 'theme';
-  function zipTheme(src, prefix, dest, note) {
+  function zipTheme(src, prefix, dest, note, skip = null, extra = null) {
     if (isInside(dest, src)) throw 'Choose a place outside the theme folder for the zip.';
     must(dest);
     const zip = new AdmZip();
     const files = {};
     for (const [p, rel] of themeFiles(src)) {
+      if (skip?.(rel)) continue;
       const data = readFileSync(p);
       zip.addFile(`${prefix}/${rel}`, data);
       files[rel] = sha(data);
     }
+    if (extra) zip.addFile(`${prefix}/${extra[0]}`, Buffer.from(extra[1]));
     if (note != null) {
       const m = { version: 1, app: 'ChannelCraft Studio', project: projectKey(src), theme: prefix, created: nowSecs(), note, prefix, files };
       zip.addFile(MANIFEST, Buffer.from(JSON.stringify(m, null, 2)));
@@ -612,6 +614,42 @@ export function demoBridge(demoRoot, h) {
       if (!existsSync(join(dir, 'theme.xml'))) throw `${dir} is not a theme folder`;
       zipTheme(dir, themeName(dir), must(dest), null);
       return dest;
+    },
+    // Like gallery.rs share_theme: console art the same as another theme's is left out, with the
+    // manifest Import reads (the other themes' art folders are guessed by name here).
+    share_theme: ({ dir, dest }) => {
+      if (!existsSync(join(dir, 'theme.xml'))) throw `${dir} is not a theme folder`;
+      const words = { logos: ['logo', 'wheel', 'marquee'], consoles: ['console', 'device', 'controller', 'hardware'] };
+      const artDirs = { logos: new Set(), consoles: new Set() };
+      for (const n of readdirSync(themesDir())) {
+        const t = join(themesDir(), n);
+        // Not themes made or changed in ChannelCraft (gallery.rs borrowed_art).
+        if (n.startsWith('.') || resolve(t).toLowerCase() === resolve(dir).toLowerCase() || !existsSync(join(t, 'theme.xml')) || existsSync(join(t, '_inc', 'ccs'))) continue;
+        for (const [p] of themeFiles(t)) {
+          const d = dirname(p);
+          for (const f of ['logos', 'consoles']) if (words[f].some((w) => basename(d).toLowerCase().includes(w))) artDirs[f].add(d);
+        }
+      }
+      const left = new Set();
+      const folders = new Set();
+      for (const [p, rel] of themeFiles(dir)) {
+        const art = /^_inc\/systems\/(logos|consoles)\/[^/]+$/i.exec(rel);
+        if (!art) continue;
+        const f = art[1].toLowerCase();
+        const size = statSync(p).size;
+        for (const d of artDirs[f]) {
+          const o = join(d, basename(p));
+          if (existsSync(o) && statSync(o).size === size && readFileSync(o).equals(readFileSync(p))) {
+            left.add(rel.toLowerCase());
+            folders.add(f);
+            break;
+          }
+        }
+      }
+      const order = ['logos', 'consoles'].filter((f) => folders.has(f));
+      const extra = order.length ? ['channelcraft.json', JSON.stringify({ gallery: 1, systemArtLeftOut: '_inc/systems', folders: order })] : null;
+      zipTheme(dir, themeName(dir), must(dest), null, (rel) => rel.toLowerCase() === 'channelcraft.json' || left.has(rel.toLowerCase()), extra);
+      return { path: dest, leftOut: left.size };
     },
     copy_theme: ({ src, name }) => {
       const dest = newThemePath(name);

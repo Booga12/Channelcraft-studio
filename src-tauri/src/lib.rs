@@ -157,6 +157,7 @@ pub fn run() {
             problems::problem_log_path,
             problems::clear_problem_log,
             gallery::publish_theme,
+            gallery::share_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

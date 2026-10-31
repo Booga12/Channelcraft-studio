@@ -1,5 +1,5 @@
 // Making a theme's look your own design, and sharing: designs as small .ccdesign files, and a
-// whole theme as one .zip with its preview picture.
+// theme as one .zip with its preview picture (console art copied from another theme left out).
 // Part of the editor (editor.svelte.ts): each function is a method of the editor (`this`),
 // attached to it there, so callers use ed.<name>(...).
 
@@ -96,8 +96,9 @@ export async function importMyDesign(this: Editor) {
 }
 
 /**
- * Shares the whole theme as one .zip, ready to post anywhere: saved first, with a preview
- * picture (taken from the screen when the theme has none). Others open it with Import.
+ * Shares the theme as one .zip, ready to post anywhere: saved first, with a preview picture
+ * (taken from the screen when the theme has none). Console art copied from another installed
+ * theme is left out, as for the gallery. Others open it with Import, which adds that art back.
  */
 export async function shareTheme(this: Editor) {
   const p = this.project;
@@ -109,8 +110,12 @@ export async function shareTheme(this: Editor) {
     if (this.dirtyCount) return void this.notify('The theme couldn’t be saved, so it wasn’t shared.', 'error');
     if (!p.assets.some((a) => a.rel.toLowerCase() === 'preview.png')) await this.makePreviewImage();
     this.notify(`Packing “${p.name}”… With many pictures this can take a little while.`, 'info', 600000);
-    await api.exportTheme(p.dir, dest);
-    this.notify(`“${p.name}” is ready to share as ${basename(dest)}. Others add it with Import a theme on the start screen.`, 'info', 8000, { label: 'Show file', run: () => void revealItemInDir(dest) });
+    const { leftOut } = await api.shareTheme(p.dir, dest, this.systems.map((s) => s.theme));
+    // Console art copied from another theme stays out: Import copies it from the other person's themes.
+    const art = leftOut
+      ? ` ${leftOut.toLocaleString()} console ${leftOut === 1 ? 'picture' : 'logos and pictures'} copied from another theme ${leftOut === 1 ? 'was' : 'were'} left out: ChannelCraft's Import a theme fills them in from the other person's themes. For a complete copy, use Export as zip.`
+      : '';
+    this.notify(`“${p.name}” is ready to share as ${basename(dest)}. Others add it with Import a theme on the start screen.${art}`, 'info', 10000, { label: 'Show file', run: () => void revealItemInDir(dest) });
   } catch (e) {
     this.notify(`Sharing failed: ${e}`, 'error');
   }
