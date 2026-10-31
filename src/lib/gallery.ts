@@ -4,7 +4,7 @@
  * The website the gallery is on (the same as GALLERY_SITE in src-tauri/src/gallery.rs). In
  * development VITE_GALLERY_SITE can point it at a local website dev server.
  */
-export const GALLERY_SITE: string = (import.meta.env.DEV && import.meta.env.VITE_GALLERY_SITE) || 'https://channelcraft-website.fatbooga6.workers.dev';
+export const GALLERY_SITE: string = (import.meta.env.DEV && import.meta.env.VITE_GALLERY_SITE) || 'https://channelcraft-website.channelcraftstudio.workers.dev';
 
 export const NAME_MAX = 60;
 export const MAKER_MAX = 40;

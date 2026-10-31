@@ -24,7 +24,7 @@ use walkdir::WalkDir;
 const MAX_BYTES: u64 = 25 * 1024 * 1024;
 /// The gallery's address, the same as GALLERY_SITE in src/lib/gallery.ts (a test checks they
 /// match). Release builds send themes only here, whatever the webview asks for.
-const GALLERY_SITE: &str = "https://channelcraft-website.fatbooga6.workers.dev";
+const GALLERY_SITE: &str = "https://channelcraft-website.channelcraftstudio.workers.dev";
 /// The gallery manifest's file name, at the theme's top.
 pub(crate) const GALLERY_MANIFEST: &str = "channelcraft.json";
 /// Where the wizard puts the console art it copies (themeOptions.ts importConsoleArt), and the
