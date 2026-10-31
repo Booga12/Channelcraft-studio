@@ -8,7 +8,7 @@ import { applyChanges } from './edits';
 import { appliedGameLayout, appliedSystemLayout, designChanges, designVarsChange } from './presets';
 import { GAME_LAYOUTS } from './gameLayouts';
 import { SYSTEM_LAYOUTS, systemLayout } from './systemLayouts';
-import { DESIGNS, DESIGN_GROUPS, DETAIL_LABELS, designAssets, designElements, designVars, recoloured, type DesignContext, type DesignEl } from './designs';
+import { DESIGNS, DESIGN_GROUPS, DETAIL_LABELS, designAssets, designElements, designFrame, designVars, recoloured, type DesignContext, type DesignEl } from './designs';
 import { BACKGROUNDS } from './designArt';
 import { catalogFont } from './fonts';
 import { ANIMATIONS } from './animations';
@@ -204,7 +204,8 @@ describe('designs on the starter theme (in memory)', () => {
     const developerW = (fs: number, font: string) => 11 * (['pressstart', 'silkscreen'].includes(font) ? 1 : 0.58) * fs * (9 / 16);
     for (const d of DESIGNS) {
       for (const g of GAME_LAYOUTS) {
-        for (const view of ['detailed', 'grid', 'gamecarousel']) {
+        // The video screen too: its video sits where the screenshot is, and is often bigger (#39).
+        for (const view of ['detailed', 'video', 'grid', 'gamecarousel']) {
           const els = designElements(d, ctx(d.id), view, undefined, g.id);
           const at = (n: string) => els.find((e) => e.name === n)!;
           const where = `${d.id}/${g.id}/${view}`;
@@ -241,6 +242,15 @@ describe('designs on the starter theme (in memory)', () => {
             const e = els.find((x) => x.name === n);
             if (!e || e.props.visible === 'false' || !(e.props.size ?? e.props.maxSize)) continue;
             expect(meets(block, box(e)), `${where} details clear of ${n} (${block} vs ${box(e)})`).toBe(false);
+            // In the Cover layout the screenshot or video's frame (border and shadow, drawn outside
+            // its box) clears the details too (#39). Other layouts: see the follow-up issue.
+            if (g.id.startsWith('cover') && e.blocks?.length) {
+              const f = designFrame(d);
+              const grow = (f.border + f.shadow) / 1080;
+              const [ex, ey, ew, eh] = box(e);
+              const around: Box = [ex - grow, ey - grow, ew + 2 * grow, eh + 2 * grow];
+              expect(meets(block, around), `${where} details clear of ${n}'s frame (${block} vs ${around})`).toBe(false);
+            }
           }
         }
       }
