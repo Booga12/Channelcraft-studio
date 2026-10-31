@@ -468,7 +468,7 @@ export function demoBridge(demoRoot, h) {
         .map((name) => {
           const p = join(themesDir(), name);
           const preview = ['preview.png', 'preview.jpg', '_inc/images/preview.png', 'screenshot.png'].map((f) => join(p, f)).find((f) => existsSync(f)) ?? null;
-          return { name, path: p, preview, modified: Math.floor(statSync(join(p, 'theme.xml')).mtimeMs / 1000) };
+          return { name, path: p, preview, modified: Math.floor(statSync(join(p, 'theme.xml')).mtimeMs / 1000), made: existsSync(join(p, '_inc', 'ccs')) };
         })
         .sort((a, b) => lower(a.name).localeCompare(lower(b.name))),
     list_fonts: () => {

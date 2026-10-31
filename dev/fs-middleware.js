@@ -105,7 +105,7 @@ export function devFs() {
         .filter((p) => existsSync(join(p, 'theme.xml')))
         .map((p) => {
           const preview = ['preview.png', 'preview.jpg', '_inc/images/preview.png', 'screenshot.png'].map((f) => join(p, f)).find((f) => existsSync(f)) ?? null;
-          return { name: basename(p), path: p, preview, modified: 0 };
+          return { name: basename(p), path: p, preview, modified: 0, made: existsSync(join(p, '_inc', 'ccs')) };
         })
         .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())),
     list_theme_files: ({ dir }) => walk(guard(dir)).map((p) => ({ rel: relative(dir, p).replace(/\\/g, '/'), kind: kind(p), size: statSync(p).size })),
