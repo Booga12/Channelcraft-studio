@@ -31,6 +31,8 @@ pub(crate) const GALLERY_MANIFEST: &str = "channelcraft.json";
 /// two folders in it.
 const ART_DIR: &str = "_inc/systems";
 const ART_FOLDERS: [&str; 2] = ["logos", "consoles"];
+/// The folder ChannelCraft puts its own files in, in every theme it makes or changes.
+const CCS_DIR: &str = "_inc/ccs";
 /// What the server unpacks, kept small for the free plan's CPU limit: the same as LIMITS
 /// packedFiles, packedFileBytes and packedTotalBytes in
 /// channelcraft-website/src/lib/server/gallery/check.ts. Text past these is stored.
@@ -68,7 +70,9 @@ fn borrowed_art(src: &Path, themes: &Path, names: &HashSet<String>) -> HashSet<S
     let others: Vec<(PathBuf, ConsoleArt)> = dirs
         .flatten()
         .map(|e| e.path())
-        .filter(|d| !d.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) && d.join("theme.xml").is_file() && normalize(d).to_string_lossy().to_lowercase() != me)
+        // Not themes made or changed in ChannelCraft (they have _inc/ccs): their art may be the
+        // maker's own (a duplicated theme has the same files), and the receiver won't have it.
+        .filter(|d| !d.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) && d.join("theme.xml").is_file() && !d.join(CCS_DIR).is_dir() && normalize(d).to_string_lossy().to_lowercase() != me)
         .map(|d| {
             let art = scan_console_art(&d, names);
             (d, art)
@@ -151,6 +155,46 @@ pub(crate) fn gallery_zip(src: &Path, prefix: &str, dest: &Path, themes: &Path, 
     Ok(GalleryZip { folders, skipped })
 }
 
+/// Zips a theme for Share theme: every file, except the console art copied from another installed
+/// theme (as the gallery zip leaves it out), with the manifest so Import fills it back in from the
+/// other person's themes. Returns how many files were left out.
+pub(crate) fn share_zip(src: &Path, prefix: &str, dest: &Path, themes: &Path, names: &HashSet<String>) -> CmdResult<usize> {
+    let borrowed = borrowed_art(src, themes, names);
+    let folders: Vec<String> = ART_FOLDERS.into_iter().filter(|f| borrowed.iter().any(|b| b.starts_with(&format!("{ART_DIR}/{f}/")))).map(String::from).collect();
+    let json = serde_json::to_string(&GalleryManifest { gallery: 1, system_art_left_out: Some(ART_DIR.into()), folders: folders.clone() }).map_err(err)?;
+    let extra = (!folders.is_empty()).then_some((GALLERY_MANIFEST, json.as_bytes()));
+    let leave_out = |rel: &str| {
+        let l = rel.to_lowercase();
+        l == GALLERY_MANIFEST || borrowed.contains(&l)
+    };
+    // As zip_theme does: pictures, videos, sounds and fonts are already compressed.
+    let store = |path: &Path, rel: &str| matches!(file_kind(path), "image" | "video" | "sound" | "font") && !rel.to_lowercase().ends_with(".svg");
+    zip_theme_as(src, prefix, dest, None, Some(&ZipPlan { leave_out: &leave_out, store: &store, extra }))?;
+    Ok(borrowed.len())
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Shared {
+    pub path: String,
+    /// Console logos and pictures left out because they're copied from another theme.
+    pub left_out: usize,
+}
+
+/// Share theme: zips the theme in `dir` to `dest`, without the console art copied from another
+/// installed theme (see share_zip). `systems` are the systems' theme names (as in es_systems.cfg).
+#[tauri::command(async)]
+pub fn share_theme(roots: tauri::State<Roots>, dir: String, dest: String, systems: Option<Vec<String>>) -> CmdResult<Shared> {
+    let src = PathBuf::from(&dir);
+    if !src.join("theme.xml").is_file() {
+        return Err(format!("{dir} is not a theme folder"));
+    }
+    let themes = themes_dir(&roots.root()?);
+    let names: HashSet<String> = systems.unwrap_or_default().iter().map(|s| s.to_lowercase()).collect();
+    let left_out = share_zip(&src, &theme_name(&src), Path::new(&dest), &themes, &names)?;
+    Ok(Shared { path: dest, left_out })
+}
+
 /// Where an installed theme keeps its system logos and console pictures, found the way the New
 /// theme wizard does (themeOptions.ts scanConsoleArt): the folders with the most pictures named
 /// after systems.
@@ -218,7 +262,7 @@ pub(crate) fn fill_console_art(m: &GalleryManifest, themes: &Path, dest: &Path, 
     if m.gallery < 1 || folders.is_empty() {
         return Ok(None);
     }
-    const MISSING: &str = "Console logos and pictures don't come with gallery themes, and none of your themes has them to copy, so the console logos are missing.";
+    const MISSING: &str = "Console logos and pictures don't come with shared or gallery themes, and none of your themes has them to copy, so the console logos are missing.";
     let Some((from, art)) = console_art_source(themes, names, skip) else { return Ok(Some(MISSING.into())) };
     let mut n = 0;
     for f in folders {
@@ -234,7 +278,7 @@ pub(crate) fn fill_console_art(m: &GalleryManifest, themes: &Path, dest: &Path, 
     if n == 0 {
         return Ok(Some(MISSING.into()));
     }
-    Ok(Some(format!("Console logos and pictures don't come with gallery themes, so {n} were copied from your theme “{}”.", theme_name(&from))))
+    Ok(Some(format!("Console logos and pictures don't come with shared or gallery themes, so {n} were copied from your theme “{}”.", theme_name(&from))))
 }
 const OFFLINE: &str = "Couldn't reach the gallery. Check your internet connection and try again.";
 
@@ -606,12 +650,29 @@ mod tests {
         let mut text = String::new();
         a.by_name("Made/channelcraft.json").unwrap().read_to_string(&mut text).unwrap();
         assert_eq!(text, r#"{"gallery":1,"systemArtLeftOut":"_inc/systems","folders":["logos","consoles"]}"#);
-        // Share theme is unchanged: it has everything.
+        // Export as zip is unchanged: it has everything.
+        let exported = base.join("exported.zip");
+        crate::storage::zip_theme(&dir, "Made", &exported, None).unwrap();
+        assert!(entries(&exported).iter().any(|(n, _, _)| n == "Made/_inc/systems/logos/sys1.png"));
+        // Share theme leaves out only the copied art, keeps every other file as Export does, and
+        // adds the manifest once.
         let shared = base.join("shared.zip");
-        crate::storage::zip_theme(&dir, "Made", &shared, None).unwrap();
-        assert!(entries(&shared).iter().any(|(n, _, _)| n == "Made/_inc/systems/logos/sys1.png"));
+        assert_eq!(share_zip(&dir, "Made", &shared, &themes, &systems()).unwrap(), 2);
+        let got = entries(&shared);
+        let has = |n: &str| got.iter().any(|(x, _, _)| x == n);
+        assert!(!has("Made/_inc/systems/logos/sys1.png") && !has("Made/_inc/systems/consoles/sys1.png"));
+        assert!(has("Made/_inc/systems/logos/mine.png") && has("Made/_inc/systems/logos/sys2.png"));
+        let exported: Vec<String> = entries(&exported).into_iter().map(|e| e.0).filter(|n| !n.contains("/_inc/systems/logos/sys1.png") && !n.contains("/_inc/systems/consoles/sys1.png") && !n.ends_with(GALLERY_MANIFEST)).collect();
+        assert!(exported.iter().all(|n| has(n)), "missing from the shared zip");
+        assert_eq!(got.iter().filter(|(n, _, _)| n == "Made/channelcraft.json").count(), 1);
+        assert_eq!(got.iter().find(|(n, _, _)| n == "Made/preview.png").map(|e| e.1), Some(Stored));
+        assert_eq!(got.iter().find(|(n, _, _)| n == "Made/theme.xml").map(|e| e.1), Some(Deflated));
         // No theme to borrow from: the art stays in, and there's no manifest.
         fs::remove_dir_all(themes.join("carbon")).unwrap();
+        assert_eq!(share_zip(&dir, "Made", &shared, &themes, &systems()).unwrap(), 0);
+        let got = entries(&shared);
+        assert!(got.iter().any(|(n, _, _)| n == "Made/_inc/systems/logos/sys1.png"));
+        assert!(!got.iter().any(|(n, _, _)| n.ends_with(GALLERY_MANIFEST)));
         let made = gallery_zip(&dir, "Made", &out, &themes, &systems()).unwrap();
         assert!(made.folders.is_empty());
         let got = entries(&out);
@@ -619,6 +680,47 @@ mod tests {
         assert!(!got.iter().any(|(n, _, _)| n.ends_with(GALLERY_MANIFEST)));
         fits_the_server(&got);
         fs::remove_dir_all(&base).unwrap();
+    }
+
+    /// A theme made in ChannelCraft is never where art is "borrowed" from: a duplicate of the
+    /// maker's own theme has the same logos, and the person receiving it won't have them.
+    #[test]
+    fn own_themes_are_not_an_art_source() {
+        let base = std::env::temp_dir().join(format!("ccs-gown-{}", unique_id()));
+        let themes = base.join("themes");
+        art_theme(&themes);
+        let dir = themes.join("Made");
+        made_theme(&dir);
+        fs::create_dir_all(dir.join(CCS_DIR)).unwrap();
+        // The maker's own drawing of every system's logo, then a duplicate of the theme.
+        for s in systems() {
+            fs::write(dir.join(format!("_inc/systems/logos/{s}.png")), [PNG, s.as_bytes()].concat()).unwrap();
+        }
+        let copy = themes.join("Made copy");
+        copy_tree(&dir, &copy);
+        let out = base.join("shared.zip");
+        // Only the console picture is carbon's; every logo is the maker's and stays in.
+        assert_eq!(share_zip(&copy, "Made copy", &out, &themes, &systems()).unwrap(), 1);
+        let got = entries(&out);
+        for s in systems() {
+            assert!(got.iter().any(|(n, _, _)| *n == format!("Made copy/_inc/systems/logos/{s}.png")), "{s} left out");
+        }
+        assert!(!got.iter().any(|(n, _, _)| n == "Made copy/_inc/systems/consoles/sys1.png"));
+        // The gallery zip too.
+        let made = gallery_zip(&copy, "Made copy", &out, &themes, &systems()).unwrap();
+        assert_eq!(made.folders, vec!["consoles"]);
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    fn copy_tree(from: &Path, to: &Path) {
+        for e in WalkDir::new(from).into_iter().flatten() {
+            let t = to.join(e.path().strip_prefix(from).unwrap());
+            if e.file_type().is_dir() {
+                fs::create_dir_all(&t).unwrap();
+            } else {
+                fs::copy(e.path(), &t).unwrap();
+            }
+        }
     }
 
     /// The four wizard-made themes of the demo RetroBat (dev/guides/README.md), read only: their
@@ -636,6 +738,10 @@ mod tests {
         fs::create_dir_all(&base).unwrap();
         for name in ["Arcade Nights", "Neon Sunset", "Pocket Pixels", "Rainy Sunday"] {
             let src = themes.join(name);
+            // The guide recordings make these; a freshly rebuilt demo doesn't have them yet.
+            if !src.join("theme.xml").is_file() {
+                continue;
+            }
             let out = base.join(format!("{name}.zip"));
             let made = gallery_zip(&src, name, &out, &themes, &names).unwrap();
             let left = made.folders;

@@ -147,6 +147,8 @@ export const api = {
   /** Restores a backup exactly; returns the backup made of the current state first. */
   restoreBackup: (dir: string, zip: string) => invoke<string>('restore_backup', { dir, zip }),
   exportTheme: (dir: string, dest: string) => invoke<string>('export_theme', { dir, dest }),
+  /** Share theme: the zip without console art copied from another installed theme (Import adds it back). */
+  shareTheme: (dir: string, dest: string, systems: string[]) => invoke<{ path: string; leftOut: number }>('share_theme', { dir, dest, systems }),
   /** Zips the theme as Share theme does and publishes it to the gallery at `site`. */
   publishTheme: (dir: string, name: string, maker: string, site: string, systems: string[]) => invoke<{ slug: string; url: string; leftOut: string[] }>('publish_theme', { dir, name, maker, site, systems }),
   writeBinary: (path: string, base64: string) => invoke<void>('write_binary', { path, base64 }),

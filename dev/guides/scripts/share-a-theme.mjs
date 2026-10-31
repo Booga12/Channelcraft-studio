@@ -15,7 +15,7 @@ export default {
     {
       id: 'share',
       title: 'Share your theme as one zip',
-      shows: 'File > "Share theme…" saves the theme first, adds a preview picture taken from the screen if it has none, and packs the whole theme into one .zip (here "Arcade Nights.zip" on the Desktop). The message says it is ready to share and that others add it with "Import a theme". In the real app a Windows save window asks where to put the zip; the clip skips it.',
+      shows: 'File > "Share theme…" saves the theme first, adds a preview picture taken from the screen if it has none, and packs the theme into one .zip (here "Arcade Nights.zip" on the Desktop). Console logos copied from another theme are left out; Import adds them back from the other person's themes. The message says it is ready to share and that others add it with "Import a theme". In the real app a Windows save window asks where to put the zip; the clip skips it.',
       uiLabels: ['File', 'Share theme…', 'Show file'],
       hold: 2200,
       async run(ctx) {
@@ -30,7 +30,7 @@ export default {
     {
       id: 'whats-inside',
       title: 'What\'s in the zip',
-      skipped: 'Looking inside the zip happens in Windows File Explorer ("Show file" in the message opens its folder), which can\'t be filmed in the browser version of the app. The zip holds the theme\'s folder: theme.xml and its other XML files, the pictures, fonts, sounds and videos it uses (with the fonts\' licence files), and preview.png. Nothing from your games or your RetroBat settings goes in.',
+      skipped: 'Looking inside the zip happens in Windows File Explorer ("Show file" in the message opens its folder), which can\'t be filmed in the browser version of the app. The zip holds the theme\'s folder: theme.xml and its other XML files, the pictures, fonts, sounds and videos it uses (with the fonts\' licence files), and preview.png. Console logos copied from another theme are left out (Import adds them back). Nothing from your games or your RetroBat settings goes in.',
     },
     {
       id: 'import',

@@ -669,6 +669,18 @@ mod tests {
         let made_zip = crate::gallery::gallery_zip(&made, "Neon", &zip, &themes, &names).unwrap();
         assert_eq!(made_zip.folders, vec!["logos", "consoles"]);
 
+        // A Share theme zip leaves the same art out, and Import fills it back in the same way.
+        // (Made before the gallery zip is imported below, so only carbon has this art.)
+        let shared_zip = work.join("neon-shared.zip");
+        assert_eq!(crate::gallery::share_zip(&made, "Neon", &shared_zip, &themes, &systems.iter().cloned().collect()).unwrap(), 2);
+        let dest_s = themes.join("Neon shared");
+        let note = import_into(&shared_zip, &themes, &dest_s, &systems).unwrap().unwrap();
+        assert!(note.contains("23 were copied from your theme “carbon”"), "{note}");
+        assert_eq!(fs::read_dir(dest_s.join("_inc/systems/logos")).unwrap().count(), 12);
+        assert_eq!(fs::read(dest_s.join("_inc/systems/logos/sys2.png")).unwrap(), mine);
+        assert!(!dest_s.join(crate::gallery::GALLERY_MANIFEST).exists());
+        fs::remove_dir_all(&dest_s).unwrap();
+
         let mut src = open_source(&zip).unwrap();
         let p = plan(&mut src, &themes).unwrap();
         assert!(p.gallery.is_some());
