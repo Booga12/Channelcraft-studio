@@ -12,7 +12,35 @@ pub(crate) type CmdResult<T> = Result<T, String>;
 // so slow work (zipping backups, scanning folders, downloads) never freezes the window.
 
 pub(crate) fn err<E: std::fmt::Display>(e: E) -> String {
-    e.to_string()
+    friendly(e.to_string())
+}
+
+/// The Windows error code in an error's text: "(os error 32)" from std, or an HRESULT such as
+/// "code: -2147024864" (0x80070020) from the trash crate.
+fn windows_code(msg: &str) -> Option<u32> {
+    let digits = |rest: &str| rest.trim_start().chars().take_while(|c| c.is_ascii_digit() || *c == '-').collect::<String>();
+    if let Some(i) = msg.find("os error ") {
+        return digits(&msg[i + 9..]).parse().ok();
+    }
+    let i = msg.find("code: ")?;
+    let n: i64 = digits(&msg[i + 6..]).parse().ok()?;
+    let h = n as i32 as u32;
+    // FACILITY_WIN32 HRESULTs carry the plain Windows code in the low 16 bits.
+    Some(if h & 0xFFFF_0000 == 0x8007_0000 { h & 0xFFFF } else { h })
+}
+
+/// Plain words, with what to do, for the Windows errors people run into (issue #27). Anything
+/// else is left as it is.
+pub(crate) fn friendly(msg: String) -> String {
+    let Some(code) = windows_code(&msg) else { return msg };
+    let words = match code {
+        32 | 33 => "Windows says a file or folder is in use. Close any window or program that has it open (File Explorer, RetroBat, a picture editor) and try again.",
+        5 => "Windows didn't allow it (access denied). Close any program using the theme's files, check the folder isn't read-only, and try again.",
+        39 | 112 => "The drive is full. Free up some space and try again.",
+        206 => "A file path is too long for Windows. Try a shorter theme name, or keep RetroBat in a shorter folder path.",
+        _ => return msg,
+    };
+    format!("{words} (Windows error {code})")
 }
 
 /// The RetroBat folder the user picked. Every write must land inside its themes folder
@@ -665,8 +693,36 @@ pub fn delete_theme(roots: State<Roots>, dir: String) -> CmdResult<()> {
     if active_theme(&root).is_some_and(|a| a.eq_ignore_ascii_case(&name)) {
         return Err(format!("\"{name}\" is the theme RetroBat is using. Pick another theme in RetroBat (or use “Use in RetroBat” on another one) before deleting it."));
     }
-    trash::delete(&path).map_err(|e| format!("Couldn't move the theme to the Recycle Bin: {e}"))?;
+    trash::delete(&path).map_err(|e| {
+        // Windows often says only "Some operations were aborted": look for a file another program
+        // has open, so the message can say which one.
+        if let Some((rel, why)) = busy_file(&path) {
+            return format!("Couldn't move the theme to the Recycle Bin: {} It's “{rel}”.", friendly(why));
+        }
+        let e = friendly(e.to_string());
+        if e.starts_with("Windows") || e.starts_with("The drive") || e.starts_with("A file path") {
+            return format!("Couldn't move the theme to the Recycle Bin. {e}");
+        }
+        format!("Couldn't move the theme to the Recycle Bin. Close any window or program showing this theme's folder (File Explorer, RetroBat, a command prompt) and try again. ({e})")
+    })?;
     Ok(())
+}
+
+/// The first file in `dir` that another program has open (so it can't be moved), and the error
+/// Windows gives for it.
+fn busy_file(dir: &Path) -> Option<(String, String)> {
+    for e in WalkDir::new(dir).into_iter().flatten().filter(|e| e.file_type().is_file()) {
+        let mut open = fs::OpenOptions::new();
+        open.read(true);
+        // No sharing: fails while any other program has the file open.
+        #[cfg(windows)]
+        std::os::windows::fs::OpenOptionsExt::share_mode(&mut open, 0);
+        if let Err(x) = open.open(e.path()) {
+            let rel = e.path().strip_prefix(dir).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+            return Some((rel, x.to_string()));
+        }
+    }
+    None
 }
 
 /// Theme option choices RetroBat saved for this theme, as raw `key=value` text.
@@ -786,6 +842,42 @@ pub fn close_retrobat() -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A file another program has open is found and named (issue #27). Read only: nothing is
+    /// moved to the Recycle Bin.
+    #[cfg(windows)]
+    #[test]
+    fn a_busy_file_is_named() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let d = std::env::temp_dir().join(format!("ccs-busy-{}", crate::storage::unique_id()));
+        fs::create_dir_all(d.join("_inc")).unwrap();
+        fs::write(d.join("theme.xml"), "<theme/>").unwrap();
+        fs::write(d.join("_inc/a.png"), "x").unwrap();
+        assert_eq!(busy_file(&d), None);
+        let h = fs::OpenOptions::new().read(true).share_mode(0).open(d.join("_inc/a.png")).unwrap();
+        let (rel, why) = busy_file(&d).unwrap();
+        assert_eq!(rel, "_inc/a.png");
+        assert!(friendly(why).contains("in use"));
+        drop(h);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn windows_errors_get_plain_words() {
+        // std's io::Error text.
+        let e = err(std::io::Error::from_raw_os_error(32));
+        assert!(e.starts_with("Windows says a file or folder is in use.") && e.ends_with("(Windows error 32)"), "{e}");
+        // The trash crate's text on Windows (HRESULT 0x80070020).
+        let e = friendly(r#"Couldn't move the theme to the Recycle Bin: Error during a `trash` operation: Os { code: -2147024864, description: "windows error: The process cannot access the file" }"#.into());
+        assert!(e.contains("in use") && e.ends_with("(Windows error 32)"), "{e}");
+        assert!(friendly("x (os error 5)".into()).contains("access denied"));
+        assert!(friendly("x (os error 112)".into()).starts_with("The drive is full."));
+        assert!(friendly("x (os error 206)".into()).contains("too long"));
+        // Not "os error 50" read as 5, and anything else left as it was.
+        assert_eq!(friendly("x (os error 50)".into()), "x (os error 50)");
+        assert_eq!(friendly("x is not a theme folder".into()), "x is not a theme folder");
+        assert_eq!(friendly("Server said code: 404".into()), "Server said code: 404");
+    }
 
     #[test]
     fn es_settings_are_replaced_or_added_and_the_rest_kept() {
