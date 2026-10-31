@@ -26,6 +26,29 @@ export function recoveryKey(this: Editor, dir: string) {
   return dir.replace(/[^A-Za-z0-9]+/g, '_').slice(-120);
 }
 
+/** Recovery files written in this session (by key), so one can be cleared when it's no longer needed. */
+const keptRecovery = new Set<string>();
+
+/**
+ * The kept files that still differ from the theme as it is now (`current` gives a file's text by
+ * its relative path, or undefined when the file is gone). Undoing back to the saved theme leaves
+ * nothing to restore (#43).
+ */
+export function changedSinceKept<F extends { rel: string; src: string }>(files: F[], current: (rel: string) => string | undefined): F[] {
+  return files.filter((f) => {
+    const now = current(f.rel);
+    return now !== undefined && now !== f.src;
+  });
+}
+
+/** Undone (or redone) back to the saved theme: the kept copy would only bring the undone edits back. */
+export function forgetRecoveryIfClean(this: Editor) {
+  const p = this.project;
+  if (!p || p.dirtyFiles.length) return;
+  const key = this.recoveryKey(p.dir);
+  if (keptRecovery.delete(key)) api.clearRecovery(key).catch(() => {});
+}
+
 /** Every 20 s: keep unsaved edits in a recovery file, and save if autosave is on and due. */
 export function startAutosave(this: Editor) {
   clearInterval(this.autosaveTimer);
@@ -33,7 +56,7 @@ export function startAutosave(this: Editor) {
     const p = this.project;
     if (!p || this.busy) return;
     const dirty = p.dirtyFiles;
-    if (!dirty.length) return;
+    if (!dirty.length) return this.forgetRecoveryIfClean();
     if (prefs.v.autosaveMinutes > 0 && Date.now() - this.lastSave > prefs.v.autosaveMinutes * 60_000) {
       this.save();
       return;
@@ -41,6 +64,7 @@ export function startAutosave(this: Editor) {
     if (prefs.v.keepRecovery) {
       const data = JSON.stringify({ dir: p.dir, time: Date.now(), files: dirty.map((f) => ({ rel: f.rel, src: f.src, base: f.savedSrc.length })) });
       api.saveRecovery(this.recoveryKey(p.dir), data).catch(() => {});
+      keptRecovery.add(this.recoveryKey(p.dir));
     }
   }, 20_000);
 }
@@ -55,16 +79,23 @@ export async function offerRecovery(this: Editor, project: ThemeProject) {
   }
   if (!raw) return;
   const data = JSON.parse(raw) as { time: number; files: { rel: string; src: string }[] };
+  const fileOf = (rel: string) => project.files.get(pathKey(join(project.dir, rel)));
+  const files = changedSinceKept(data.files, (rel) => fileOf(rel)?.src);
+  if (!files.length) {
+    // Nothing kept differs from the theme as saved: no question.
+    await api.clearRecovery(this.recoveryKey(project.dir)).catch(() => {});
+    return;
+  }
   const when = new Date(data.time).toLocaleString();
-  const restore = await ask(`ChannelCraft kept unsaved changes to ${data.files.length} file(s) of this theme from ${when}. Restore them?`, {
+  const restore = await ask(`ChannelCraft kept unsaved changes to ${files.length} file${files.length === 1 ? '' : 's'} of this theme from ${when}. Restore them?`, {
     title: 'Restore unsaved changes',
     kind: 'info',
     okLabel: 'Restore',
     cancelLabel: 'Discard them',
   });
   if (restore) {
-    for (const f of data.files) {
-      const file = project.files.get(pathKey(join(project.dir, f.rel)));
+    for (const f of files) {
+      const file = fileOf(f.rel);
       if (file) project.setSource(file, f.src);
     }
     this.rev++;
@@ -118,6 +149,7 @@ export async function save(this: Editor) {
     }
     this.rev++;
     this.lastSave = Date.now();
+    keptRecovery.delete(this.recoveryKey(p.dir));
     api.clearRecovery(this.recoveryKey(p.dir)).catch(() => {});
     const saved = `Saved ${dirty.length} file${dirty.length === 1 ? '' : 's'}${backup ? ' (backup made first)' : ''}`;
     const issues = this.healthIssues.length;

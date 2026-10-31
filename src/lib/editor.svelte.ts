@@ -674,6 +674,7 @@ export class Editor {
       this.undoStack = this.undoStack.slice(0, -1);
       this.redoStack = [...this.redoStack, { label: e.label, applied: [], parts: back.reverse(), time: 0 }];
       this.rev++;
+      this.forgetRecoveryIfClean();
       if (!quiet) this.notify(`Undid ${e.label}`);
       return;
     }
@@ -681,6 +682,7 @@ export class Editor {
     this.undoStack = this.undoStack.slice(0, -1);
     this.redoStack = [...this.redoStack, { label: e.label, applied: redo, time: 0 }];
     this.rev++;
+    this.forgetRecoveryIfClean();
     if (!quiet) this.notify(`Undid ${e.label}`);
   }
 
@@ -693,6 +695,7 @@ export class Editor {
       this.redoStack = this.redoStack.slice(0, -1);
       this.undoStack = [...this.undoStack, { label: e.label, applied: [], parts: again, time: 0 }];
       this.rev++;
+      this.forgetRecoveryIfClean();
       if (!quiet) this.notify(`Redid ${e.label}`);
       return;
     }
@@ -700,6 +703,7 @@ export class Editor {
     this.redoStack = this.redoStack.slice(0, -1);
     this.undoStack = [...this.undoStack, { label: e.label, applied: undo, time: 0 }];
     this.rev++;
+    this.forgetRecoveryIfClean();
     if (!quiet) this.notify(`Redid ${e.label}`);
   }
 
