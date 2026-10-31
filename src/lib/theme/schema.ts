@@ -228,6 +228,7 @@ export function fmtNum(n: number): string {
 /** Elements ES draws by default even if a theme only adjusts them; used for labels. */
 export const ELEMENT_LABELS: Record<string, string> = {
   background: 'Background',
+  bgsound: 'Menu music',
   logo: 'Logo',
   logoText: 'Logo text',
   gamelist: 'Game list',

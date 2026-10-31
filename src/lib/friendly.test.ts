@@ -27,6 +27,8 @@ describe('plain names for the parts designs add (#35)', () => {
     // The design's backdrop and the theme's own background don't share a name.
     expect(elementLabel('ccs_background')).toBe('Backdrop');
     expect(elementLabel('background')).toBe('Background');
+    expect(elementLabel('staticBackground')).toBe('Backdrop');
+    expect(elementLabel('bgsound')).toBe('Menu music');
   });
 
   it("has a plain name for every ccs_ part the designs make", async () => {

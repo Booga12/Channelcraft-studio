@@ -94,8 +94,12 @@
       return null;
     };
     let systems = ed.previewSystems;
+    // RetroBat only lists consoles that have games (#37): with a few of those, show just them
+    // (and the one being previewed). With fewer, keep them all so there's a row to design.
+    const withGames = systems.filter((s) => ed.gameSystems.includes(s.name) || s.name === ed.settings.system?.name);
+    if (withGames.length >= 3) systems = withGames;
     if (defs.length) {
-      const withLogo = ed.previewSystems.filter((s) => logoFor(s));
+      const withLogo = systems.filter((s) => logoFor(s));
       if (withLogo.length >= 3) systems = withLogo;
     }
     return { logo, logoText, systems, logoFor };
