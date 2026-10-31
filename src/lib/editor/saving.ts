@@ -200,12 +200,28 @@ export async function exportZip(this: Editor) {
   }
 }
 
-/** Captures the current screen as the theme's preview.png (shown in RetroBat and here). */
-export async function makePreviewImage(this: Editor) {
+/** Waits until the preview has drawn: its fonts and pictures loaded (at most `ms`). */
+async function stageReady(stage: HTMLElement, ms = 4000) {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await frame();
+  const end = Date.now() + ms;
+  await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, ms))]);
+  while (Date.now() < end && [...stage.querySelectorAll('img')].some((i) => !i.complete)) await new Promise((r) => setTimeout(r, 100));
+  await frame();
+}
+
+/**
+ * Captures the current screen as the theme's preview.png (shown in RetroBat and here). `quiet`:
+ * no message, and a failure is only a missing picture (used when a theme is made).
+ */
+export async function makePreviewImage(this: Editor, quiet = false) {
   const p = this.project;
+  // No page to capture (the tests run the editor without one).
+  if (typeof document === 'undefined') return;
   const stage = document.querySelector<HTMLElement>('.stage');
   if (!p || !stage) return;
   try {
+    if (quiet) await stageReady(stage);
     const { toPng } = await import('html-to-image');
     const { width, height } = screenSize(this.settings);
     const keep = this.selection;
@@ -217,8 +233,8 @@ export async function makePreviewImage(this: Editor) {
     p.setAssets(await api.listThemeFiles(p.dir));
     this.rev++;
     await this.refreshThemes();
-    this.notify('Saved preview.png from this screen');
+    if (!quiet) this.notify('Saved preview.png from this screen');
   } catch (e) {
-    this.notify(`Couldn't capture the screen: ${e}`, 'error');
+    if (!quiet) this.notify(`Couldn't capture the screen: ${e}`, 'error');
   }
 }

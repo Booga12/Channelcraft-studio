@@ -224,6 +224,11 @@ export async function applyStarter(this: Editor, choice: { design: string; artFr
   }
   task.step('save');
   await this.save();
+  // A picture for its card on Home (and in RetroBat's theme list), from the System menu (#31).
+  if (!p.assets.some((a) => a.rel.toLowerCase() === 'preview.png') && this.viewNames.includes('system')) {
+    if (this.view !== 'system') this.showScreen({ view: 'system', file: 'theme.xml' });
+    await this.makePreviewImage(true);
+  }
   this.notify(`“${p.name}” is ready${design ? ` with the ${design.label} design` : ''}. It's saved; your changes from here can be undone.`);
   // The starting point is the saved theme, not something to undo back past.
   this.undoStack = [];
