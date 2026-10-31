@@ -79,7 +79,7 @@ fn is_work_dir(name: &str) -> bool {
 }
 
 /// Every file of a theme that belongs in a backup or export (no temp files, no links).
-fn theme_files(dir: &Path) -> impl Iterator<Item = (PathBuf, String)> + '_ {
+pub(crate) fn theme_files(dir: &Path) -> impl Iterator<Item = (PathBuf, String)> + '_ {
     WalkDir::new(dir)
         .into_iter()
         .filter_entry(|e| e.depth() == 0 || !is_work_dir(&e.file_name().to_string_lossy()))
@@ -347,9 +347,23 @@ impl<R: Read> Read for HashingReader<R> {
     }
 }
 
+/// How a zip differs from the one Share theme makes (the gallery's, in gallery.rs).
+pub(crate) struct ZipPlan<'a> {
+    /// Files (by relative path) not put in the zip.
+    pub leave_out: &'a dyn Fn(&str) -> bool,
+    /// Whether a file is stored rather than deflated.
+    pub store: &'a dyn Fn(&Path, &str) -> bool,
+    /// One more file, deflated, at the theme's top: its name and contents.
+    pub extra: Option<(&'a str, &'a [u8])>,
+}
+
 /// Zips a theme to `dest` (through a temp file, so an existing zip survives a failure). With a
 /// `note`, a backup manifest with every file's hash is added.
-fn zip_theme(src: &Path, prefix: &str, dest: &Path, note: Option<&str>) -> CmdResult<()> {
+pub(crate) fn zip_theme(src: &Path, prefix: &str, dest: &Path, note: Option<&str>) -> CmdResult<()> {
+    zip_theme_as(src, prefix, dest, note, None)
+}
+
+pub(crate) fn zip_theme_as(src: &Path, prefix: &str, dest: &Path, note: Option<&str>, plan: Option<&ZipPlan>) -> CmdResult<()> {
     if is_inside(dest, src) {
         return Err("Choose a place outside the theme folder for the zip.".into());
     }
@@ -364,11 +378,21 @@ fn zip_theme(src: &Path, prefix: &str, dest: &Path, note: Option<&str>) -> CmdRe
         let store = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored).large_file(true);
         let mut hashes = BTreeMap::new();
         for (path, rel) in theme_files(src) {
-            let packed = matches!(file_kind(&path), "image" | "video" | "sound" | "font") && !rel.to_lowercase().ends_with(".svg");
+            if plan.is_some_and(|p| (p.leave_out)(&rel)) {
+                continue;
+            }
+            let packed = match plan {
+                Some(p) => (p.store)(&path, &rel),
+                None => matches!(file_kind(&path), "image" | "video" | "sound" | "font") && !rel.to_lowercase().ends_with(".svg"),
+            };
             zip.start_file(format!("{prefix}/{rel}"), if packed { store } else { deflate }).map_err(err)?;
             let mut reader = HashingReader { inner: fs::File::open(&path).map_err(|e| format!("{rel}: {e}"))?, hash: Sha256::new() };
             std::io::copy(&mut reader, &mut zip).map_err(err)?;
             hashes.insert(rel, hex(&reader.hash.finalize()));
+        }
+        if let Some((name, bytes)) = plan.and_then(|p| p.extra) {
+            zip.start_file(format!("{prefix}/{name}"), deflate).map_err(err)?;
+            zip.write_all(bytes).map_err(err)?;
         }
         if let Some(note) = note {
             let m = Manifest { version: 1, app: "ChannelCraft Studio".into(), project: project_key(src), theme: prefix.into(), created: now_secs(), note: note.into(), prefix: prefix.into(), files: hashes };
@@ -387,7 +411,7 @@ fn zip_theme(src: &Path, prefix: &str, dest: &Path, note: Option<&str>) -> CmdRe
     result
 }
 
-fn theme_name(dir: &Path) -> String {
+pub(crate) fn theme_name(dir: &Path) -> String {
     dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "theme".into())
 }
 

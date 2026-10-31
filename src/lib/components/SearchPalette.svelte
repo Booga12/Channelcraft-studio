@@ -11,7 +11,7 @@
   import Icon, { TYPE_ICONS } from './Icon.svelte';
   import { PANELS } from './editor/ToolDock.svelte';
   import { screenLabel } from './editor/screens';
-  import { closeTheme, exportTheme, launchRetroBat, reloadFromDisk, shareTheme, tryInRetroBat } from './editor/actions';
+  import { closeTheme, exportTheme, launchRetroBat, publishTheme, reloadFromDisk, shareTheme, tryInRetroBat } from './editor/actions';
 
   interface Entry {
     group: string;
@@ -66,6 +66,7 @@
       cmd('Launch RetroBat', 'play', launchRetroBat),
       cmd('Export theme as zip…', 'folder', exportTheme),
       cmd('Share theme (one file with a preview)…', 'folder', shareTheme),
+      cmd('Publish to the gallery…', 'folder', publishTheme),
       cmd('Save as my design…', 'sparkle', () => (ed.showSaveDesign = true)),
       cmd('Import a design (.ccdesign)…', 'sparkle', () => ed.importMyDesign()),
       cmd('Make preview.png from this screen', 'image', () => ed.makePreviewImage()),

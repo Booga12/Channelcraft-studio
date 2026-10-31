@@ -839,7 +839,8 @@ export function demoBridge(demoRoot, h) {
       } finally {
         if (existsSync(stage)) rmSync(stage, { recursive: true, force: true });
       }
-      return dest;
+      // The console art of a gallery download isn't filled in here (see importing.rs).
+      return { path: dest, note: null };
     },
 
     // assets.rs

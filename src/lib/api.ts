@@ -147,6 +147,8 @@ export const api = {
   /** Restores a backup exactly; returns the backup made of the current state first. */
   restoreBackup: (dir: string, zip: string) => invoke<string>('restore_backup', { dir, zip }),
   exportTheme: (dir: string, dest: string) => invoke<string>('export_theme', { dir, dest }),
+  /** Zips the theme as Share theme does and publishes it to the gallery at `site`. */
+  publishTheme: (dir: string, name: string, maker: string, site: string, systems: string[]) => invoke<{ slug: string; url: string; leftOut: string[] }>('publish_theme', { dir, name, maker, site, systems }),
   writeBinary: (path: string, base64: string) => invoke<void>('write_binary', { path, base64 }),
   copyFolderIntoTheme: (src: string, themeDir: string, destRel: string) => invoke<number>('copy_folder_into_theme', { src, themeDir, destRel }),
   saveRecovery: (key: string, data: string) => invoke<void>('save_recovery', { key, data }),
@@ -171,7 +173,8 @@ export const api = {
   /** Looks inside a theme .zip or folder (nothing is written): what would come in and what wouldn't. */
   inspectThemeImport: (source: string) => invoke<ImportPlan>('inspect_theme_import', { source }),
   /** Imports a theme .zip or folder as a new theme folder; returns its path. */
-  importTheme: (source: string, name: string) => invoke<string>('import_theme', { source, name }),
+  /** `systems` are the systems' theme names, to find console art for a gallery download. */
+  importTheme: (source: string, name: string, systems: string[]) => invoke<{ path: string; note: string | null }>('import_theme', { source, name, systems }),
   importAsset: (themeDir: string, src: string, destRelDir: string) =>
     invoke<string>('import_asset', { themeDir, src, destRelDir }),
   /** The asset library folder (in the app's data folder); created if needed. */

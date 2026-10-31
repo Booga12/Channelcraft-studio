@@ -215,6 +215,7 @@ export async function makePreviewImage(this: Editor) {
     this.selection = keep;
     await api.writeBinary(join(p.dir, 'preview.png'), url.split(',')[1]);
     p.setAssets(await api.listThemeFiles(p.dir));
+    this.rev++;
     await this.refreshThemes();
     this.notify('Saved preview.png from this screen');
   } catch (e) {

@@ -214,7 +214,7 @@
           <div><strong>ChannelCraft Studio {version}</strong><small>A theme editor for RetroBat. Not made by or affiliated with the RetroBat team.</small></div>
         </div>
         <div class="row">
-          <div><strong>Your files stay on your computer</strong><small>Themes, games and settings are only read and written on this PC. The app only goes online to download a free font (from the Google Fonts collection on GitHub), to check for updates, and, if you turn it on in Preview, to fill missing pictures from libretro-thumbnails.</small></div>
+          <div><strong>Your files stay on your computer</strong><small>Themes, games and settings are only read and written on this PC. The app only goes online to download a free font (from the Google Fonts collection on GitHub), to check for updates, to publish a theme to the gallery (only when you choose to), and, if you turn it on in Preview, to fill missing pictures from libretro-thumbnails.</small></div>
         </div>
         <div class="row">
           <div><strong>Licence: MIT</strong><small>Free to use, copy, change and share, including the changes you make. It comes without any warranty.</small></div>

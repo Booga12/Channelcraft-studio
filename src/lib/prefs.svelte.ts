@@ -42,6 +42,8 @@ const DEFAULTS = {
   /** The dock panel stays open while working on the preview. */
   pinPanel: false,
   panelWidth: 320,
+  /** The maker name last used to publish to the gallery. */
+  galleryMaker: '',
   inspectorWidth: 340,
 };
 

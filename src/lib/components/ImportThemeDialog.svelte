@@ -44,9 +44,9 @@
     busy = true;
     error = '';
     try {
-      const path = await api.importTheme(source, name.trim());
+      const { path, note } = await api.importTheme(source, name.trim(), ed.systems.map((s) => s.theme));
       await ed.refreshThemes();
-      ed.notify(`“${name.trim()}” was imported`);
+      ed.notify(note ? `“${name.trim()}” was imported. ${note}` : `“${name.trim()}” was imported`);
       onimported(path);
     } catch (e) {
       error = String(e);

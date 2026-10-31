@@ -5,6 +5,7 @@ mod assets;
 mod explorer;
 mod intro;
 mod problems;
+mod gallery;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -155,6 +156,7 @@ pub fn run() {
             problems::read_problem_log,
             problems::problem_log_path,
             problems::clear_problem_log,
+            gallery::publish_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

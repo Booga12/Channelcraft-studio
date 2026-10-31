@@ -411,16 +411,22 @@ pub fn copy_folder_into_theme(roots: State<Roots>, src: String, theme_dir: Strin
     }
     let dest = PathBuf::from(&theme_dir).join(&dest_rel);
     ensure_writable(&roots, &dest)?;
-    fs::create_dir_all(&dest).map_err(err)?;
+    copy_art_folder(&src_p, &dest, None)
+}
+
+/// Copies the files of `src` (not its subfolders) into `dest`, keeping files already there. Only
+/// files that pass the import checks (and are of kind `want`, if given) are copied.
+pub(crate) fn copy_art_folder(src: &Path, dest: &Path, want: Option<crate::importing::Kind>) -> CmdResult<usize> {
+    fs::create_dir_all(dest).map_err(err)?;
     let mut n = 0;
-    for e in fs::read_dir(&src_p).map_err(err)?.flatten() {
+    for e in fs::read_dir(src).map_err(err)?.flatten() {
         let p = e.path();
         if !p.is_file() {
             continue;
         }
         let target = dest.join(e.file_name());
         // Only real pictures and the like; anything else in that folder stays behind.
-        if !target.exists() && crate::importing::check_file(&p, None).is_ok() {
+        if !target.exists() && crate::importing::check_file(&p, want).is_ok() {
             fs::copy(&p, &target).map_err(err)?;
             n += 1;
         }
