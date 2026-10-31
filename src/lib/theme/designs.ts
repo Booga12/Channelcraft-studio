@@ -681,7 +681,9 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         marquee('0.53 0.15', '0.2 0.08', '0.5 0'),
         title('0.425 0.26', '0.21 0.08', '0.03'),
         ...details(0.425, 0.355, 0.21, 0.034),
-        screenshot('0.53 0.57', '0.2 0.14'),
+        // Its top (0.515, plus the frame) clears the last details row (to 0.487); its bottom
+        // (0.655) the description (#39).
+        screenshot('0.53 0.585', '0.2 0.14'),
         desc('0.425 0.67', '0.21 0.22', '0.017'),
         panel(d, c, 'ccs_listpanel', '0.67 0.12', '0.3 0.8', 10),
         gameList(d, c, '0.685 0.14', '0.27 0.76'),
