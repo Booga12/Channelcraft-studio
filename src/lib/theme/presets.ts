@@ -8,7 +8,7 @@ import { DESIGNS, designClock, designElements, designGameLayout, designVars, ele
 import type { Change } from './edits';
 import { DEPTH_VAR, MOTION_VAR, type Depth } from './depth';
 import type { ThemeProject } from './project';
-import type { Resolution } from './resolver';
+import type { Resolution, ResolvedElement } from './resolver';
 import { SYSTEM_LAYOUTS, systemLayout, type SystemLayout } from './systemLayouts';
 import { GAME_LAYOUTS, gameLayout, type GameLayout } from './gameLayouts';
 import { screenOf, tuningOf } from './animations';
@@ -419,17 +419,21 @@ export function designChanges(project: ThemeProject, res: Resolution, design: De
     const names = new Set(els.map((e) => e.name));
     const extras = new Set(els.filter((e) => isDesignExtra(e.name)).map((e) => e.name));
     const body = [...elementsMarkup(els, extras, view), ...kept];
-    if (hideOwn) {
-      // Only the theme's own parts: ones defined just in ChannelCraft's block are kept or dropped above.
-      const block = designBlock(project, view);
-      const onlyInBlock = (e: { defs: { file: unknown; node: XElement }[] }) => !!block && e.defs.every((d) => d.file === project.entry && d.node.start >= block.view.start && d.node.end <= block.view.end);
-      for (const e of res.views.get(view)?.elements.values() ?? []) {
-        if (onlyInBlock(e)) continue;
-        if (e.extra && !names.has(e.name) && !isDesignExtra(e.name)) body.push(`  <${e.type} name="${e.name}" extra="${e.extra}">`, '    <visible>false</visible>', `  </${e.type}>`);
-        // The theme's own game parts the design doesn't place (e.g. md_image on the video screen,
-        // where the design shows md_video) would stay where the theme put them, over the design.
-        else if (!e.extra && (e.name.startsWith('md_') || e.name === 'folderpath') && !names.has(e.name) && isShown(e)) body.push(`  <${e.type} name="${e.name}">`, '    <visible>false</visible>', `  </${e.type}>`);
+    // Only the theme's own parts: ones defined just in ChannelCraft's block are kept or dropped above.
+    const block = designBlock(project, view);
+    const inBlock = (d: { file: unknown; node: XElement }) => !!block && d.file === project.entry && d.node.start >= block.view.start && d.node.end <= block.view.end;
+    const onlyInBlock = (e: { defs: { file: unknown; node: XElement }[] }) => e.defs.every(inBlock);
+    // Shown by the theme itself: the block being replaced (which may hide it now) doesn't count.
+    const shownByTheme = (e: ResolvedElement) => isShown({ props: new Map([['visible', (e.history.get('visible') ?? []).filter((d) => !inBlock(d)).at(-1) ?? { value: 'true' }]]) });
+    for (const e of res.views.get(view)?.elements.values() ?? []) {
+      if (onlyInBlock(e)) continue;
+      if (e.extra) {
+        if (hideOwn && !names.has(e.name) && !isDesignExtra(e.name)) body.push(`  <${e.type} name="${e.name}" extra="${e.extra}">`, '    <visible>false</visible>', `  </${e.type}>`);
       }
+      // The theme's own game parts the design doesn't place (e.g. md_image on the video screen,
+      // where the design shows md_video) would stay where the theme put them, over the design.
+      // Hidden even when the theme keeps its decorations: the design shows that data itself.
+      else if ((e.name.startsWith('md_') || e.name === 'folderpath') && !names.has(e.name) && shownByTheme(e)) body.push(`  <${e.type} name="${e.name}">`, '    <visible>false</visible>', `  </${e.type}>`);
     }
     const title = view === 'system' ? `design ${design.label} [design-${design.id}], layout ${layout.label} [layout:${layout.id}]` : `design ${design.label} [design-${design.id}], game layout ${game.label} [game:${game.id}]`;
     out.push(blockChange(project, res, view, title, body));
