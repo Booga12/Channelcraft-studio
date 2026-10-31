@@ -10,6 +10,7 @@
   import { cards } from '$lib/simpleCards.svelte';
   import { familyFor, fontState } from '$lib/preview.svelte';
   import { join } from '$lib/path';
+  import { countLines, MIN_FIT_SIZE, textRects } from '$lib/textFit';
   import { fontName } from '$lib/theme/fonts';
   import { fmtNum } from '$lib/theme/schema';
   import { resolveAsset, type ResolvedElement } from '$lib/theme/resolver';
@@ -110,10 +111,7 @@
   function measure(): number {
     const node = document.querySelector<HTMLElement>(`.stage .el[data-name="${CSS.escape(el.name)}"] .text`);
     if (!node || !node.textContent?.trim()) return 1;
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    const tops = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
-    return Math.max(1, tops.size);
+    return countLines(textRects(node));
   }
   $effect(() => {
     ed.rev;
@@ -128,8 +126,8 @@
   async function fit() {
     fitting = true;
     let s = size;
-    for (let i = 0; i < 14 && measure() > 1 && s > 0.012; i++) {
-      s = Math.round(s * 0.93 * 1000) / 1000;
+    for (let i = 0; i < 14 && measure() > 1 && s > MIN_FIT_SIZE; i++) {
+      s = Math.max(MIN_FIT_SIZE, Math.round(s * 0.93 * 1000) / 1000);
       ed.setProp(el.name, 'fontSize', fmtNum(s), { coalesce: `fit.${el.name}` });
       await tick();
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
