@@ -247,6 +247,15 @@ export const ELEMENT_LABELS: Record<string, string> = {
   md_players: 'Players',
   md_lastplayed: 'Last played',
   md_playcount: 'Play count',
+  // RetroBat's own labels ("Genre: "...), written by RetroBat in its language.
+  md_lbl_rating: 'Rating label',
+  md_lbl_releasedate: 'Release date label',
+  md_lbl_developer: 'Developer label',
+  md_lbl_publisher: 'Publisher label',
+  md_lbl_genre: 'Genre label',
+  md_lbl_players: 'Players label',
+  md_lbl_lastplayed: 'Last played label',
+  md_lbl_playcount: 'Play count label',
   md_name: 'Game name',
   // RetroBat's loading screens (splash.xml, gamesplash.xml).
   splash: 'Screen colour',

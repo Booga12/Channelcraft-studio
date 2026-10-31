@@ -169,6 +169,10 @@ export interface DesignEl {
   animSpeed?: number;
   /** Nested blocks written as they are (a <shader>, for example). */
   blocks?: string[];
+  /** Left and width of the group this part belongs to; a mirrored screen flips the group, not its order. */
+  group?: [number, number];
+  /** No depth text shadow (small text it would smudge). */
+  noShadow?: boolean;
 }
 
 export interface DesignContext {
@@ -191,7 +195,43 @@ export interface DesignContext {
   movingBg?: string | null;
 }
 
-const LABELS_AND_EXTRAS = ['md_lbl_rating', 'md_lbl_releasedate', 'md_lbl_developer', 'md_lbl_publisher', 'md_lbl_genre', 'md_lbl_players', 'md_lbl_lastplayed', 'md_lbl_playcount', 'md_publisher', 'md_playcount', 'md_lastplayed'];
+// The game details show RetroBat's own labels for genre, developer and players (see details()).
+const LABELS_AND_EXTRAS = ['md_lbl_rating', 'md_lbl_releasedate', 'md_lbl_publisher', 'md_lbl_lastplayed', 'md_lbl_playcount', 'md_publisher', 'md_playcount', 'md_lastplayed'];
+
+/** RetroBat's labels the game details use, shown in front of their values. */
+export const DETAIL_LABELS = ['md_lbl_genre', 'md_lbl_developer', 'md_lbl_players'];
+
+/** Rough width of a character against the font size: pixel fonts are square, some others wide. */
+function charWidth(font: string): number {
+  if (['pressstart', 'silkscreen'].includes(font)) return 1;
+  if (['orbitron', 'audiowide', 'monoton', 'russo', 'lilita', 'bungee', 'michroma', 'cinzel', 'creepster'].includes(font)) return 0.75;
+  return 0.58;
+}
+
+/** Whether the design's dim text is darker than its background (a light design). */
+function isLightDesign(d: Design): boolean {
+  const lum = (h: string) => {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  return lum(d.palette.dim) < lum(d.palette.bg);
+}
+
+/** Screen-width fraction one screen-height unit takes on a 16:9 screen. */
+const ASPECT = 9 / 16;
+
+/** Sizes of the game details block (see details() in gameScreen), shared with the tests. */
+export function detailsGeometry(font: string, w: number, step: number) {
+  const row = Math.min(0.03, step);
+  // Pixel fonts are very wide: their labels are smaller still. VT323's letters are small for its size.
+  const labelFs = charWidth(font) === 1 ? 0.014 : font === 'vt323' ? 0.02 : 0.018;
+  // RetroBat writes its labels itself ("Developer: ", translated), so their width isn't known.
+  // A fixed column wide enough for the English "Developer: " keeps every value lined up; a longer
+  // translation is cut with "..." by RetroBat instead of running into the value.
+  const labelW = Math.min(w * 0.45, 11 * charWidth(font) * labelFs * ASPECT + 0.008);
+  const ratingW = 5 * step * 0.85 * ASPECT;
+  return { row, labelFs, valueFs: 0.022, labelW, ratingW, yearX: Math.max(labelW, ratingW + 0.012), favX: w * 0.55, height: step * 3 + row };
+}
 
 function text(d: Design, c: DesignContext, name: string, props: Record<string, string>, opts: { title?: boolean; dim?: boolean; native?: boolean } = {}): DesignEl {
   const p = d.palette;
@@ -326,14 +366,29 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
     // Full system names are long ("Super Nintendo Entertainment System"): give the text room.
     return text(d, c, 'logoText', { pos, origin, size: `${Math.max(Number(w), 0.36)} 0.05`, fontSize: '0.03', alignment: align, zIndex: '50' }, { title: true, native: true });
   };
-  const details = (x: number, y: number, w: number, step = 0.036) => [
-    { type: 'rating', name: 'md_rating', props: { pos: `${x} ${y}`, size: `0 ${(step * 0.85).toFixed(3)}`, color: K(d, c, 'designAccent'), unfilledColor: K(d, c, 'designRatingOff'), visible: 'true', zIndex: '40' } } as DesignEl,
-    { ...text(d, c, 'md_releasedate', { pos: `${(x + w * 0.42).toFixed(3)} ${y}`, fontSize: '0.024', format: '%Y', zIndex: '40' }, { dim: true, native: true }), type: 'datetime' },
-    text(d, c, 'md_genre', { pos: `${x} ${(y + step).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', zIndex: '40' }, { dim: true, native: true }),
-    text(d, c, 'md_developer', { pos: `${(x + w * 0.5).toFixed(3)} ${(y + step).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', zIndex: '40' }, { dim: true, native: true }),
-    text(d, c, 'md_players', { pos: `${x} ${(y + step * 2).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', zIndex: '40' }, { dim: true, native: true }),
-    text(d, c, 'ccs_favorite', { pos: `${(x + w * 0.5).toFixed(3)} ${(y + step * 2).toFixed(3)}`, size: `${(w * 0.5).toFixed(3)} 0.03`, fontSize: '0.022', text: '★ Favourite', color: K(d, c, 'designAccent'), visible: '{game:favorite}', zIndex: '40' }),
-  ];
+  // Stars and year, then one row each for genre, developer and players: a small dim label
+  // (RetroBat's own md_lbl_*) in a column on the left, the value beside it.
+  const details = (x: number, y: number, w: number, step = 0.036): DesignEl[] => {
+    const g = detailsGeometry(d.font, w, step);
+    const f = (n: number) => n.toFixed(3);
+    const rowY = (i: number) => f(y + step * i);
+    // On a light design the dim colour is already faint: no fading and no shadow, or it smudges.
+    const light = isLightDesign(d);
+    const label = (name: string, i: number): DesignEl => ({ ...text(d, c, name, { pos: `${f(x)} ${rowY(i)}`, size: `${f(g.labelW)} ${f(g.row)}`, fontSize: String(g.labelFs), opacity: light ? '1' : '0.85', zIndex: '40' }, { dim: true, native: true }), noShadow: light });
+    const value = (name: string, i: number, width: number) => text(d, c, name, { pos: `${f(x + g.labelW)} ${rowY(i)}`, size: `${f(width)} ${f(g.row)}`, fontSize: String(g.valueFs), zIndex: '40' }, { dim: true, native: true });
+    const els: DesignEl[] = [
+      { type: 'rating', name: 'md_rating', props: { pos: `${f(x)} ${f(y)}`, size: `0 ${f(step * 0.85)}`, color: K(d, c, 'designAccent'), unfilledColor: K(d, c, 'designRatingOff'), visible: 'true', zIndex: '40' } },
+      { ...text(d, c, 'md_releasedate', { pos: `${f(x + g.yearX)} ${f(y)}`, fontSize: '0.024', format: '%Y', zIndex: '40' }, { dim: true, native: true }), type: 'datetime' },
+      label('md_lbl_genre', 1),
+      value('md_genre', 1, w - g.labelW),
+      label('md_lbl_developer', 2),
+      value('md_developer', 2, w - g.labelW),
+      label('md_lbl_players', 3),
+      value('md_players', 3, g.favX - g.labelW - 0.004),
+      text(d, c, 'ccs_favorite', { pos: `${f(x + g.favX)} ${rowY(3)}`, size: `${f(w - g.favX)} ${f(g.row)}`, fontSize: String(g.valueFs), alignment: 'right', text: '★ Favourite', color: K(d, c, 'designAccent'), visible: '{game:favorite}', zIndex: '40' }),
+    ];
+    return els.map((e) => ({ ...e, group: [x, w] }));
+  };
   const desc = (pos: string, size: string, fs = '0.02') => text(d, c, 'md_description', { pos, size, fontSize: fs, lineSpacing: '1.45', verticalAlignment: 'top', zIndex: '40' }, { dim: true, native: true });
   const title = (pos: string, size: string, fs = '0.046', align = 'left') => ({ ...text(d, c, 'ccs_title', { pos, size, fontSize: fs, alignment: align, text: '{game:name}', zIndex: '45', ...tilt((d.tilt ?? 0) / 2) }, { title: true }), anim: d.anims?.title });
   const marquee = (pos: string, max: string, origin = '0 0') => art('md_marquee', pos, max, 46, { origin });
@@ -352,10 +407,10 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
       { type: 'imagegrid', name: 'gamegrid', props: { pos: '0.04 0.13', size: '0.92 0.6', autoLayout: '6 2', margin: '0.01 0.02', padding: '0.01 0.01 0.01 0.01', imageSource: 'boxart', autoLayoutSelectedZoom: '1.1', animateSelection: 'true', scrollDirection: 'vertical', centerSelection: 'false', scrollbarColor: '00000000', zIndex: '30' } },
       { type: 'gridtile', name: 'default', props: { backgroundImage: `${c.art}/tile.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designTile'), imageColor: 'FFFFFFDD', padding: `${pad} ${pad} ${pad} ${pad}`, selectionMode: 'full', imageSizeMode: 'maxSize' } },
       { type: 'gridtile', name: 'selected', props: { backgroundImage: `${c.art}/tile-selected.svg`, backgroundCornerSize: `${corner} ${corner}`, backgroundColor: K(d, c, 'designAccent'), imageColor: 'FFFFFFFF', padding: `${pad} ${pad} ${pad} ${pad}` } },
-      panel(d, c, 'ccs_infopanel', '0.04 0.76', '0.92 0.17', 10),
-      title('0.06 0.775', '0.42 0.05', '0.032'),
-      ...details(0.06, 0.83, 0.42, 0.03),
-      desc('0.5 0.785', '0.28 0.13', '0.015'),
+      panel(d, c, 'ccs_infopanel', '0.04 0.74', '0.92 0.19', 10),
+      title('0.06 0.75', '0.42 0.05', '0.032'),
+      ...details(0.06, 0.8, 0.42, 0.028),
+      desc('0.5 0.765', '0.28 0.15', '0.015'),
       screenshot('0.86 0.845', '0.12 0.13'),
     );
     return els;
@@ -369,7 +424,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
       marquee('0.05 0.12', '0.3 0.12', '0 0'),
       title('0.05 0.25', '0.5 0.06', '0.046'),
       ...details(0.05, 0.32, 0.4, 0.034),
-      desc('0.05 0.43', '0.4 0.1', '0.017'),
+      desc('0.05 0.46', '0.4 0.1', '0.017'),
       screenshot('0.8 0.27', '0.3 0.3'),
       { type: 'gamecarousel', name: 'gamecarousel', props: { type: 'horizontal', pos: '0 0.58', size: '1 0.34', logoSize: '0.12 0.24', maxLogoCount: '7', logoScale: '1.35', minLogoOpacity: '0.5', imageSource: 'boxart', color: '00000000', zIndex: '40' } },
     );
@@ -392,8 +447,8 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         })(),
         screenshot('0.14 0.42', '0.18 0.2'),
         desc('0.04 0.56', '0.2 0.16', '0.016'),
-        title('0.08 0.74', '0.68 0.06', '0.042', 'center'),
-        ...details(0.2, 0.82, 0.44, 0.032),
+        title('0.08 0.725', '0.68 0.06', '0.042', 'center'),
+        ...details(0.2, 0.8, 0.44, 0.032),
         panel(d, c, 'ccs_listpanel', '0.74 0.1', '0.23 0.82', 20, K(d, c, 'designListPanel')),
         gameList(d, c, '0.75 0.12', '0.21 0.78'),
       );
@@ -407,10 +462,10 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         marquee('0.05 0.28', '0.34 0.16', '0 0'),
         title('0.05 0.44', '0.5 0.06', '0.05'),
         gameList(d, c, '0.05 0.54', '0.42 0.38'),
-        ...details(0.53, 0.53, 0.42, 0.034),
-        boxart('0.6 0.73', '0.1 0.2'),
-        screenshot('0.81 0.73', '0.2 0.2'),
-        desc('0.53 0.85', '0.43 0.09', '0.015'),
+        ...details(0.53, 0.52, 0.42, 0.03),
+        boxart('0.6 0.745', '0.1 0.2'),
+        screenshot('0.81 0.745', '0.2 0.2'),
+        desc('0.53 0.855', '0.43 0.085', '0.015'),
       );
       break;
     case 'sidebar':
@@ -425,8 +480,8 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         panel(d, c, 'ccs_infopanel', '0.34 0.62', '0.62 0.32', 10),
         boxart('0.415 0.78', '0.1 0.26'),
         title('0.49 0.64', '0.46 0.06', '0.04'),
-        ...details(0.49, 0.71, 0.46, 0.032),
-        desc('0.49 0.81', '0.46 0.11', '0.016'),
+        ...details(0.49, 0.7, 0.46, 0.032),
+        desc('0.49 0.83', '0.46 0.1', '0.016'),
       );
       break;
     case 'tvguide':
@@ -439,7 +494,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         marquee('0.58 0.18', '0.2 0.08', '0 0'),
         boxart('0.91 0.25', '0.08 0.14'),
         ...details(0.58, 0.29, 0.28, 0.034),
-        desc('0.58 0.4', '0.38 0.14', '0.017'),
+        desc('0.58 0.43', '0.38 0.13', '0.017'),
         panel(d, c, 'ccs_listpanel', '0.04 0.58', '0.92 0.34', 20, K(d, c, 'designListPanel')),
         gameList(d, c, '0.06 0.6', '0.88 0.3'),
       );
@@ -455,7 +510,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         panel(d, c, 'ccs_infopanel', '0.42 0.12', '0.24 0.78', 10),
         marquee('0.54 0.15', '0.2 0.08', '0.5 0'),
         screenshot('0.54 0.36', '0.2 0.16'),
-        ...details(0.44, 0.5, 0.2, 0.034),
+        ...details(0.44, 0.47, 0.2, 0.034),
         desc('0.44 0.62', '0.2 0.26', '0.016'),
         panel(d, c, 'ccs_listpanel', '0.69 0.12', '0.28 0.8', 20, K(d, c, 'designListPanel')),
         gameList(d, c, '0.705 0.14', '0.25 0.76'),
@@ -473,8 +528,8 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         rot(screenshot('0.52 0.27', '0.26 0.28'), 2),
         rot(panel(d, c, 'ccs_infopanel', '0.37 0.48', '0.3 0.44', 8), -1.5),
         title('0.39 0.5', '0.26 0.06', '0.036'),
-        ...details(0.39, 0.58, 0.26, 0.032),
-        desc('0.39 0.69', '0.26 0.2', '0.016'),
+        ...details(0.39, 0.57, 0.26, 0.032),
+        desc('0.39 0.7', '0.26 0.19', '0.016'),
         rot(panel(d, c, 'ccs_listpanel', '0.7 0.1', '0.27 0.82', 20, K(d, c, 'designListPanel')), 1.5),
         gameList(d, c, '0.715 0.13', '0.24 0.76'),
       );
@@ -489,7 +544,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         { ...text(d, c, 'ccs_vs', { pos: '0.33 0.74', size: '0.1 0.1', fontSize: '0.08', alignment: 'center', text: 'VS', color: K(d, c, 'designAccent'), zIndex: '44' }, { title: true }), anim: 'pulse' },
         title('0.42 0.14', '0.31 0.06', '0.042'),
         marquee('0.42 0.22', '0.2 0.07', '0 0'),
-        ...details(0.42, 0.32, 0.31, 0.034),
+        ...details(0.42, 0.31, 0.31, 0.034),
         screenshot('0.575 0.56', '0.3 0.2'),
         desc('0.42 0.7', '0.31 0.2', '0.016'),
         panel(d, c, 'ccs_listpanel', '0.76 0.12', '0.21 0.8', 20, K(d, c, 'designListPanel')),
@@ -544,7 +599,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         marquee('0.11 0.62', '0.18 0.08', '0.5 0'),
         screenshot('0.89 0.3', '0.18 0.24'),
         ...details(0.8, 0.48, 0.18, 0.03),
-        desc('0.8 0.6', '0.18 0.3', '0.014'),
+        desc('0.8 0.61', '0.18 0.29', '0.014'),
       );
       break;
     case 'scrapbook':
@@ -556,8 +611,8 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         rot(screenshot('0.46 0.3', '0.24 0.24'), 4),
         rot(marquee('0.36 0.5', '0.2 0.08', '0 0'), -3),
         rot(title('0.06 0.66', '0.5 0.07', '0.05'), -2),
-        ...details(0.06, 0.76, 0.5, 0.034),
-        desc('0.06 0.865', '0.5 0.07', '0.015'),
+        ...details(0.06, 0.745, 0.5, 0.03),
+        desc('0.06 0.87', '0.5 0.07', '0.015'),
         rot(panel(d, c, 'ccs_listpanel', '0.62 0.1', '0.35 0.82', 20, K(d, c, 'designListPanel')), 2),
         gameList(d, c, '0.64 0.13', '0.31 0.76'),
       );
@@ -582,15 +637,15 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         fanart('1E'),
         systemLogo('0.5 0.04', '0.5 0', '0.26 0.07'),
         systemLogoText('0.5 0.04', '0.5 0', '0.26 0.07'),
-        panel(d, c, 'ccs_listpanel', '0.2 0.14', '0.6 0.64', 20, K(d, c, 'designListPanel')),
-        gameList(d, c, '0.22 0.16', '0.56 0.6', 'center'),
-        panel(d, c, 'ccs_infopanel', '0.06 0.8', '0.88 0.13', 10),
-        boxart('0.11 0.865', '0.07 0.11'),
-        screenshot('0.2 0.865', '0.1 0.11'),
-        title('0.26 0.81', '0.36 0.045', '0.03'),
-        ...details(0.26, 0.86, 0.36, 0.026),
-        desc('0.64 0.815', '0.22 0.1', '0.015'),
-        marquee('0.935 0.865', '0.06 0.06', '1 0.5'),
+        panel(d, c, 'ccs_listpanel', '0.2 0.14', '0.6 0.6', 20, K(d, c, 'designListPanel')),
+        gameList(d, c, '0.22 0.16', '0.56 0.56', 'center'),
+        panel(d, c, 'ccs_infopanel', '0.06 0.76', '0.88 0.18', 10),
+        boxart('0.11 0.85', '0.07 0.14'),
+        screenshot('0.2 0.85', '0.1 0.14'),
+        title('0.26 0.77', '0.36 0.045', '0.03'),
+        ...details(0.26, 0.82, 0.36, 0.026),
+        desc('0.64 0.775', '0.22 0.15', '0.015'),
+        marquee('0.935 0.85', '0.06 0.06', '1 0.5'),
       );
       break;
     case 'cinema':
@@ -602,7 +657,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         marquee('0.05 0.09', '0.36 0.15'),
         title('0.05 0.26', '0.42 0.06', '0.05'),
         ...details(0.05, 0.34, 0.4),
-        desc('0.05 0.46', '0.4 0.16'),
+        desc('0.05 0.49', '0.4 0.16'),
         screenshot('0.15 0.77', '0.2 0.2'),
         boxart('0.34 0.77', '0.1 0.2'),
         panel(d, c, 'ccs_listpanel', '0.65 0.14', '0.32 0.74', 20, K(d, c, 'designListPanel')),
@@ -625,7 +680,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         panel(d, c, 'ccs_infopanel', '0.41 0.12', '0.24 0.8', 10),
         marquee('0.53 0.15', '0.2 0.08', '0.5 0'),
         title('0.425 0.26', '0.21 0.08', '0.03'),
-        ...details(0.425, 0.36, 0.21, 0.034),
+        ...details(0.425, 0.355, 0.21, 0.034),
         screenshot('0.53 0.57', '0.2 0.14'),
         desc('0.425 0.67', '0.21 0.22', '0.017'),
         panel(d, c, 'ccs_listpanel', '0.67 0.12', '0.3 0.8', 10),
@@ -642,7 +697,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         screenshot('0.5 0.34', '0.36 0.36'),
         marquee('0.8 0.34', '0.2 0.16', '0.5 0.5'),
         title('0.1 0.555', '0.8 0.055', '0.04', 'center'),
-        ...details(0.1, 0.63, 0.32, 0.034),
+        ...details(0.1, 0.615, 0.32, 0.03),
         desc('0.46 0.625', '0.44 0.11', '0.017'),
         panel(d, c, 'ccs_listpanel', '0.25 0.76', '0.5 0.17', 20),
         gameList(d, c, '0.27 0.77', '0.46 0.15', 'center'),
@@ -659,7 +714,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         screenshot('0.35 0.41', '0.22 0.3'),
         marquee('0.47 0.24', '0.12 0.06', '1 0.5'),
         ...details(0.05, 0.585, 0.42),
-        desc('0.05 0.705', '0.42 0.19'),
+        desc('0.05 0.73', '0.42 0.17'),
         panel(d, c, 'ccs_listpanel', '0.52 0.14', '0.45 0.78', 10),
         gameList(d, c, '0.54 0.16', '0.41 0.74'),
       );
@@ -794,6 +849,12 @@ function mirrored(els: DesignEl[]): DesignEl[] {
     const [x, y] = pos.split(' ').map(Number);
     const [ox, oy] = String(p.origin ?? '0 0').split(' ').map(Number);
     const w = Number(String(p.size ?? p.maxSize ?? '0 0').split(' ')[0]) || 0;
+    if (e.group) {
+      // Parts of a group (label, then value) move with it and stay in reading order.
+      const [gx, gw] = e.group;
+      p.pos = `${r3(1 - gx - gw + (x - gx))} ${y}`;
+      return { ...e, props: p };
+    }
     if (w) {
       const left = x - ox * w;
       p.pos = `${r3(1 - left - w + ox * w)} ${y}`;
@@ -838,7 +899,7 @@ function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game', o: { 
     if (lv.parallax && e.name === PARALLAX[kind] && !e.anim) e = { ...e, anim: PARALLAX_ANIM };
     if (lv.parallax && e.name === 'ccs_deco') e = { ...e, anim: DRIFT_ANIM };
     // Text shadows: titles on Subtle, all text on Strong; text that glows keeps its glow.
-    if (ts && !hidden && TEXT_TYPES.has(e.type) && !e.props.glowColor && (ts.on === 'all' || TITLES.includes(e.name))) e = { ...e, props: { ...e.props, ...textFxProps({ kind: 'shadow', color: '000000', size: ts.size, strength: ts.strength, dx: ts.offset, dy: ts.offset }, false) } };
+    if (ts && !hidden && !e.noShadow && TEXT_TYPES.has(e.type) && !e.props.glowColor && (ts.on === 'all' || TITLES.includes(e.name))) e = { ...e, props: { ...e.props, ...textFxProps({ kind: 'shadow', color: '000000', size: ts.size, strength: ts.strength, dx: ts.offset, dy: ts.offset }, false) } };
     // Reflections: logos on a shelf or floor, and tiles in a single row.
     if (lv.reflect && kind === 'system' && o.floor && e.type === 'image' && e.name === 'logo') e = { ...e, props: { ...e.props, reflexion: `${lv.reflect} 0` } };
     if (lv.reflect && kind === 'system' && o.oneRow && e.type === 'gridtile') e = { ...e, props: { ...e.props, reflexion: `${r2(lv.reflect * 0.8)} 0` } };

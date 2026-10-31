@@ -61,6 +61,9 @@ export const NATIVE_TYPES: Record<string, string> = {
   md_players: 'text',
   md_playcount: 'text',
   md_name: 'text',
+  md_lbl_genre: 'text',
+  md_lbl_developer: 'text',
+  md_lbl_players: 'text',
   systemcarousel: 'carousel',
   systemInfo: 'text',
   imagegrid: 'imagegrid',
@@ -119,7 +122,7 @@ function round(n: number) {
 export const TILE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect x="1" y="1" width="94" height="94" rx="22" fill="#ffffff"/></svg>\n';
 
 /** RetroBat's own game parts, which a layout moves on themes without a design. */
-const PLAIN_PARTS = ['logo', 'gamelist', 'md_image', 'md_marquee', 'md_rating', 'md_releasedate', 'md_description', 'md_genre', 'md_developer', 'md_players'];
+const PLAIN_PARTS = ['logo', 'gamelist', 'md_image', 'md_marquee', 'md_rating', 'md_releasedate', 'md_description', 'md_genre', 'md_developer', 'md_players', 'md_lbl_genre', 'md_lbl_developer', 'md_lbl_players'];
 const PLACEMENT = ['pos', 'size', 'maxSize', 'origin', 'alignment', 'fontSize'];
 
 /** Hand-made placements for themes without a design (RetroBat's own parts only). */
@@ -357,8 +360,10 @@ export function layoutChanges(project: ThemeProject, res: Resolution, preset: La
     for (const [name, props] of Object.entries(preset.elements)) {
       if (name === 'md_video' && view !== 'video') continue;
       const type = resolved?.elements.get(name)?.type ?? NATIVE_TYPES[name] ?? 'text';
-      // Secondary fields are only tidied away if the theme actually shows them.
-      if (TIDY[name] && !resolved?.elements.has(name)) continue;
+      // Secondary fields are only tidied away if the theme actually shows them. A label goes
+      // with its value: RetroBat draws its labels even when a theme doesn't mention them.
+      const label = name.startsWith('md_lbl_') && resolved?.elements.has(name.replace('lbl_', ''));
+      if (TIDY[name] && !resolved?.elements.has(name) && !label) continue;
       body.push(`  <${type} name="${name}">`);
       for (const [k, v] of Object.entries(props)) body.push(`    <${k}>${v}</${k}>`);
       body.push(`  </${type}>`);
