@@ -137,5 +137,7 @@ export async function publishToGallery(this: Editor, name: string, maker: string
   if (this.dirtyCount) await this.save();
   if (this.dirtyCount) throw 'The theme couldn’t be saved, so it wasn’t published.';
   if (!this.hasPreview()) await this.makePreviewFromSystemMenu();
+  // The gallery refuses a theme without one, so say why here rather than after the upload (#46).
+  if (!this.hasPreview()) throw 'The preview picture couldn’t be made from the System menu. Open the System menu and use Make preview.png from this screen (in the menu or Ctrl+K), then publish again.';
   return api.publishTheme(p.dir, name.trim(), maker.trim(), GALLERY_SITE, this.systems.map((s) => s.theme));
 }

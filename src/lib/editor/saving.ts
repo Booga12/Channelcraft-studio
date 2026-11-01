@@ -283,7 +283,18 @@ export async function makePreviewImage(this: Editor, quiet = false, still: () =>
     const used = new Set([...stage.querySelectorAll('*')].flatMap((n) => getComputedStyle(n).fontFamily.split(',').map((f) => f.trim().replace(/^["']|["']$/g, ''))));
     const fontEmbedCSS = await themeFontCss((fam) => used.has(fam));
     if (!still()) return;
-    const url = await toPng(stage, { width, height, pixelRatio: 1, fontEmbedCSS, style: { transform: 'none' }, filter: (n) => !(n instanceof HTMLElement && n.classList.contains('overlay')) });
+    // A picture that can't be loaded (a missing console logo) is left blank, as on screen,
+    // instead of failing the whole capture (#46).
+    const url = await toPng(stage, {
+      width,
+      height,
+      pixelRatio: 1,
+      fontEmbedCSS,
+      style: { transform: 'none' },
+      imagePlaceholder: BLANK_PNG,
+      onImageErrorHandler: () => {},
+      filter: (n) => !(n instanceof HTMLElement && n.classList.contains('overlay')),
+    });
     this.selection = keep;
     await api.writeBinary(join(p.dir, 'preview.png'), url.split(',')[1]);
     p.setAssets(await api.listThemeFiles(p.dir));
@@ -291,6 +302,9 @@ export async function makePreviewImage(this: Editor, quiet = false, still: () =>
     await this.refreshThemes();
     if (!quiet) this.notify('Saved preview.png from this screen');
   } catch (e) {
-    if (!quiet) this.notify(`Couldn't capture the screen: ${e}`, 'error');
+    if (!quiet) this.notify(`Couldn't capture the screen: ${e instanceof Event ? 'a picture or font on it couldn’t be read' : e}`, 'error');
   }
 }
+
+/** A see-through 1×1 picture, drawn where a picture can't be loaded. */
+const BLANK_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
