@@ -148,6 +148,8 @@ export function demoBridge(demoRoot, h) {
       rel.split('/').some((part) => !part || part === '.' || part === '..' || /[. ]$/.test(part) || /[<>"|?*]/.test(part) || /[\x00-\x1f]/.test(part));
     if (bad) throw `Unsafe file path in the request: ${rel}`;
   }
+  // Marks a theme still being set up; its first save removes it (storage.rs UNFINISHED, #22).
+  const UNFINISHED = '.channelcraft-unfinished';
   function validThemeName(name) {
     const bad = !name.trim() || /[\\/:*?"<>|]/.test(name) || name.startsWith('.') || /[ .]$/.test(name);
     if (bad) throw `"${name}" is not a valid folder name`;
@@ -155,6 +157,11 @@ export function demoBridge(demoRoot, h) {
   function newThemePath(name) {
     validThemeName(name);
     const dest = join(themesDir(), name.trim());
+    // A theme left half-built under this name goes to the (demo) Recycle Bin (#22, as commands.rs).
+    if (existsSync(join(dest, UNFINISHED))) {
+      mkdirSync(L.recycle, { recursive: true });
+      renameSync(dest, must(join(L.recycle, `${name.trim()} (${uniqueId()})`)));
+    }
     if (existsSync(dest)) throw `A theme folder named "${name.trim()}" already exists`;
     return dest;
   }
@@ -464,7 +471,7 @@ export function demoBridge(demoRoot, h) {
     detect_retrobat: () => L.retrobat,
     list_themes: () =>
       readdirSync(themesDir())
-        .filter((name) => !name.startsWith('.') && existsSync(join(themesDir(), name, 'theme.xml')))
+        .filter((name) => !name.startsWith('.') && existsSync(join(themesDir(), name, 'theme.xml')) && !existsSync(join(themesDir(), name, UNFINISHED)))
         .map((name) => {
           const p = join(themesDir(), name);
           const preview = ['preview.png', 'preview.jpg', '_inc/images/preview.png', 'screenshot.png'].map((f) => join(p, f)).find((f) => existsSync(f)) ?? null;
@@ -539,6 +546,8 @@ export function demoBridge(demoRoot, h) {
         if (s) open.stamps.set(relKey(f.rel), s);
         else open.stamps.delete(relKey(f.rel));
       });
+      // Saved once: no longer half-built (#22).
+      rmSync(join(dir, UNFINISHED), { force: true });
     },
     backup_theme: ({ dir, keep, note }) => {
       const zip = makeBackup(must(dir), note ?? 'before saving');
@@ -658,7 +667,7 @@ export function demoBridge(demoRoot, h) {
     },
     create_theme_from_starter: ({ name }) => {
       const dest = newThemePath(name);
-      copyDirStaged(h.starterDir, dest, true);
+      copyDirStaged(h.starterDir, dest, true, true);
       return dest;
     },
     make_theme_dirs: ({ themeDir, rels }) => {
@@ -985,7 +994,7 @@ export function demoBridge(demoRoot, h) {
     },
   };
 
-  function copyDirStaged(src, dest, plain = false) {
+  function copyDirStaged(src, dest, plain = false, unfinished = false) {
     const stage = must(join(dirname(dest), `.channelcraft-copy-${uniqueId()}`));
     try {
       mkdirSync(stage, { recursive: true });
@@ -998,7 +1007,7 @@ export function demoBridge(demoRoot, h) {
             if (d === src && isWorkDir(name)) continue;
             mkdirSync(join(stage, rel), { recursive: true });
             walk(p);
-          } else if (st.isFile() && !name.endsWith('.ccs-tmp')) {
+          } else if (st.isFile() && !name.endsWith('.ccs-tmp') && !isWorkDir(name)) {
             if (plain) {
               mkdirSync(dirname(join(stage, rel)), { recursive: true });
               copyFileSync(p, join(stage, rel));
@@ -1007,6 +1016,7 @@ export function demoBridge(demoRoot, h) {
         }
       };
       walk(src);
+      if (unfinished) writeFileSync(join(stage, UNFINISHED), 'ChannelCraft is still setting up this theme.');
       if (existsSync(dest)) throw `${dest} already exists`;
       renameSync(stage, dest);
     } finally {

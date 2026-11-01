@@ -270,7 +270,8 @@ pub fn list_themes(roots: State<Roots>) -> CmdResult<Vec<ThemeInfo>> {
     for entry in fs::read_dir(&dir).map_err(err)?.flatten() {
         let p = entry.path();
         // Folders starting with "." are ChannelCraft's own work folders (or hidden ones).
-        if !p.join("theme.xml").is_file() || entry.file_name().to_string_lossy().starts_with('.') {
+        // A theme still being set up (or left half-built) isn't listed (#22).
+        if !p.join("theme.xml").is_file() || entry.file_name().to_string_lossy().starts_with('.') || p.join(crate::storage::UNFINISHED).is_file() {
             continue;
         }
         let preview = ["preview.png", "preview.jpg", "_inc/images/preview.png", "screenshot.png"]
@@ -301,7 +302,8 @@ pub fn list_theme_files(dir: String) -> CmdResult<Vec<FileEntry>> {
     let base = PathBuf::from(&dir);
     let mut out = Vec::new();
     for e in WalkDir::new(&base).into_iter().flatten() {
-        if !e.file_type().is_file() {
+        // ChannelCraft's own marker files (such as the unfinished-theme marker) aren't theme files.
+        if !e.file_type().is_file() || e.file_name().to_string_lossy().starts_with(crate::storage::WORK_PREFIX) {
             continue;
         }
         let rel = e.path().strip_prefix(&base).map_err(err)?.to_string_lossy().replace('\\', "/");
@@ -654,6 +656,10 @@ fn fetch_ofl(dir_url: &str, dest: &Path) -> CmdResult<()> {
 pub(crate) fn new_theme_path(roots: &Roots, name: &str) -> CmdResult<PathBuf> {
     valid_theme_name(name)?;
     let dest = themes_dir(&roots.root()?).join(name.trim());
+    // A theme left half-built under this name (#22) goes to the Recycle Bin to make way.
+    if dest.join(crate::storage::UNFINISHED).is_file() {
+        trash::delete(&dest).map_err(|e| format!("A half-made theme named \"{}\" is in the way and couldn't be moved to the Recycle Bin: {e}", name.trim()))?;
+    }
     if dest.exists() {
         return Err(format!("A theme folder named \"{}\" already exists", name.trim()));
     }
