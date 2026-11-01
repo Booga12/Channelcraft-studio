@@ -27,6 +27,7 @@
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
   import Gamepad2Icon from '@lucide/svelte/icons/gamepad-2';
+  import Layers2Icon from '@lucide/svelte/icons/layers-2';
   import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
   import PlayIcon from '@lucide/svelte/icons/play';
   import PauseIcon from '@lucide/svelte/icons/pause';
@@ -162,6 +163,43 @@
     if (!v) return [];
     return [...v.elements.values()]
       .filter((e) => e.name !== 'clock' && OVERLAY_TYPES.has(e.type) && isVisible(e))
+      .sort((a, b) => zOf(a) - zOf(b) || a.order - b.order);
+  });
+  /**
+   * What's shown faded behind the Screen overlay while editing it, as RetroBat draws the overlay
+   * over every screen (#29). Preview only; the choice is kept for the session.
+   */
+  const BEHIND = [
+    { id: 'gamelist', label: 'Game list behind', views: ['detailed', 'video', 'basic'] },
+    { id: 'system', label: 'System menu behind', views: ['system'] },
+    { id: 'none', label: 'Nothing behind', views: [] },
+  ] as const;
+  let behind = $state<(typeof BEHIND)[number]['id']>('gamelist');
+  const behindView = $derived.by(() => {
+    if (ed.view !== 'screen' || ed.screenFile !== 'theme.xml' || splash) return null;
+    const views = BEHIND.find((b) => b.id === behind)!.views as readonly string[];
+    return views.find((n) => (ed.res?.views.get(n)?.elements.size ?? 0) > 0) ?? null;
+  });
+  const behindParts = $derived.by(() => {
+    const n = behindView;
+    const v = n ? ed.res?.views.get(n) : null;
+    if (!n || !v) return [];
+    // As on the game list itself: logoText only when the logo picture is missing.
+    const logo = v.elements.get('logo');
+    const hasLogo = n !== 'system' && !!logo && !!ed.project && isVisible(logo) && !!resolveAssetWithFallbacks(logo, 'path', ed.res!, ed.project, ed.env);
+    return [...v.elements.values()]
+      .filter(
+        (e) =>
+          isVisible(e) &&
+          !(hasLogo && e.name === 'logoText') &&
+          !isCarouselPart(n, e) &&
+          !(n === 'basic' && e.name.startsWith('md_')) &&
+          e.type !== 'gridtile' &&
+          !e.name.startsWith('gridtile') &&
+          e.type !== 'sound' &&
+          e.type !== 'gameextras' &&
+          !e.type.startsWith('menu'),
+      )
       .sort((a, b) => zOf(a) - zOf(b) || a.order - b.order);
   });
   /** Parts hidden in the preview only (the eye in Layers) that RetroBat still draws on this screen. */
@@ -704,6 +742,14 @@
                   <div class:filling={ed.playAnimations} style:width="60%" style:background="linear-gradient(to right, {cssColor(bar.activeColor)}, {cssColor(bar.activeColorEnd)})"></div>
                 </div>
               {/if}
+              {#if behindView}
+                <!-- Faded, under the overlay and not selectable: only to judge the overlay against (#29). -->
+                <div class="behind" aria-hidden="true">
+                  {#each behindParts as el (el.name)}
+                    <PreviewElement {el} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view={behindView} locked animate={false} {play} {slide} />
+                  {/each}
+                </div>
+              {/if}
               {#each drawn as el, i (el.name)}
                 <PreviewElement
                   z={splash ? 1000 + i + (i >= splash.barIndex ? 1 : 0) : undefined}
@@ -807,7 +853,16 @@
         <TriangleAlertIcon />{hiddenHere.length} hidden here only, RetroBat still shows {hiddenHere.length === 1 ? 'it' : 'them'}
       </button>
     {/if}
-    {#if splash?.ignored.length}
+    {#if ed.view === 'screen' && ed.screenFile === 'theme.xml' && !splash}
+      <button
+        class="pill note"
+        title="RetroBat draws the Screen overlay over every screen. This shows one faded behind it, in the preview only, so you can judge the overlay. Click to change what's behind."
+        onclick={() => (behind = BEHIND[(BEHIND.findIndex((b) => b.id === behind) + 1) % BEHIND.length].id)}
+      >
+        <Layers2Icon />{BEHIND.find((b) => b.id === behind)!.label}
+      </button>
+    {/if}
+        {#if splash?.ignored.length}
       <span class="pill warn-note" title="On a loading screen RetroBat only draws its background, label and progress bar, plus elements marked extra=&quot;true&quot;. Not drawn: {splash.ignored.join(', ')}">
         <TriangleAlertIcon />{splash.ignored.length} RetroBat won't draw here
       </span>
@@ -956,6 +1011,22 @@
     padding: 0 10px;
     color: var(--warn);
     font-size: 12px;
+  }
+  .note {
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .note :global(svg) {
+    width: 14px;
+    height: 14px;
+  }
+  .behind {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.35;
+    pointer-events: none;
   }
   .warn-note :global(svg) {
     width: 14px;
