@@ -295,7 +295,7 @@ export async function makePreviewImage(this: Editor, quiet = false, still: () =>
       // It remembers pictures by address; without the part after "?" every file the dev server
       // sends (/__dev/file?path=…) would count as one picture on the next capture.
       includeQueryParams: true,
-      filter: (n: Node) => !(n instanceof HTMLElement && n.classList.contains('overlay')) && copyable(n),
+      filter: (n: Node) => !(n instanceof HTMLElement && (n.classList.contains('overlay') || n.classList.contains('behind'))) && copyable(n),
     };
     // Without the selection outline. It comes back after, unless something else was picked meanwhile.
     const keep = this.selection;
