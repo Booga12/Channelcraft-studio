@@ -9,6 +9,7 @@ import { ask, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { join, pathKey } from '../path';
 import { prefs } from '../prefs.svelte';
 import { screenSize } from '../theme/context';
+import { themeFontCss } from '../preview.svelte';
 
 /** Makes a backup zip of the open theme once per session, before anything is written to it. */
 export async function ensureBackup(this: Editor) {
@@ -271,7 +272,8 @@ export async function makePreviewImage(this: Editor, quiet = false) {
     const keep = this.selection;
     this.selection = [];
     await new Promise((r) => setTimeout(r, 50));
-    const url = await toPng(stage, { width, height, pixelRatio: 1, style: { transform: 'none' }, filter: (n) => !(n instanceof HTMLElement && n.classList.contains('overlay')) });
+    const fontEmbedCSS = await themeFontCss();
+    const url = await toPng(stage, { width, height, pixelRatio: 1, fontEmbedCSS, style: { transform: 'none' }, filter: (n) => !(n instanceof HTMLElement && n.classList.contains('overlay')) });
     this.selection = keep;
     await api.writeBinary(join(p.dir, 'preview.png'), url.split(',')[1]);
     p.setAssets(await api.listThemeFiles(p.dir));

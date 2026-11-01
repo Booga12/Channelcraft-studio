@@ -27,6 +27,30 @@ export function familyFor(abs: string | null): string {
   return `'${fam}', ${fallback}`;
 }
 
+/**
+ * @font-face rules for the theme fonts with the files inlined, for pictures made from the preview:
+ * html-to-image only sees fonts from stylesheets, not ones added with the FontFace API (#44).
+ */
+export async function themeFontCss(): Promise<string> {
+  const rules = await Promise.all(
+    [...families].map(async ([abs, fam]) => {
+      try {
+        const blob = await (await fetch(fileUrl(abs))).blob();
+        const data = await new Promise<string>((ok, fail) => {
+          const r = new FileReader();
+          r.onload = () => ok(String(r.result));
+          r.onerror = () => fail(r.error);
+          r.readAsDataURL(blob);
+        });
+        return `@font-face { font-family: '${fam}'; src: url("${data}"); }`;
+      } catch {
+        return '';
+      }
+    }),
+  );
+  return rules.filter(Boolean).join('\n');
+}
+
 export interface Box {
   x: number;
   y: number;
