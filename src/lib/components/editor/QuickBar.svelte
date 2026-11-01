@@ -53,12 +53,13 @@
 
 <div class="ui-new flex flex-col gap-2.5 border-b px-3.5 py-3">
   {#if !many && el}
-    <div class="grid grid-cols-4 gap-1.5">
+    <!-- In a narrow inspector the % goes, so the numbers keep their room (#41). -->
+    <div class="@container grid grid-cols-4 gap-1.5">
       {#each FIELDS as f (f.k)}
         <label class="group flex h-8 items-center gap-1 rounded-lg bg-muted/60 pr-1.5 pl-2 ring-1 ring-transparent transition-all focus-within:bg-background focus-within:ring-ring hover:bg-muted" title={f.help}>
           <span class="text-[10.5px] font-semibold text-muted-foreground">{f.k}</span>
           <input class="no-spin w-full min-w-0 bg-transparent text-right font-mono text-xs tabular-nums outline-none" type="number" step="0.1" value={f.value} oninput={(e) => f.set(e.currentTarget.valueAsNumber)} />
-          <span class="text-[10px] text-muted-foreground">%</span>
+          <span class="hidden text-[10px] text-muted-foreground @[270px]:inline">%</span>
         </label>
       {/each}
     </div>
@@ -66,14 +67,15 @@
     <p class="m-0 flex items-center gap-2 text-sm font-medium"><LayersIcon class="size-4 text-muted-foreground" />{ed.selection.length} elements selected</p>
   {/if}
 
-  <div class="flex items-center gap-0.5">
+  <!-- Wraps in a narrow inspector: the right-hand group moves to a second line (#41). -->
+  <div class="flex flex-wrap items-center gap-x-0.5 gap-y-1">
     <IconButton label={many ? 'Align left edges' : 'Move to the left edge'} onclick={() => ed.align('left')}><AlignStartVerticalIcon /></IconButton>
     <IconButton label={many ? 'Align centres' : 'Centre across the screen'} onclick={() => ed.align('hcenter')}><AlignCenterVerticalIcon /></IconButton>
     <IconButton label={many ? 'Align right edges' : 'Move to the right edge'} onclick={() => ed.align('right')}><AlignEndVerticalIcon /></IconButton>
     <IconButton label={many ? 'Align top edges' : 'Move to the top'} onclick={() => ed.align('top')}><AlignStartHorizontalIcon /></IconButton>
     <IconButton label={many ? 'Align middles' : 'Centre down the screen'} onclick={() => ed.align('vcenter')}><AlignCenterHorizontalIcon /></IconButton>
     <IconButton label={many ? 'Align bottom edges' : 'Move to the bottom'} onclick={() => ed.align('bottom')}><AlignEndHorizontalIcon /></IconButton>
-    <span class="flex-1"></span>
+    <div class="ml-auto flex items-center gap-0.5">
     {#if many}
       <IconButton label="Space evenly across" disabled={ed.selection.length < 3} onclick={() => ed.distribute('h')}><DistributeHIcon /></IconButton>
       <IconButton label="Space evenly down" disabled={ed.selection.length < 3} onclick={() => ed.distribute('v')}><DistributeVIcon /></IconButton>
@@ -89,5 +91,6 @@
       </IconButton>
       <IconButton label="Delete this element" onclick={remove}><Trash2Icon /></IconButton>
     {/if}
+    </div>
   </div>
 </div>

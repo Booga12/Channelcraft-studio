@@ -60,8 +60,31 @@
   // The preview fits in the space the floating parts leave free.
   const GAP = 12;
   const DOCK = 64;
-  const insetL = $derived(GAP + DOCK + (open ? 8 + prefs.v.panelWidth : 0) + 16);
-  const insetR = $derived(inspecting ? GAP + prefs.v.inspectorWidth + 16 : 20);
+  const PANEL_MIN = 260;
+  const INSPECTOR_MIN = 280;
+  // Both side panels at your widths can leave the screen cramped (#41). Then both go to their
+  // narrowest. Your saved widths stay as they are and come back once there's room. Resizing a
+  // panel while they're narrow only lasts until a panel closes, so it never changes whether
+  // they're crowded (worked out from the saved widths) halfway through a drag.
+  let hostW = $state(0);
+  let held = $state<{ panelWidth?: number; inspectorWidth?: number }>({});
+  $effect(() => {
+    if (!open || !inspecting) held = {};
+  });
+  const crowded = $derived.by(() => {
+    if (!open || !inspecting || !hostW) return false;
+    const free = hostW - (GAP + DOCK + 8 + prefs.v.panelWidth + 16) - (GAP + prefs.v.inspectorWidth + 16);
+    return free < hostW * 0.55;
+  });
+  const panelW = $derived(held.panelWidth ?? (crowded ? Math.min(prefs.v.panelWidth, PANEL_MIN) : prefs.v.panelWidth));
+  const inspectorW = $derived(held.inspectorWidth ?? (crowded ? Math.min(prefs.v.inspectorWidth, INSPECTOR_MIN) : prefs.v.inspectorWidth));
+  /** A width set by hand: saved when there's room; while crowded, kept only until a panel closes. */
+  function widen(which: 'panelWidth' | 'inspectorWidth', v: number) {
+    if (crowded || held[which] !== undefined) held[which] = v;
+    else prefs.v[which] = v;
+  }
+  const insetL = $derived(GAP + DOCK + (open ? 8 + panelW : 0) + 16);
+  const insetR = $derived(inspecting ? GAP + inspectorW + 16 : 20);
   const insetB = 56;
 
   /** Clicking the empty area around the screen closes a panel that isn't pinned. */
@@ -240,7 +263,7 @@
 
 <div class="flex h-screen flex-col overflow-hidden bg-[var(--canvas)]">
   <TopBar />
-  <div class="relative min-h-0 flex-1">
+  <div class="relative min-h-0 flex-1" bind:clientWidth={hostW}>
     <main
       class="absolute inset-0 flex flex-col"
       style:--inset-l="{insetL}px"
@@ -276,7 +299,8 @@
           <FloatingPanel
             title={info.label}
             subtitle={info.help}
-            bind:width={prefs.v.panelWidth}
+            min={PANEL_MIN}
+            bind:width={() => panelW, (v) => widen('panelWidth', v)}
             onresized={() => prefs.save()}
             pinned={prefs.v.pinPanel}
             onpin={() => prefs.set('pinPanel', !prefs.v.pinPanel)}
@@ -296,8 +320,8 @@
           title={ed.selection.length > 1 ? `${ed.selection.length} elements` : el ? (ed.simple ? elementLabel(el.name) : el.name) : 'Inspector'}
           subtitle={ed.selection.length > 1 ? 'Line them up, or change them together' : el ? typeLabel(el.type) : ''}
           edge="left"
-          min={280}
-          bind:width={prefs.v.inspectorWidth}
+          min={INSPECTOR_MIN}
+          bind:width={() => inspectorW, (v) => widen('inspectorWidth', v)}
           onresized={() => prefs.save()}
           onclose={closeInspector}
         >
