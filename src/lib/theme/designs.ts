@@ -253,6 +253,39 @@ const col = (c: string) => (c.length === 6 ? `${c}FF` : c);
  * The colours a design's parts use, by the shared variable name each is written as when
  * `DesignContext.vars` is set. A colour set (RetroBat's Color set option) redefines them.
  */
+const luminance = (h: string) => {
+  const lin = (i: number) => {
+    const c = (parseInt(h.slice(i, i + 2), 16) || 0) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
+};
+const ratio = (a: string, b: string) => {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+};
+const blend = (a: string, b: string, t: number) => [0, 2, 4].map((i) => Math.round((parseInt(a.slice(i, i + 2), 16) || 0) * (1 - t) + (parseInt(b.slice(i, i + 2), 16) || 0) * t).toString(16).padStart(2, '0')).join('').toUpperCase();
+/** An RRGGBBAA colour laid over an RRGGBB one. */
+const laid = (top: string, under: string) => blend(under, top, top.length >= 8 ? parseInt(top.slice(6, 8), 16) / 255 : 1);
+
+/**
+ * The accent as small text ("★ Favourite", a console's game count): the accent itself when it
+ * reads well (3:1) on the background and on panels, else darkened (on light designs) or lightened
+ * until it does (#45). Panels count with the shadow a solid one floats on.
+ */
+export function accentForText(accent: string, bg: string, bg2: string, panel: string): string {
+  const light = luminance(bg) > 0.3;
+  // withDepth draws no shadow under see-through panels on light designs.
+  const shadowed = !light || panel.length < 8 || parseInt(panel.slice(6, 8), 16) >= 0x80;
+  const backs = [bg, bg2].flatMap((b) => [b, laid(panel, b), ...(shadowed ? [laid(panel, laid('00000055', b))] : [])]).map((b) => b.slice(0, 6));
+  const toward = light ? '000000' : 'FFFFFF';
+  for (let t = 0; t <= 1; t += 0.01) {
+    const c = blend(accent.slice(0, 6), toward, t);
+    if (Math.min(...backs.map((b) => ratio(c, b))) >= 3.05) return c;
+  }
+  return toward;
+}
+
 export function designVars(p: Palette6): Record<DesignVar, string> {
   const faint = p.surface.length === 8 && parseInt(p.surface.slice(6), 16) < 0x30;
   return {
@@ -262,6 +295,7 @@ export function designVars(p: Palette6): Record<DesignVar, string> {
     designText: `${p.text}FF`.slice(0, 8),
     designDimText: `${p.dim}FF`.slice(0, 8),
     designAccent: col(p.accent),
+    designAccentText: `${accentForText(p.accent, p.bg, p.bg2, p.surface)}FF`,
     designSelectedText: col(p.accentText),
     // RetroBat builds a glow up from many faint copies (see simpleProps): a faint colour for size 2.
     designGlow: `${p.accent.slice(0, 6)}${Math.round(copyAlpha(0.7, 2) * 255).toString(16).padStart(2, '0').toUpperCase()}`,
@@ -271,7 +305,7 @@ export function designVars(p: Palette6): Record<DesignVar, string> {
   };
 }
 
-export type DesignVar = 'designBackground' | 'designBackground2' | 'designPanel' | 'designText' | 'designDimText' | 'designAccent' | 'designSelectedText' | 'designGlow' | 'designRatingOff' | 'designListPanel' | 'designTile';
+export type DesignVar = 'designBackground' | 'designBackground2' | 'designPanel' | 'designText' | 'designDimText' | 'designAccent' | 'designAccentText' | 'designSelectedText' | 'designGlow' | 'designRatingOff' | 'designListPanel' | 'designTile';
 
 /** A design colour: its variable when the context asks for shared colours, else its value. */
 function K(d: Design, c: DesignContext, name: DesignVar): string {
@@ -385,7 +419,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
       value('md_developer', 2, w - g.labelW),
       label('md_lbl_players', 3),
       value('md_players', 3, g.favX - g.labelW - 0.004),
-      text(d, c, 'ccs_favorite', { pos: `${f(x + g.favX)} ${rowY(3)}`, size: `${f(w - g.favX)} ${f(g.row)}`, fontSize: String(g.valueFs), alignment: 'right', text: '★ Favourite', color: K(d, c, 'designAccent'), visible: '{game:favorite}', zIndex: '40' }),
+      text(d, c, 'ccs_favorite', { pos: `${f(x + g.favX)} ${rowY(3)}`, size: `${f(w - g.favX)} ${f(g.row)}`, fontSize: String(g.valueFs), alignment: 'right', text: '★ Favourite', color: K(d, c, 'designAccentText'), visible: '{game:favorite}', zIndex: '40' }),
     ];
     return els.map((e) => ({ ...e, group: [x, w] }));
   };
@@ -541,7 +575,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
         systemLogo('0.04 0.04', '0 0', '0.22 0.07'),
         systemLogoText('0.04 0.04', '0 0', '0.22 0.07'),
         boxart('0.2 0.48', '0.3 0.6'),
-        { ...text(d, c, 'ccs_vs', { pos: '0.33 0.74', size: '0.1 0.1', fontSize: '0.08', alignment: 'center', text: 'VS', color: K(d, c, 'designAccent'), zIndex: '44' }, { title: true }), anim: 'pulse' },
+        { ...text(d, c, 'ccs_vs', { pos: '0.33 0.74', size: '0.1 0.1', fontSize: '0.08', alignment: 'center', text: 'VS', color: K(d, c, 'designAccentText'), zIndex: '44' }, { title: true }), anim: 'pulse' },
         title('0.42 0.14', '0.31 0.06', '0.042'),
         marquee('0.42 0.22', '0.2 0.07', '0 0'),
         ...details(0.42, 0.31, 0.31, 0.034),
@@ -750,7 +784,7 @@ function systemScreen(d: Design, c: DesignContext, l: SystemLayout): DesignEl[] 
     const scale = ['pressstart', 'silkscreen'].includes(font) ? 0.62 : ['orbitron', 'audiowide', 'monoton', 'russo', 'lilita', 'bungee', 'michroma', 'cinzel', 'creepster'].includes(font) ? 0.85 : 1;
     const size0 = Number(fs ?? defFs) * scale;
     const el = text(d, c, name, { pos, size, alignment: align, fontSize: String(Math.round(size0 * 1000) / 1000), text: value, zIndex: '45' }, kind === 'title' ? { title: true } : { dim: kind === 'dim' });
-    if (kind === 'accent') el.props.color = K(d, c, 'designAccent');
+    if (kind === 'accent') el.props.color = K(d, c, 'designAccentText');
     return el;
   };
 
@@ -805,14 +839,14 @@ export function designElements(d: Design, c: DesignContext, view: string, system
   if (view === 'system') {
     const l = systemLayout(systemLayoutId) ?? systemLayout(d.system)!;
     const oneRow = !!l.grid && l.grid.autoLayout?.split(' ')[1] === '1';
-    return withMotion(withDepth(systemScreen(d, c, l), depthOf(d, c), 'system', { floor: !!l.floor, oneRow }), c);
+    return withMotion(withDepth(systemScreen(d, c, l), depthOf(d, c), 'system', { floor: !!l.floor, oneRow, colours: designVars(d.palette) }), c);
   }
   if (GAME_VIEWS.includes(view)) {
     const gl = gameLayout(gameLayoutId) ?? gameLayout(d.gameLayout) ?? defaultGameLayout(d.game);
     let els = settled(gameScreen(d, c, view, gl.archetype));
     if (gl.mirror && LIST_VIEWS.includes(view)) els = mirrored(els);
     for (const n of LABELS_AND_EXTRAS) els.push({ type: n === 'md_lastplayed' ? 'datetime' : 'text', name: n, props: { visible: 'false' } });
-    return withMotion(withDepth(els, depthOf(d, c), 'game'), c);
+    return withMotion(withDepth(els, depthOf(d, c), 'game', { colours: designVars(d.palette) }), c);
   }
   return [];
 }
@@ -888,7 +922,19 @@ const r4 = (n: number) => String(Math.round(n * 10000) / 10000);
  * logo's lift, reflections on a shelf or floor, the selected tile's lift, and layers moving at
  * different distances (the background's slow zoom, decorations drifting).
  */
-function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game', o: { floor?: boolean; oneRow?: boolean } = {}): DesignEl[] {
+/**
+ * Whether a panel colour (RRGGBB[AA], or a ${design...} variable) can take a shadow: at least
+ * half solid, or on a dark design, where the shadow showing through only deepens the panel.
+ */
+function solid(colour: string | string[] | undefined, colours: Record<string, string> = {}): boolean {
+  const c = typeof colour === 'string' ? (colour.match(/^\$\{(\w+)\}$/) ? (colours[colour.slice(2, -1)] ?? '') : colour) : '';
+  if (!/^[0-9a-fA-F]{8}$/.test(c) || parseInt(c.slice(6), 16) >= 0x80) return true;
+  const bg = colours.designBackground ?? '000000';
+  const ch = (i: number) => parseInt(bg.slice(i, i + 2), 16) || 0;
+  return 0.299 * ch(0) + 0.587 * ch(2) + 0.114 * ch(4) < 128;
+}
+
+function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game', o: { floor?: boolean; oneRow?: boolean; colours?: Record<string, string> } = {}): DesignEl[] {
   const lv = depthLevel(depth);
   const ts = lv.textShadow;
   const ps = lv.panelShadow;
@@ -907,7 +953,8 @@ function withDepth(els: DesignEl[], depth: Depth, kind: 'system' | 'game', o: { 
     if (lv.reflect && kind === 'system' && o.oneRow && e.type === 'gridtile') e = { ...e, props: { ...e.props, reflexion: `${r2(lv.reflect * 0.8)} 0` } };
     if (lv.lift !== 1 && e.type === 'imagegrid') e = { ...e, props: { ...e.props, autoLayoutSelectedZoom: r2(Number(e.props.autoLayoutSelectedZoom ?? 1.06) * lv.lift) } };
     // Panels float on a soft shadow (kept on screen, so one along an edge just doesn't show there).
-    if (ps && e.type === 'ninepatch' && e.name.startsWith('ccs_') && typeof e.props.pos === 'string' && typeof e.props.size === 'string') {
+    // Only mostly solid ones: through a see-through panel the whole shadow would show, greying it (#45).
+    if (ps && e.type === 'ninepatch' && e.name.startsWith('ccs_') && typeof e.props.pos === 'string' && typeof e.props.size === 'string' && solid(e.props.color, o.colours)) {
       const [x, y] = e.props.pos.split(' ').map(Number);
       const [w, h] = e.props.size.split(' ').map(Number);
       const sx = x + ps.dx;

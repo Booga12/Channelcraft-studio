@@ -250,8 +250,6 @@ function colourBehind(top: ResolvedElement, x: number, y: number, els: ResolvedE
 
 /** Checks on what a text shows: letters its font lacks, game art drawn over it, colours too alike. */
 function textChecks(project: ThemeProject, res: Resolution, env: Environment, view: string, els: ResolvedElement[], add: Add, charsOf?: CharsOf) {
-  // A design's text colours, also when a theme has them as fixed values.
-  const palette = new Set(['designText', 'designDimText', 'designAccent', 'designSelectedText'].map((n) => hexOf(res.vars.get(n)?.value)?.slice(0, 6)).filter(Boolean));
   for (const el of els) {
     if ((el.type !== 'text' && el.type !== 'datetime') || !shown(el) || el.name.includes('.')) continue;
 
@@ -306,26 +304,30 @@ function textChecks(project: ThemeProject, res: Resolution, env: Environment, vi
       break;
     }
 
-    // Text colour against what's behind it, for colours picked for a text. The design's own
-    // colours are for the whole theme: the editor's theme-wide check covers those.
+    // Text colour against what's behind it. Text in the design's text colour is in the
+    // theme-wide check too (the editor adds that one), which fixes the whole palette.
     const colDef = el.props.get('color');
     const col = hexOf(colDef?.value);
-    if (!colDef || !col || !alphaOf(col) || colDef.raw.includes('${design') || palette.has(col.slice(0, 6))) continue;
+    if (!colDef || !col || !alphaOf(col) || colDef.raw.trim() === '${designText}') continue;
     const behind = colourBehind(el, (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, els, res);
     if (!behind) continue;
     const ratio = contrast(col.slice(0, 6), behind);
     if (ratio >= 3) continue;
     const key = `contrast|${colDef.file.rel}|${el.name}`;
     add(key, view, () => {
-      const design = hexOf(res.vars.get('designText')?.value);
-      const to = design && contrast(design.slice(0, 6), behind) >= 3 ? '${designText}' : contrast('111111', behind) >= contrast('FFFFFF', behind) ? '111111' : 'FFFFFF';
+      // The nearest readable design colour: accent text keeps an accent, if its text shade reads.
+      const reads = (n: string) => {
+        const c = hexOf(res.vars.get(n)?.value);
+        return !!c && contrast(c.slice(0, 6), behind) >= 3;
+      };
+      const to = colDef.raw.trim() === '${designAccent}' && reads('designAccentText') ? '${designAccentText}' : reads('designText') ? '${designText}' : contrast('111111', behind) >= contrast('FFFFFF', behind) ? '111111' : 'FFFFFF';
       return {
         kind: 'hard-to-read',
         key,
         text: `Its colour is too close to what's behind it (contrast ${Math.floor(ratio * 10) / 10}:1; 3 or more reads well).`,
         views: [view],
         element: el.name,
-        fix: { label: to === '${designText}' ? 'Use the text colour' : 'Make it readable', changes: [setTextChange(colDef.file, colDef.node, to)] },
+        fix: { label: to === '${designAccentText}' ? 'Use the readable accent' : to === '${designText}' ? 'Use the text colour' : 'Make it readable', changes: [setTextChange(colDef.file, colDef.node, to)] },
       };
     });
   }
