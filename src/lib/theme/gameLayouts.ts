@@ -84,8 +84,8 @@ const MORE: GameLayout[] = [
 export const GAME_LAYOUTS: GameLayout[] = [
   { id: 'classic', label: 'Classic', description: 'Game list on the right; the cover, screenshot and details in a panel on the left.', archetype: 'list-right', diagram: LIST_RIGHT },
   { id: 'mirrored', label: 'Mirrored', description: 'Game list on the left; the cover, screenshot and details on the right.', archetype: 'list-right', mirror: true, flipOf: 'classic', diagram: flip(LIST_RIGHT) },
-  { id: 'videofocus', label: 'Cinema', description: 'Fan art fills the screen behind a big title and details; the list sits on the right.', archetype: 'cinema', diagram: CINEMA },
-  { id: 'cinema-left', label: 'Cinema, list on the left', description: 'Fan art fills the screen, the list on the left and the title and details on the right.', archetype: 'cinema', mirror: true, flipOf: 'videofocus', diagram: flip(CINEMA) },
+  { id: 'videofocus', label: 'Full-screen art', description: 'Fan art fills the screen behind a big title and details; the list sits on the right.', archetype: 'cinema', diagram: CINEMA },
+  { id: 'cinema-left', label: 'Full-screen art, list on the left', description: 'Fan art fills the screen, the list on the left and the title and details on the right.', archetype: 'cinema', mirror: true, flipOf: 'videofocus', diagram: flip(CINEMA) },
   { id: 'cover', label: 'Cover shelf', description: 'A big box cover with a mirror reflection, details in the middle and the list on the right.', archetype: 'cover', diagram: COVER },
   { id: 'cover-left', label: 'Cover shelf, list on the left', description: 'The list on the left, details in the middle and a big reflected cover on the right.', archetype: 'cover', mirror: true, flipOf: 'cover', diagram: flip(COVER) },
   { id: 'bigpicture', label: 'Centre stage', description: 'Cover and screenshot side by side in the middle, details under them and a short list at the bottom.', archetype: 'centered', diagram: CENTERED },
