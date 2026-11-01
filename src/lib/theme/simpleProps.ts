@@ -236,7 +236,7 @@ export interface Swatch {
 }
 
 /** Design colours first, in an order that suits text. */
-const DESIGN_ORDER = ['designText', 'designDimText', 'designAccent', 'designSelectedText', 'designGlow', 'designBackground', 'designPanel'];
+const DESIGN_ORDER = ['designText', 'designDimText', 'designAccent', 'designAccentText', 'designSelectedText', 'designGlow', 'designBackground', 'designPanel'];
 
 /**
  * The theme's colours worth offering as one-click swatches: its design colours, else the colour

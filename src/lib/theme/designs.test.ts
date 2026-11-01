@@ -15,6 +15,7 @@ import { ANIMATIONS } from './animations';
 import { parse, print } from '../xml/cst';
 import { renderText } from './expr';
 import type { Environment } from './context';
+import { checkTheme } from './health';
 
 const env: Environment = {
   esHome: 'M:\\Retrobat\\emulationstation\\.emulationstation',
@@ -320,4 +321,22 @@ describe('design colours as shared variables', () => {
     expect(p.entry!.src.split('ChannelCraft design colours').length).toBe(2);
     expect(resolveTheme(p, env).vars.get('designAccent')!.value).toBe(designVars(DESIGNS[1].palette).designAccent);
   });
+});
+
+describe('built-in designs read well (#45)', () => {
+  // Every design at every depth, on layouts that put accent text on panels, on the background and
+  // over the Versus art: no text below 3:1 on what is behind it.
+  for (const d of DESIGNS) {
+    it(`${d.label}`, async () => {
+      const found: string[] = [];
+      for (const depth of ['off', 'subtle', 'strong'] as const) {
+        for (const g of [d.gameLayout ?? 'classic', 'classic', 'versus']) {
+          const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+          applyChanges(p, [designVarsChange(p, d, depth), ...designChanges(p, resolveTheme(p, env), d, { ...ctx(d.id), font: null, vars: true, depth }, ['system', 'detailed', 'video'], true, d.system, { gameLayout: g })]);
+          for (const i of checkTheme(p, resolveTheme(p, env), env)) if (i.kind === 'hard-to-read' || i.kind === 'covered') found.push(`${depth}/${g} ${i.element}: ${i.text}`);
+        }
+      }
+      expect(found).toEqual([]);
+    }, 60000);
+  }
 });

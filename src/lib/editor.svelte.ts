@@ -20,7 +20,7 @@ import { prefs } from './prefs.svelte';
 import { tileStyleOfPath } from './theme/tiles';
 import { appliedDesign, appliedSystemLayout, readability, designChanges, designVarsChange, LAYOUTS } from './theme/presets';
 import { readMenuState, type MenuState } from './theme/menuOptions';
-import { DESIGNS, designAssets, recoloured, type Design } from './theme/designs';
+import { DESIGNS, accentForText, designAssets, recoloured, type Design } from './theme/designs';
 import { withOnlineArt } from './theme/libretro';
 import { addConsoleProp, addConsoleVar, consoleValues, overrideIn, sharedIn, type ConsoleValue } from './theme/consoles';
 import { FEATURED_FILE, readFeatured, type FeaturedState } from './theme/featured';
@@ -898,11 +898,28 @@ export class Editor {
     return true;
   }
 
+  /**
+   * The change that sets designAccentText (the accent as small text) from the theme's colours,
+   * with `now` overriding some of them; null when nothing changes or it isn't a design theme.
+   */
+  accentTextChange(now: Record<string, string> = {}): Change | null {
+    const v = (n: string) => (now[n] ?? this.res?.vars.get(n)?.value ?? '').trim();
+    const accent = v('designAccent');
+    if (!/^[0-9a-fA-F]{6}/.test(accent)) return null;
+    const bg = /^[0-9a-fA-F]{6}/.test(v('designBackground')) ? v('designBackground') : '000000';
+    const bg2 = /^[0-9a-fA-F]{6}/.test(v('designBackground2')) ? v('designBackground2') : bg;
+    const panel = /^[0-9a-fA-F]{6}/.test(v('designPanel')) ? v('designPanel') : 'FFFFFF14';
+    return this.designVarChange('designAccentText', `${accentForText(accent, bg, bg2, panel)}FF`);
+  }
+
   setVar(name: string, value: string) {
     if (this.sharedOnly('Colours and theme values')) return;
     const change = this.varChange(name, value);
     if (!change) return;
-    this.commit(`change of ${humanize(name)}${this.consoleOnly ? ` for ${this.consoleName}` : ''}`, [change], `var.${name}${this.consoleOnly ? `@${this.consoleTheme}` : ''}`);
+    // The accent's text shade follows the colours it is worked out from (#45).
+    const follows = ['designAccent', 'designBackground', 'designBackground2', 'designPanel'].includes(name) && !this.consoleOnly && this.res?.vars.has('designAccentText');
+    const shade = follows ? this.accentTextChange({ [name]: value }) : null;
+    this.commit(`change of ${humanize(name)}${this.consoleOnly ? ` for ${this.consoleName}` : ''}`, shade ? [change, shade] : [change], `var.${name}${this.consoleOnly ? `@${this.consoleTheme}` : ''}`);
     this.warnShadowed(this.res?.varHistory.get(name));
   }
 
@@ -1122,7 +1139,9 @@ export class Editor {
     const carry = opts.carry === 'none' ? undefined : (opts.carry ?? 'design');
     const changes = designChanges(p, res, design, ctx, views, opts.hideOwn ?? true, opts.systemLayout, { gameLayout: opts.gameLayout, carry });
     // The design's colours become shared colours (variables) its parts refer to.
-    this.commit(label, keepColours ? changes : [designVarsChange(p, design, depth, this.motionFeel), ...changes]);
+    // Themes made before the accent had a text shade (#45) get one, from their own colours.
+    const shade = keepColours && !res.vars.has('designAccentText') ? this.accentTextChange() : null;
+    this.commit(label, keepColours ? [...(shade ? [shade] : []), ...changes] : [designVarsChange(p, design, depth, this.motionFeel), ...changes]);
     this.selected = null;
     const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
     if (layoutId) {

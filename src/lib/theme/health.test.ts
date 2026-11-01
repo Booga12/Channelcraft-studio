@@ -71,7 +71,7 @@ describe('theme health check', () => {
 
 const TEXTS = `<theme>
   <formatVersion>7</formatVersion>
-  <variables><designAccent>6A2A80FF</designAccent></variables>
+  <variables><designAccent>6A2A80FF</designAccent><designAccentText>E0A0F0FF</designAccentText></variables>
   <view name="detailed">
     <text name="play" extra="true"><pos>0.1 0.1</pos><size>0.3 0.05</size><text>PLAY ▶ ★ {game:name}</text><fontPath>./a.ttf</fontPath></text>
     <video name="md_video"><pos>0.1 0.5</pos><size>0.3 0.3</size></video>
@@ -100,7 +100,7 @@ describe('checks on what texts show (#26)', () => {
   it("finds letters neither the font nor RetroBat's fonts have, game art over text, and colours too alike", async () => {
     const { p, e } = await loadTexts();
     const got = checkTheme(p, resolveTheme(p, e), e, chars).map((i) => `${i.kind}:${i.element}`).sort();
-    expect(got).toEqual(['covered:under', 'hard-to-read:pink', 'missing-character:play']);
+    expect(got).toEqual(['covered:under', 'hard-to-read:accent', 'hard-to-read:pink', 'missing-character:play']);
     const play = checkTheme(p, resolveTheme(p, e), e, chars).find((i) => i.element === 'play')!;
     expect(play.text).toContain('“▶”');
     expect(play.text).not.toContain('★');
@@ -111,6 +111,14 @@ describe('checks on what texts show (#26)', () => {
     const loading = (abs: string) => (abs.endsWith('a.ttf') ? chars(abs) : undefined);
     expect(checkTheme(p, resolveTheme(p, e), e, loading).some((i) => i.kind === 'missing-character')).toBe(false);
     expect(checkTheme(p, resolveTheme(p, e), { ...e, resourcesDir: '' }, chars).some((i) => i.kind === 'missing-character')).toBe(false);
+  });
+
+  it("moves accent-coloured text to the accent's readable shade (#45)", async () => {
+    const { p, e } = await loadTexts();
+    const accent = checkTheme(p, resolveTheme(p, e), e, chars).find((i) => i.element === 'accent')!;
+    expect(accent.fix?.label).toBe('Use the readable accent');
+    applyChanges(p, accent.fix!.changes);
+    expect(checkTheme(p, resolveTheme(p, e), e, chars).some((i) => i.element === 'accent')).toBe(false);
   });
 
   it('makes a hard-to-read colour readable', async () => {
