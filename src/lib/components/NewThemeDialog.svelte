@@ -114,7 +114,7 @@
   function pickGroup(g: DesignGroup | 'all') {
     group = g;
     if (g !== 'all' && chosen.group !== g) pickDesign(DESIGNS.find((d) => d.group === g)!.id);
-    step = 1;
+    // No jump to the next step: like every other pick, Next moves on (#33).
   }
 
   function pickDesign(id: string) {
@@ -198,7 +198,7 @@
         {/each}
       </ol>
       <p class="summary">
-        <strong>{chosen.label}</strong> · {SYSTEM_LAYOUTS.find((l) => l.id === sysId)?.label} · {GAME_LAYOUTS.find((l) => l.id === gameId)?.label}
+        <span>Design: <strong>{chosen.label}</strong></span> · <span>System menu: <strong>{SYSTEM_LAYOUTS.find((l) => l.id === sysId)?.label}</strong></span> · <span>Game list: <strong>{GAME_LAYOUTS.find((l) => l.id === gameId)?.label}</strong></span>
       </p>
     {/if}
 
