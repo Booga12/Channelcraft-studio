@@ -1,0 +1,11 @@
+name: New feature
+description: Something ChannelCraft Studio can't do yet.
+labels: [New feature]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What should it do?
+      description: What you'd like to be able to do, and why it would help.
+    validations:
+      required: true

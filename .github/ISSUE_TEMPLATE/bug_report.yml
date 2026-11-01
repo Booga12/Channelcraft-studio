@@ -1,7 +1,7 @@
 # "Report a problem" in the app opens this form with the fields filled in (by their ids).
 name: Report a problem
 description: Something in ChannelCraft Studio didn't work, or looked wrong.
-labels: [bug]
+labels: [Bug]
 body:
   - type: markdown
     attributes:

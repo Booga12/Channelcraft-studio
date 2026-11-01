@@ -1,0 +1,11 @@
+name: Improvement
+description: Something that works, but could be better or clearer.
+labels: [Improvement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What could be better?
+      description: What it does now, and what would be better.
+    validations:
+      required: true

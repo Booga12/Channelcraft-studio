@@ -1,0 +1,32 @@
+# Every issue and pull request carries a kind-of-task label (Bug, New feature, Improvement, Design,
+# Docs & guides, Maintenance, Accessibility), so the list reads at a glance. One without any gets
+# "Needs a label", which comes off by itself once a kind is added. It only reads labels and never
+# checks out code, so pull_request_target is safe here.
+name: Labels
+
+on:
+  issues:
+    types: [opened, reopened, labeled, unlabeled]
+  pull_request_target:
+    types: [opened, reopened, labeled, unlabeled]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  kind:
+    name: Has a kind-of-task label
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const KINDS = ['Bug', 'Improvement', 'New feature', 'Design', 'Docs & guides', 'Maintenance', 'Accessibility'];
+            const FLAG = 'Needs a label';
+            const item = context.payload.issue ?? context.payload.pull_request;
+            const names = item.labels.map((l) => l.name);
+            const has = names.some((n) => KINDS.includes(n));
+            const at = { owner: context.repo.owner, repo: context.repo.repo, issue_number: item.number };
+            if (!has && !names.includes(FLAG)) await github.rest.issues.addLabels({ ...at, labels: [FLAG] });
+            if (has && names.includes(FLAG)) await github.rest.issues.removeLabel({ ...at, name: FLAG });
