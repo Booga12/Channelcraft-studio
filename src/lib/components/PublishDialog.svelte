@@ -13,6 +13,7 @@
   import { join } from '$lib/path';
   import { prefs } from '$lib/prefs.svelte';
   import AppDialog from './AppDialog.svelte';
+  import { screenLabel } from './editor/screens';
 
   let name = $state((ed.project?.name ?? '').slice(0, NAME_MAX));
   let maker = $state(prefs.v.galleryMaker ?? '');
@@ -29,6 +30,13 @@
   const ready = $derived(!nameErr && !makerErr && allowed && !busy);
   const preview = $derived(ed.project && ed.hasPreview() ? fileUrl(join(ed.project.dir, 'preview.png')) : null);
   const unsaved = $derived(ed.dirtyCount > 0);
+  // Where the gallery picture comes from (#40): the theme's own picture, or a screen made into one.
+  const hadPreview = ed.hasPreview();
+  const systemId = ed.screens.find((s) => s.view === 'system' && s.file === 'theme.xml')?.id ?? '';
+  let from = $state(hadPreview ? 'keep' : systemId);
+  const fromScreen = $derived(ed.screens.find((s) => s.id === from) ?? null);
+  // Menus and overlays make poor gallery pictures: they're drawn over another screen.
+  const pictureScreens = $derived(ed.screens.filter((s) => s.view !== 'menu' && s.view !== 'screen'));
 
   const close = () => !busy && (ed.showPublish = false);
 
@@ -39,7 +47,7 @@
     error = '';
     prefs.set('galleryMaker', maker.trim());
     try {
-      done = await ed.publishToGallery(name, maker);
+      done = await ed.publishToGallery(name, maker, fromScreen);
     } catch (e) {
       error = publishError(e);
     } finally {
@@ -111,12 +119,19 @@
           </label>
         </div>
         <figure class="m-0 flex flex-col gap-1">
-          {#if preview}
+          {#if preview && !fromScreen}
             <img class="aspect-video w-full rounded-lg object-cover ring-1 ring-foreground/10" src={preview} alt="The theme’s preview" />
           {:else}
-            <div class="grid aspect-video w-full place-items-center rounded-lg bg-muted p-2 text-center text-xs text-muted-foreground">No preview yet</div>
+            <div class="grid aspect-video w-full place-items-center rounded-lg bg-muted p-2 text-center text-xs text-muted-foreground">{fromScreen ? screenLabel(fromScreen) : 'No preview yet'}</div>
           {/if}
-          <figcaption class="text-xs text-muted-foreground">{preview ? 'Shown in the gallery' : 'Made from the System menu when you publish'}</figcaption>
+          <label class="flex flex-col gap-1 text-xs text-muted-foreground">
+            Picture from
+            <select bind:value={from} disabled={busy} class="text-xs">
+              {#if hadPreview}<option value="keep">The current picture</option>{/if}
+              {#each pictureScreens as s (s.id)}<option value={s.id}>{screenLabel(s)}</option>{/each}
+            </select>
+          </label>
+          <figcaption class="text-xs text-muted-foreground">{fromScreen ? `Made from ${screenLabel(fromScreen)} when you publish. RetroBat shows it too.` : 'Shown in the gallery'}</figcaption>
         </figure>
       </div>
 

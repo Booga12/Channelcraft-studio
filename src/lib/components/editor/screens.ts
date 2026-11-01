@@ -50,7 +50,10 @@ export function screenLabel(t: Screen): string {
   if (FILES[t.file]) return FILES[t.file].label;
   // RetroBat reads its loading screen from splash.xml, not from theme.xml's splash view.
   if (t.view === 'splash') return 'Splash (theme.xml)';
-  return viewLabel(t.view, ed.themeRes?.views.get(t.view)?.displayName);
+  // Custom screens can be named with variables (${basicGridName}): filled in from the theme.
+  const raw = ed.themeRes?.views.get(t.view)?.displayName;
+  const filled = raw?.replace(/\$\{([^}]+)\}/g, (m, n: string) => ed.themeRes?.vars.get(n.trim())?.value ?? m);
+  return viewLabel(t.view, filled);
 }
 
 export function screenHelp(t: Screen): string {
