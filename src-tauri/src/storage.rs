@@ -145,7 +145,7 @@ fn with_bom(text: &str, bom: bool) -> Vec<u8> {
     out
 }
 
-fn data_dir(app: &AppHandle, sub: &str) -> CmdResult<PathBuf> {
+pub(crate) fn data_dir(app: &AppHandle, sub: &str) -> CmdResult<PathBuf> {
     let d = app.path().app_data_dir().map_err(err)?.join(sub);
     fs::create_dir_all(&d).map_err(err)?;
     Ok(d)
@@ -660,7 +660,7 @@ pub struct OpenInfo {
     recovered: Option<String>,
 }
 
-fn take_lock(locks: &Path, dir: &Path) -> CmdResult<fs::File> {
+pub(crate) fn take_lock(locks: &Path, dir: &Path) -> CmdResult<fs::File> {
     let f = fs::OpenOptions::new().create(true).truncate(false).write(true).open(locks.join(format!("{}.lock", project_key(dir)))).map_err(err)?;
     f.try_lock().map_err(|_| "This theme is open in another ChannelCraft Studio window. Close it there first.".to_string())?;
     Ok(f)
@@ -824,15 +824,15 @@ fn copy_dir_staged_as(src: &Path, dest: &Path, unfinished: bool) -> CmdResult<()
 }
 
 #[tauri::command(async)]
-pub fn copy_theme(roots: State<Roots>, src: String, name: String) -> CmdResult<String> {
-    let dest = new_theme_path(&roots, &name)?;
+pub fn copy_theme(app: AppHandle, roots: State<Roots>, src: String, name: String) -> CmdResult<String> {
+    let dest = new_theme_path(&roots, &data_dir(&app, "locks")?, &name)?;
     copy_dir_staged(Path::new(&src), &dest)?;
     Ok(dest.to_string_lossy().into_owned())
 }
 
 #[tauri::command(async)]
 pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: String) -> CmdResult<String> {
-    let dest = new_theme_path(&roots, &name)?;
+    let dest = new_theme_path(&roots, &data_dir(&app, "locks")?, &name)?;
     let starter = app.path().resolve("starter-theme", tauri::path::BaseDirectory::Resource).map_err(err)?;
     let starter = if starter.join("theme.xml").is_file() { starter } else { crate::commands::dev_resource("starter-theme").ok_or("The starter theme is missing from this copy of the app.")? };
     copy_dir_staged_as(&starter, &dest, true)?;

@@ -31,9 +31,9 @@ export function familyFor(abs: string | null): string {
  * @font-face rules for the theme fonts with the files inlined, for pictures made from the preview:
  * html-to-image only sees fonts from stylesheets, not ones added with the FontFace API (#44).
  */
-export async function themeFontCss(): Promise<string> {
+export async function themeFontCss(wanted: (family: string) => boolean = () => true): Promise<string> {
   const rules = await Promise.all(
-    [...families].map(async ([abs, fam]) => {
+    [...families].filter(([, fam]) => wanted(fam)).map(async ([abs, fam]) => {
       try {
         const blob = await (await fetch(fileUrl(abs))).blob();
         const data = await new Promise<string>((ok, fail) => {

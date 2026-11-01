@@ -11,6 +11,8 @@
   import { fmtNum, parsePair } from '$lib/theme/schema';
   import { isCarouselPart, isVisible, zOf } from '$lib/render';
   /** What a Screen overlay can draw over the other screens (see overlayParts). */
+  /** Screen overlay parts (and RetroBat's clock) sit above every theme part, whatever its zIndex. */
+  const OVERLAY_Z = 1_000_000;
   const OVERLAY_TYPES = new Set(['image', 'video', 'text', 'ninepatch', 'datetime', 'screenshader']);
   import { usesGameData } from '$lib/theme/library';
   import type { SystemInfo } from '$lib/theme/systems';
@@ -720,14 +722,14 @@
               {/each}
               {#each overlayParts as el (el.name)}
                 <div class="esclock-el" title="From the Screen overlay, drawn over every screen. Change it on the Screen overlay screen.">
-                  <PreviewElement z={2000 + zOf(el)} {el} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
+                  <PreviewElement z={OVERLAY_Z + Math.round(zOf(el) * 10)} {el} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
                 </div>
               {/each}
               {#if esClock === 'default'}
                 <span class="esclock" style:font-size="{dims.height * 0.03}px" title="RetroBat's own clock (its “Show clock” setting). This theme doesn't place it, so RetroBat puts it here.">{ed.root?.es?.clock12 ? '08:15 PM' : '20:15'}</span>
               {:else if esClock}
                 <div class="esclock-el" title="RetroBat's own clock: move or restyle it on the Screen overlay screen.">
-                  <PreviewElement z={3000} el={esClock} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
+                  <PreviewElement z={OVERLAY_Z + Math.round(zOf(esClock) * 10)} el={esClock} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
                 </div>
               {/if}
               {#if menu}
