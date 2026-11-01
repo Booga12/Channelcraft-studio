@@ -10,6 +10,8 @@ export const fontState = $state({ loaded: 0 });
 const families = new Map<string, string>();
 /** Fallback fonts the browser hasn't needed yet, so they aren't loaded (nor put in pictures). */
 const unneeded = new Set<string>();
+/** Font files that are missing or broken: left out of pictures, where they'd hide their text (#46). */
+const failed = new Set<string>();
 const SYSTEM = "'Segoe UI', system-ui, sans-serif";
 /** RetroBat's own fonts it borrows missing characters from, as CSS families (see setRetroBatFonts). */
 const spare = $state({ css: '' });
@@ -48,7 +50,7 @@ function load(abs: string, lazy = false): string {
         else document.fonts.add(f);
         fontState.loaded++;
       })
-      .catch(() => {});
+      .catch(() => failed.add(fam!));
   }
   return fam;
 }
@@ -59,9 +61,11 @@ function load(abs: string, lazy = false): string {
  */
 export async function themeFontCss(wanted: (family: string) => boolean = () => true): Promise<string> {
   const rules = await Promise.all(
-    [...families].filter(([, fam]) => wanted(fam) && !unneeded.has(fam)).map(async ([abs, fam]) => {
+    [...families].filter(([, fam]) => wanted(fam) && !unneeded.has(fam) && !failed.has(fam)).map(async ([abs, fam]) => {
       try {
-        const blob = await (await fetch(fileUrl(abs))).blob();
+        const res = await fetch(fileUrl(abs));
+        if (!res.ok) return '';
+        const blob = await res.blob();
         const data = await new Promise<string>((ok, fail) => {
           const r = new FileReader();
           r.onload = () => ok(String(r.result));

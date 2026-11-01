@@ -552,7 +552,8 @@
       {#if videoPath && /\.(mp4|webm)$/i.test(videoPath)}
         {#key videoPath}
           <!-- svelte-ignore a11y_media_has_caption -->
-          <video src={fileUrl(videoPath)} autoplay muted loop playsinline poster={imgPath ? fileUrl(imgPath) : undefined}></video>
+          <!-- crossorigin: the app's file source allows it, and without it a frame can't go in preview.png (#46). -->
+          <video src={fileUrl(videoPath)} crossorigin="anonymous" autoplay muted loop playsinline poster={imgPath ? fileUrl(imgPath) : undefined}></video>
         {/key}
       {:else if imgPath && /\.(png|jpe?g|svg|gif|webp)$/i.test(imgPath)}
         <img src={fileUrl(imgPath)} alt="" draggable="false" onload={onImgLoad} />
