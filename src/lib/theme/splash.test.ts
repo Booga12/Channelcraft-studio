@@ -4,7 +4,10 @@ import { ThemeProject } from './project';
 import { resolveTheme } from './resolver';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
-import { splashScene, splashTemplate } from './splash';
+import { designSplashLook, splashScene, splashTemplate } from './splash';
+import { applyChanges } from './edits';
+import { designChanges, designVarsChange } from './presets';
+import { DESIGNS, designVars, type DesignContext } from './designs';
 import type { Environment } from './context';
 
 const env: Environment = {
@@ -66,5 +69,36 @@ describe('a new loading screen file', () => {
       expect(scene.ignored).toEqual([]);
       expect(scene.elements.find((e) => e.name === 'background')!.props.get('path')!.value).toBe('splash.svg');
     }
+  });
+});
+
+describe('a new loading screen on a design theme (#38)', () => {
+  it('uses the design’s backdrop, title font and colours', async () => {
+    const plain = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    expect(designSplashLook(resolveTheme(plain, env), plain, env)).toBeNull();
+
+    const p = await ThemeProject.load('src-tauri/resources/starter-theme', nodeFs);
+    const d = DESIGNS[0];
+    const c: DesignContext = { art: `./_inc/ccs/${d.id}`, font: './_inc/fonts/title.ttf', titleFont: null, logos: null, consoles: null, vars: true };
+    applyChanges(p, [designVarsChange(p, d)]);
+    applyChanges(p, designChanges(p, resolveTheme(p, env), d, c, ['system', 'detailed'], true));
+    // The design's files, as applying it in the app writes them.
+    const sys = resolveTheme(p, env).views.get('system')!;
+    const bgRel = String(sys.elements.get('staticBackground')!.props.get('path')!.value).replace(/^\.\//, '');
+    p.setAssets([...p.assets, { rel: bgRel, kind: 'image', size: 0 }, { rel: '_inc/fonts/title.ttf', kind: 'font', size: 0 }]);
+
+    const look = designSplashLook(resolveTheme(p, env), p, env)!;
+    expect(look.accent).toBe(designVars(d.palette).designAccent);
+    expect(look.background).toBe(`./${bgRel}`);
+    expect(look.font).toBe('./_inc/fonts/title.ttf');
+
+    p.addFile('gamesplash.xml', splashTemplate(true, look));
+    const view = resolveTheme(p, env, 'gamesplash.xml').views.get('splash')!;
+    const scene = splashScene(view, p.fileAt('gamesplash.xml')!, 'splash.svg');
+    expect(scene.backgroundColor).toBe(look.backgroundColor);
+    expect(scene.bar.activeColor).toBe(look.accent);
+    expect(view.elements.get('label')!.props.get('fontPath')!.value).toBe(look.font);
+    expect(view.elements.get('background')!.props.get('path')!.value).toBe(look.background);
+    expect(view.elements.get('progressbar:active')!.props.get('color')!.value).toBe(look.accent);
   });
 });
