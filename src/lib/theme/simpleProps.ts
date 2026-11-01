@@ -229,6 +229,58 @@ export function varUsers(res: Resolution, name: string): number {
   return n;
 }
 
+/** Plain names for the design colours, by what they paint (#28). */
+export const DESIGN_COLOUR_NAMES: Record<string, string> = {
+  designBackground: 'Background',
+  designBackground2: 'Background, second colour',
+  designPanel: 'Panels',
+  designListPanel: 'Game list panel',
+  designTile: 'Tiles',
+  designText: 'Text',
+  designDimText: 'Text, softer',
+  designAccent: 'Accent',
+  designAccentText: 'Accent on text',
+  designSelectedText: 'Selected text',
+  designGlow: 'Glow',
+  designRatingOff: 'Rating stars, empty',
+};
+
+/** Colours the app works out from others: the shade is used, so the colours it comes from are too. */
+const WORKED_OUT: Record<string, string[]> = { designAccentText: ['designAccent', 'designBackground', 'designBackground2', 'designPanel'] };
+
+/**
+ * Which variables something in the theme uses (#28), with the parts that use each directly, by
+ * name. A variable used only by another used variable counts as used too.
+ */
+export function varUse(res: Resolution): { used: Set<string>; users: Map<string, Set<string>> } {
+  const refs = (raw: string) => [...raw.matchAll(/\$\{([^}]+)\}/g)].map((m) => m[1].trim());
+  const users = new Map<string, Set<string>>();
+  for (const view of res.views.values()) {
+    for (const el of view.elements.values()) {
+      for (const d of el.props.values()) {
+        for (const n of refs(d.raw)) {
+          if (!users.has(n)) users.set(n, new Set());
+          users.get(n)!.add(el.name);
+        }
+      }
+    }
+  }
+  const used = new Set(users.keys());
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const v of res.vars.values()) {
+      if (!used.has(v.name)) continue;
+      for (const n of [...refs(v.raw), ...(WORKED_OUT[v.name] ?? [])]) {
+        if (!used.has(n) && res.vars.has(n)) {
+          used.add(n);
+          grew = true;
+        }
+      }
+    }
+  }
+  return { used, users };
+}
+
 export interface Swatch {
   /** The theme variable it links to. */
   name: string;

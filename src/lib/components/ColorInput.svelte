@@ -1,8 +1,11 @@
 <script lang="ts">
   import { COLOR_RE, cssColor } from '$lib/theme/schema';
 
-  /** `label` names the setting for screen readers (nothing visible). */
-  let { value, onchange, label = '' }: { value: string; onchange: (v: string) => void; label?: string } = $props();
+  /**
+   * `label` names the setting for screen readers (nothing visible). `seeThrough` shows what the
+   * slider does, as “See-through 30%” (#28).
+   */
+  let { value, onchange, label = '', seeThrough = false }: { value: string; onchange: (v: string) => void; label?: string; seeThrough?: boolean } = $props();
   const named = (what: string) => (label ? `${label}: ${what}` : what);
 
   const valid = $derived(COLOR_RE.test(value.trim()));
@@ -37,10 +40,33 @@
     onchange={() => onchange(text.trim())}
     onkeydown={(e) => e.key === 'Enter' && onchange(text.trim())}
   />
-  <input class="alpha" type="range" min="0" max="255" value={alpha} disabled={!valid} aria-label={named('opacity')} title="Opacity {Math.round((alpha / 255) * 100)}%" oninput={(e) => emit(hex6, Number(e.currentTarget.value))} />
+  {#if seeThrough}
+    <!-- Right is solid, as the colour code's last two digits; the words say how see-through it is. -->
+    <label class="see">
+      <span>See-through <b>{100 - Math.round((alpha / 255) * 100)}%</b></span>
+      <input class="alpha" type="range" min="0" max="255" value={alpha} disabled={!valid} aria-label={named('how solid (right is solid)')} oninput={(e) => emit(hex6, Number(e.currentTarget.value))} />
+    </label>
+  {:else}
+    <input class="alpha" type="range" min="0" max="255" value={alpha} disabled={!valid} aria-label={named('opacity')} title="Opacity {Math.round((alpha / 255) * 100)}%" oninput={(e) => emit(hex6, Number(e.currentTarget.value))} />
+  {/if}
 </div>
 
 <style>
+  .see {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    gap: 1px;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+  .see b {
+    font-weight: 600;
+    color: var(--text);
+  }
+  .see .alpha {
+    width: 100%;
+  }
   .color {
     display: flex;
     align-items: center;
