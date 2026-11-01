@@ -36,7 +36,7 @@ import * as health from './editor/health';
 import * as sharing from './editor/sharing';
 import * as sound from './editor/sound';
 import { checkTheme, type HealthIssue } from './theme/health';
-import { splashTemplate } from './theme/splash';
+import { designSplashLook, splashTemplate } from './theme/splash';
 
 /** RetroBat's loading screen files, read on their own (not through theme.xml). */
 export const SPLASH_FILES = ['splash.xml', 'gamesplash.xml'] as const;
@@ -379,7 +379,7 @@ export class Editor {
       if (this.sharedOnly('Loading screens')) return;
       // An empty <theme> until the edit below, so undoing it leaves nothing to save.
       const f = p.addFile(file, '<theme>\n</theme>\n');
-      this.commit(file === 'splash.xml' ? 'add a loading screen' : 'add a game launch screen', [{ file: f, patch: { start: 0, end: f.src.length, text: splashTemplate(file === 'gamesplash.xml') } }]);
+      this.commit(file === 'splash.xml' ? 'add a loading screen' : 'add a game launch screen', [{ file: f, patch: { start: 0, end: f.src.length, text: splashTemplate(file === 'gamesplash.xml', this.res ? designSplashLook(this.res, p, this.env) : null) } }]);
       this.rev++;
       this.notify(`${file === 'splash.xml' ? 'Loading screen' : 'Game launch screen'} added (${file}). Save to keep it, or Ctrl+Z to undo.`);
     }

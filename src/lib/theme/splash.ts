@@ -8,7 +8,10 @@
 // - Drawing order is fixed: extras with zIndex below 5, the background, extras 5–10, the
 //   progress bar, the label, then extras 10 and up.
 
-import type { PropDef, ResolvedElement, ResolvedView } from './resolver';
+import { resolveAssetWithFallbacks, type PropDef, type Resolution, type ResolvedElement, type ResolvedView } from './resolver';
+import type { Environment } from './context';
+import type { ThemeProject } from './project';
+import { relative } from '../path';
 import type { ThemeFile } from './project';
 import { isVisible } from '../render';
 
@@ -126,11 +129,49 @@ export function splashScene(view: ResolvedView | null | undefined, file: ThemeFi
   return { backgroundColor: bgColor, elements, bar, barIndex, ignored };
 }
 
+/** A theme design's look for a new loading screen (#38): paths are relative to the theme folder. */
+export interface SplashLook {
+  backgroundColor: string;
+  background: string | null;
+  font: string | null;
+  text: string;
+  bar: string;
+  accent: string;
+}
+
 /**
- * A new splash.xml or gamesplash.xml: RetroBat's own look, with its built-in parts written out
+ * The look of a theme made with a ChannelCraft design, for a new loading or game launch screen:
+ * its backdrop, title font and colours. Null for other themes. The splash files are read on
+ * their own, so the values are written out, not the theme's variables.
+ */
+export function designSplashLook(res: Resolution, project: ThemeProject, env: Environment): SplashLook | null {
+  const v = (n: string) => res.vars.get(n)?.value?.trim();
+  const accent = v('designAccent');
+  if (!accent || !/^[0-9a-f]{6,8}$/i.test(accent)) return null;
+  const hex = (c: string | undefined, alpha = 'FF') => (c && /^[0-9a-f]{6,8}$/i.test(c) ? c.slice(0, 6).toUpperCase() + (c.length === 8 ? c.slice(6) : alpha) : null);
+  const inTheme = (abs: string | null) => (abs && project.isInside(abs) ? relative(project.dir, abs) : null);
+  const system = res.views.get('system');
+  const bgEl = system?.elements.get('staticBackground') ?? res.views.get('detailed')?.elements.get('ccs_background');
+  const background = bgEl && isVisible(bgEl) ? inTheme(resolveAssetWithFallbacks(bgEl, 'path', res, project, env)) : null;
+  // The font of the console name (the design's title font), else any text with its own font.
+  const texts = [...(system?.elements.values() ?? [])].filter((e) => e.type === 'text' && e.props.get('fontPath')).sort((a, b) => Number(b.name === 'ccs_systemname') - Number(a.name === 'ccs_systemname') || a.order - b.order);
+  const font = texts.map((e) => inTheme(resolveAssetWithFallbacks(e, 'fontPath', res, project, env))).find(Boolean) ?? null;
+  return {
+    backgroundColor: hex(v('designBackground')) ?? '000000FF',
+    background,
+    font,
+    text: hex(v('designText')) ?? 'FFFFFFFF',
+    // The track: the design's panel colour, faint, so the accent fill stands out.
+    bar: (hex(v('designPanel')) ?? '606060FF').slice(0, 6) + '4D',
+    accent: hex(accent)!,
+  };
+}
+
+/**
+ * A new splash.xml or gamesplash.xml: RetroBat's own look, or the theme design's (`look`), with its built-in parts written out
  * so they can be changed (the label's text is set by RetroBat while it loads).
  */
-export function splashTemplate(game: boolean): string {
+export function splashTemplate(game: boolean, look: SplashLook | null = null): string {
   const what = game ? 'while a game starts' : 'while RetroBat starts';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!-- What RetroBat shows ${what}. Only the background, the label, the progress bar and
@@ -139,29 +180,31 @@ export function splashTemplate(game: boolean): string {
   <formatVersion>7</formatVersion>
   <view name="splash">
     <splash name="splash">
-      <backgroundColor>000000FF</backgroundColor>
+      <backgroundColor>${look?.backgroundColor ?? '000000FF'}</backgroundColor>
     </splash>
     <image name="background">
       <pos>0.5 0.5</pos>
       <origin>0.5 0.5</origin>
-      <maxSize>1 1</maxSize>
+${look?.background ? `      <path>${look.background}</path>
+      <size>1 1</size>` : '      <maxSize>1 1</maxSize>'}
     </image>
     <text name="label">
       <pos>0 0.78</pos>
       <size>1 0.045</size>
       <fontSize>0.045</fontSize>
       <alignment>center</alignment>
-      <color>FFFFFFFF</color>
+      <color>${look?.text ?? 'FFFFFFFF'}</color>${look?.font ? `
+      <fontPath>${look.font}</fontPath>` : ''}
     </text>
     <image name="progressbar">
       <pos>0.25 0.892</pos>
       <size>0.5 0.036</size>
-      <color>6060607F</color>
-      <colorEnd>9090907F</colorEnd>
+      <color>${look?.bar ?? '6060607F'}</color>
+      <colorEnd>${look?.bar ?? '9090907F'}</colorEnd>
     </image>
     <image name="progressbar:active">
-      <color>DF1010FF</color>
-      <colorEnd>4F0000FF</colorEnd>
+      <color>${look?.accent ?? 'DF1010FF'}</color>
+      <colorEnd>${look?.accent ?? '4F0000FF'}</colorEnd>
     </image>
   </view>
 </theme>
