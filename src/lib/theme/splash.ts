@@ -12,6 +12,7 @@ import { resolveAssetWithFallbacks, type PropDef, type Resolution, type Resolved
 import type { Environment } from './context';
 import type { ThemeProject } from './project';
 import { relative } from '../path';
+import { escapeText } from '../xml/cst';
 import type { ThemeFile } from './project';
 import { isVisible } from '../render';
 
@@ -185,7 +186,7 @@ export function splashTemplate(game: boolean, look: SplashLook | null = null): s
     <image name="background">
       <pos>0.5 0.5</pos>
       <origin>0.5 0.5</origin>
-${look?.background ? `      <path>${look.background}</path>
+${look?.background ? `      <path>${escapeText(look.background)}</path>
       <size>1 1</size>` : '      <maxSize>1 1</maxSize>'}
     </image>
     <text name="label">
@@ -194,7 +195,7 @@ ${look?.background ? `      <path>${look.background}</path>
       <fontSize>0.045</fontSize>
       <alignment>center</alignment>
       <color>${look?.text ?? 'FFFFFFFF'}</color>${look?.font ? `
-      <fontPath>${look.font}</fontPath>` : ''}
+      <fontPath>${escapeText(look.font)}</fontPath>` : ''}
     </text>
     <image name="progressbar">
       <pos>0.25 0.892</pos>

@@ -250,16 +250,22 @@ async function stageReady(stage: HTMLElement, ms = 4000) {
  */
 export async function makePreviewFromSystemMenu(this: Editor) {
   const back = { view: this.view, file: this.screenFile };
-  if (this.viewNames.includes('system') && (back.view !== 'system' || back.file !== 'theme.xml')) this.showScreen({ view: 'system', file: 'theme.xml' });
-  await this.makePreviewImage(true);
-  if (this.view !== back.view || this.screenFile !== back.file) this.showScreen(back);
+  const keep = this.selection;
+  const moved = this.viewNames.includes('system') && (back.view !== 'system' || back.file !== 'theme.xml');
+  if (moved) this.showScreen({ view: 'system', file: 'theme.xml' });
+  // Not if the user moved to another screen meanwhile (Share doesn't block the window).
+  await this.makePreviewImage(true, () => !moved || (this.view === 'system' && this.screenFile === 'theme.xml'));
+  if (moved && this.view === 'system' && this.screenFile === 'theme.xml') {
+    this.showScreen(back);
+    this.selection = keep;
+  }
 }
 
 /**
  * Captures the current screen as the theme's preview.png (shown in RetroBat and here). `quiet`:
  * no message, and a failure is only a missing picture (used when a theme is made).
  */
-export async function makePreviewImage(this: Editor, quiet = false) {
+export async function makePreviewImage(this: Editor, quiet = false, still: () => boolean = () => true) {
   const p = this.project;
   // No page to capture (the tests run the editor without one).
   if (typeof document === 'undefined') return;
@@ -272,7 +278,11 @@ export async function makePreviewImage(this: Editor, quiet = false) {
     const keep = this.selection;
     this.selection = [];
     await new Promise((r) => setTimeout(r, 50));
-    const fontEmbedCSS = await themeFontCss();
+    if (!still()) return;
+    // Only the fonts this screen uses, inlined (#44).
+    const used = new Set([...stage.querySelectorAll('*')].flatMap((n) => getComputedStyle(n).fontFamily.split(',').map((f) => f.trim().replace(/^["']|["']$/g, ''))));
+    const fontEmbedCSS = await themeFontCss((fam) => used.has(fam));
+    if (!still()) return;
     const url = await toPng(stage, { width, height, pixelRatio: 1, fontEmbedCSS, style: { transform: 'none' }, filter: (n) => !(n instanceof HTMLElement && n.classList.contains('overlay')) });
     this.selection = keep;
     await api.writeBinary(join(p.dir, 'preview.png'), url.split(',')[1]);

@@ -101,7 +101,7 @@
     if (starter) task.step('open');
     await ed.openTheme(path);
     if (!starter) return;
-    if (ed.project?.dir !== path) return task.fail('The new theme was created but could not be opened. Pick it from Your themes to try again.');
+    if (ed.project?.dir !== path) return task.fail('The new theme was created but could not be opened. Make it again with the same name to start over.');
     try {
       await ed.applyStarter(starter);
       task.finish();

@@ -224,6 +224,8 @@ export async function applyStarter(this: Editor, choice: { design: string; artFr
   }
   task.step('save');
   await this.save();
+  // Unsaved, it stays marked as half-made (#22): say so instead of "ready".
+  if (this.dirtyCount) throw new Error(`“${p.name}” couldn’t be saved, so it isn’t finished. Save it with Ctrl+S; until then it won’t show in Your themes.`);
   // A picture for its card on Home (and in RetroBat's theme list), from the System menu (#31).
   if (!this.hasPreview() && this.viewNames.includes('system')) await this.makePreviewFromSystemMenu();
   this.notify(`“${p.name}” is ready${design ? ` with the ${design.label} design` : ''}. It's saved; your changes from here can be undone.`);

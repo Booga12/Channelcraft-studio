@@ -423,10 +423,10 @@ pub struct Imported {
 /// Imports a theme .zip or folder as a new theme folder named `name`. `systems` are the systems'
 /// theme names (as in es_systems.cfg), used to find console art for a gallery download.
 #[tauri::command(async)]
-pub fn import_theme(roots: State<Roots>, source: String, name: String, systems: Option<Vec<String>>) -> CmdResult<Imported> {
+pub fn import_theme(app: tauri::AppHandle, roots: State<Roots>, source: String, name: String, systems: Option<Vec<String>>) -> CmdResult<Imported> {
     let source = PathBuf::from(source);
     let themes = check_source(&roots, &source)?;
-    let dest = new_theme_path(&roots, &name)?;
+    let dest = new_theme_path(&roots, &crate::storage::data_dir(&app, "locks")?, &name)?;
     let note = import_into(&source, &themes, &dest, &systems.unwrap_or_default())?;
     Ok(Imported { path: dest.to_string_lossy().into_owned(), note })
 }

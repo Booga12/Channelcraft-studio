@@ -653,11 +653,14 @@ fn fetch_ofl(dir_url: &str, dest: &Path) -> CmdResult<()> {
     crate::storage::write_atomic(dest, text.as_bytes())
 }
 
-pub(crate) fn new_theme_path(roots: &Roots, name: &str) -> CmdResult<PathBuf> {
+/// Where a new theme called `name` goes. `locks`: the theme locks folder, so a half-made theme
+/// another window is still setting up is never moved away.
+pub(crate) fn new_theme_path(roots: &Roots, locks: &Path, name: &str) -> CmdResult<PathBuf> {
     valid_theme_name(name)?;
     let dest = themes_dir(&roots.root()?).join(name.trim());
     // A theme left half-built under this name (#22) goes to the Recycle Bin to make way.
     if dest.join(crate::storage::UNFINISHED).is_file() {
+        let _held = crate::storage::take_lock(locks, &dest).map_err(|_| format!("A theme named \"{}\" is still being set up in another window. Pick another name, or wait for it to finish.", name.trim()))?;
         trash::delete(&dest).map_err(|e| format!("A half-made theme named \"{}\" is in the way and couldn't be moved to the Recycle Bin: {e}", name.trim()))?;
     }
     if dest.exists() {

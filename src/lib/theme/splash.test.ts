@@ -100,5 +100,9 @@ describe('a new loading screen on a design theme (#38)', () => {
     expect(view.elements.get('label')!.props.get('fontPath')!.value).toBe(look.font);
     expect(view.elements.get('background')!.props.get('path')!.value).toBe(look.background);
     expect(view.elements.get('progressbar:active')!.props.get('color')!.value).toBe(look.accent);
+
+    // File names with XML characters are written escaped and read back as they are.
+    p.addFile('splash.xml', splashTemplate(false, { ...look, background: './_inc/art/Rock & <Roll>.png' }));
+    expect(resolveTheme(p, env, 'splash.xml').views.get('splash')!.elements.get('background')!.props.get('path')!.value).toBe('./_inc/art/Rock & <Roll>.png');
   });
 });
