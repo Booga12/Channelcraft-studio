@@ -32,6 +32,11 @@
     own = kind.kind === 'own' ? (textDef?.raw ?? '') : '';
   });
 
+  // What Check theme finds on this text, shown here too (#26): missing letters, hard-to-read
+  // colour, game art drawn over it.
+  const CARD_KINDS = new Set(['missing-character', 'hard-to-read', 'covered']);
+  const problems = $derived(hasText ? ed.healthIssues.filter((i) => i.element === el.name && CARD_KINDS.has(i.kind) && (!i.views.length || i.views.includes(ed.view))) : []);
+
   const what = $derived(kind.kind === 'source' ? kind.source.label : kind.kind === 'own' ? (textDef?.raw ? 'Your own words' : 'Nothing yet') : 'Worked out by the theme');
   /** Names can be long: the preview can try a long one. */
   const showsName = $derived(kind.kind === 'source' ? kind.source.id === 'system' || kind.source.id === 'game' : kind.kind === 'theme' && /name/i.test(textDef?.raw ?? ''));
@@ -178,6 +183,13 @@
       <button class="small" onclick={fit} disabled={fitting}>{fitting ? 'Making it fit…' : 'Make it fit'}</button>
     </div>
   {/if}
+
+  {#each problems as p (p.key)}
+    <div class="alert" role="status">
+      <div>{p.text}</div>
+      {#if p.fix}<button class="small" onclick={() => ed.fixHealth(p)}>{p.fix.label}</button>{/if}
+    </div>
+  {/each}
 
   <div class="row">
     <div class="lbl">Font <b>{fontDef ? fontName(fontDef.value) : 'RetroBat’s own'}</b></div>
