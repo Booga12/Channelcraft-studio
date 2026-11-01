@@ -245,6 +245,17 @@
           </div>
         </fieldset>
       {:else if step === 2}
+        <!-- First on the screen the logos are for, not under a long grid (#24). -->
+        <fieldset>
+          <legend>Console logos and pictures</legend>
+          <select bind:value={artFrom} disabled={scanning} aria-label="Console logos and pictures">
+            <option value="">{scanning ? 'Looking through your themes…' : 'None: show console names as text'}</option>
+            {#each sources as s (s.theme.path)}
+              <option value={s.theme.path}>Copy from {s.theme.name} ({s.logos} logos{s.consoles ? `, ${s.consoles} console pictures` : ''})</option>
+            {/each}
+          </select>
+          <small class="note">Copies the system logos (and console pictures, if it has them) from one of your installed themes, so the system screen shows real logos straight away.</small>
+        </fieldset>
         <fieldset>
           <legend>How the consoles are shown (the system menu)</legend>
           <div class="designs">
@@ -262,16 +273,6 @@
               <LayoutCard diagram={(flip ? GAME_LAYOUTS.find((x) => x.id === flipped(l.id)) : l)?.diagram ?? l.diagram} design={chosen} label={l.id === designGameLayout(chosen) ? `${l.label} (the design's own)` : l.label} description={l.description} on={gameBase === l.id} onclick={() => (gameLayout = l.id)} />
             {/each}
           </div>
-        </fieldset>
-        <fieldset>
-          <legend>Console logos and pictures</legend>
-          <select bind:value={artFrom} disabled={scanning} aria-label="Console logos and pictures">
-            <option value="">{scanning ? 'Looking through your themes…' : 'None: show console names as text'}</option>
-            {#each sources as s (s.theme.path)}
-              <option value={s.theme.path}>Copy from {s.theme.name} ({s.logos} logos{s.consoles ? `, ${s.consoles} console pictures` : ''})</option>
-            {/each}
-          </select>
-          <small class="note">Copies the system logos (and console pictures, if it has them) from one of your installed themes, so the system screen shows real logos straight away.</small>
         </fieldset>
       {/if}
     {/if}
@@ -387,8 +388,6 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     gap: 10px;
-    max-height: 52vh;
-    overflow-y: auto;
   }
   .choice {
     position: relative;
