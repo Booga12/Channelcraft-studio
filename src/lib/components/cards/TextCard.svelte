@@ -94,6 +94,7 @@
     return p.assets.filter((a) => a.kind === 'font').slice(0, 8).map((a) => ({ rel: a.rel, abs: join(p.dir, a.rel) }));
   });
   let moreFonts = $state(false);
+  let moreBtn = $state<HTMLButtonElement>();
   const sameFile = (a: string | null, b: string) => !!a && a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
   function useFont(abs: string) {
     ed.setProp(el.name, 'fontPath', ed.relativeAssetPath(el.name, 'fontPath', abs), { literal: true });
@@ -187,9 +188,26 @@
         {/each}
       </div>
     {/if}
-    <button class="ghost small more" onclick={() => (moreFonts = !moreFonts)}>{moreFonts ? 'Hide other fonts' : 'More fonts: free ones, or from your PC…'}</button>
+    <button class="ghost small more" bind:this={moreBtn} onclick={() => (moreFonts = !moreFonts)}>{moreFonts ? 'Hide other fonts' : 'More fonts: free ones, or from your PC…'}</button>
     {#if moreFonts}
-      <AssetInput value={fontDef?.raw ?? ''} kind="font" resolved={fontAbs} toRelative={(abs) => ed.relativeAssetPath(el.name, 'fontPath', abs)} onchange={(v) => ed.setProp(el.name, 'fontPath', v, { literal: true })} />
+      <!-- Straight to the font picker, without the raw file path that looked like a search (#25).
+           Advanced mode has its own fontPath field. -->
+      <AssetInput
+        value={fontDef?.raw ?? ''}
+        kind="font"
+        resolved={fontAbs}
+        toRelative={(abs) => ed.relativeAssetPath(el.name, 'fontPath', abs)}
+        onchange={(v) => {
+          ed.setProp(el.name, 'fontPath', v, { literal: true });
+          moreFonts = false;
+        }}
+        startOpen
+        pathBox={false}
+        onclose={() => {
+          moreFonts = false;
+          moreBtn?.focus();
+        }}
+      />
     {/if}
   </div>
 

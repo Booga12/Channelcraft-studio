@@ -14,6 +14,9 @@
     resolved,
     toRelative,
     onchange,
+    startOpen = false,
+    pathBox = true,
+    onclose,
   }: {
     value: string;
     kind: 'image' | 'font' | 'sound' | 'video';
@@ -22,10 +25,17 @@
     /** Converts an absolute path into the value to store. */
     toRelative: (abs: string) => string;
     onchange: (v: string) => void;
+    /** Opens with the picker showing (on Free fonts, for fonts), as when asked for more fonts (#25). */
+    startOpen?: boolean;
+    /** Whether to show the box with the file's path and its … button. */
+    pathBox?: boolean;
+    /** Called when the picker closes after opening with `startOpen`. */
+    onclose?: () => void;
   } = $props();
 
   let text = $state('');
-  let browsing = $state(false);
+  // svelte-ignore state_referenced_locally
+  let browsing = $state(startOpen);
   let filter = $state('');
   $effect(() => {
     text = value;
@@ -162,7 +172,16 @@
 
   // ---- fonts ----
   /** Where the list comes from: your Assets first, then the theme (and for fonts, free and PC fonts). */
-  let fontTab = $state<Tab>('assets');
+  // svelte-ignore state_referenced_locally
+  let fontTab = $state<Tab>(startOpen && kind === 'font' ? 'free' : 'assets');
+  $effect(() => {
+    if (!startOpen) return;
+    if (fontTab === 'free') loadGoogle();
+    if (!ed.libraryLoaded) ed.loadLibrary();
+  });
+  $effect(() => {
+    if (startOpen && !browsing) onclose?.();
+  });
   let pcFonts = $state<{ name: string; path: string; source: string }[]>([]);
   let busy = $state(false);
 
@@ -228,6 +247,7 @@
 </script>
 
 <div class="asset">
+  {#if pathBox}
   <div class="line">
     {#if kind === 'image' && resolved}
       <img class="thumb" src={fileUrl(resolved)} alt="" />
@@ -237,10 +257,12 @@
     <input class="mono" aria-label="Path of the {what}" bind:value={text} spellcheck="false" onchange={() => onchange(text.trim())} onkeydown={(e) => e.key === 'Enter' && onchange(text.trim())} />
     <button class="small" bind:this={browseBtn} onclick={toggleBrowse} onkeydown={browseKey} aria-label="Choose a {what} from your Assets or the theme" aria-expanded={browsing} title="Choose a {what} from your Assets or the theme">…</button>
   </div>
+  {/if}
   {#if browsing}
     <div class="browser" {@attach closeOnEscape}>
       <div class="bhead">
-        <input placeholder="Filter {what}s…" aria-label="Filter {what}s" bind:value={filter} />
+        <!-- Opened on request, typing goes straight to the filter: a font name searches (#25). -->
+        <input placeholder="Filter {what}s…" aria-label="Filter {what}s" bind:value={filter} {@attach (n) => void (startOpen && n.focus())} />
         <button class="small" onclick={importFile} disabled={busy} title="Pick a file on your PC. It's added to your Assets too.">From my computer…</button>
       </div>
       <div class="ftabs" role="tablist" aria-label="Where to choose from">
