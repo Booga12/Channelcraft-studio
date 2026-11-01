@@ -13,6 +13,7 @@
   import PasteIcon from '@lucide/svelte/icons/clipboard-paste';
   import SearchIcon from '@lucide/svelte/icons/search';
   import GridIcon from '@lucide/svelte/icons/layout-grid';
+  import CheckIcon from '@lucide/svelte/icons/check';
   import { ed } from '$lib/editor.svelte';
   import { cards, CARD_PROPS, LOOK_PROPS } from '$lib/simpleCards.svelte';
   import { elementLabel, TYPE_LABELS, typeLabel, viewLabel } from '$lib/friendly';
@@ -60,11 +61,14 @@
     return s;
   });
 
+  // The other game lists it's on or could be on (#30); the note below covers the rest.
+  const also = $derived(ed.alsoOnFor(el.name));
   const sharedViews = $derived.by(() => {
     const set = new Set<string>();
-    for (const d of el.defs) for (const v of sharing(d).views) if (v !== ed.view) set.add(v);
+    for (const d of el.defs) for (const v of sharing(d).views) if (v !== ed.view && !also.screens.some((s) => s.view === v)) set.add(v);
     return [...set];
   });
+  const screenName = (v: string) => viewLabel(v, ed.res?.views.get(v)?.displayName);
 
   // ---- "Back to how it was" ----
   const key = $derived(`${ed.project?.dir}|${ed.screenFile}|${ed.view}|${el.name}`);
@@ -151,6 +155,35 @@
       <span class="sp"></span>
       <button class="small" onclick={onremove} title="Delete it from this screen"><TrashIcon size={13} /> Delete</button>
     </div>
+    {#if also.screens.length}
+      <div class="also" role="group" aria-label="Also show it on">
+        <span class="also-lbl">Also show on</span>
+        {#if also.why}
+          <p class="shared">{also.why}</p>
+        {:else}
+          {#each also.screens as s (s.view)}
+            {#if s.state === 'with'}
+              <span class="chip on fixed" title="{screenName(s.view)} is built on {s.from ? screenName(s.from) : 'this screen'}, so it shows it too."><CheckIcon size={12} />{screenName(s.view)}</span>
+            {:else}
+              <button
+                class="small chip"
+                class:on={s.state === 'on'}
+                aria-pressed={s.state === 'on'}
+                disabled={s.state === 'taken'}
+                title={s.state === 'taken'
+                  ? `${screenName(s.view)} already has a part called “${el.name}”.`
+                  : s.state === 'on'
+                    ? `It's on ${screenName(s.view)} too: changes show on both. Click to take it off there.`
+                    : `Show it on ${screenName(s.view)} too, as the same part: changing it changes both.`}
+                onclick={() => ed.setAlsoOn(el.name, s.view, s.state !== 'on')}
+              >
+                {#if s.state === 'on'}<CheckIcon size={12} />{/if}{screenName(s.view)}
+              </button>
+            {/if}
+          {/each}
+        {/if}
+      </div>
+    {/if}
     {#if kind}
       <div class="tools">
         <button class="small" onclick={copyLook} title="Remember how this looks, to give it to another {kind}"><PaintbrushIcon size={13} /> Copy look</button>
@@ -234,6 +267,33 @@
     margin: 0;
     font-size: 12px;
     color: var(--warn);
+  }
+  .also {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+  .also-lbl {
+    margin-right: 2px;
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .chip.on {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+  }
+  .chip.fixed {
+    padding: 2px 8px;
+    border: 1px solid var(--brand);
+    border-radius: 6px;
+    font-size: 12px;
+    opacity: 0.75;
   }
   .tools {
     display: flex;

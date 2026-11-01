@@ -11,6 +11,8 @@ import { patchRemoveNode, patchSetAttr } from '../xml/cst';
 import { fmtNum, parsePair } from '../theme/schema';
 import { reorder, zIndexFor } from '../theme/layers';
 import { zOf } from '../render';
+import { alsoOn, alsoOnChanges } from '../theme/alsoOn';
+import { viewLabel } from '../friendly';
 
 /** Properties of an element as written, with relative paths made relative to theme.xml. */
 export function snapshotElement(this: Editor, name: string) {
@@ -222,6 +224,13 @@ export function moveLayers(this: Editor, names: string[], before: string | null)
 export function deleteElement(this: Editor, elementName: string): { removed: number; kept: number } {
   const el = this.currentView?.elements.get(elementName);
   if (!el) return { removed: 0, kept: 0 };
+  // A part shown on several game lists (#30) comes off this one only.
+  const off = this.project && this.res && this.screenFile === 'theme.xml' ? alsoOnChanges(this.project, this.res, this.view, elementName, this.view, false) : null;
+  if (off) {
+    this.commit(`taking ${elementLabel(elementName)} off ${viewLabel(this.view)}`, off);
+    this.selected = null;
+    return { removed: 1, kept: 0 };
+  }
   const own = el.defs.filter((d) => {
     const names = (d.node.attrs.find((a) => a.name === 'name')?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     const parentNames = (d.node.parent?.attrs.find((a) => a.name === 'name')?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -257,6 +266,12 @@ export function deleteSelection(this: Editor) {
   for (const name of this.selection) {
     const el = v.elements.get(name);
     if (!el) continue;
+    // A part shown on several game lists (#30) comes off this one only.
+    const off = this.project && this.res && this.screenFile === 'theme.xml' ? alsoOnChanges(this.project, this.res, this.view, name, this.view, false) : null;
+    if (off) {
+      changes.push(...off);
+      continue;
+    }
     for (const d of el.defs) {
       const names = (d.node.attrs.find((a) => a.name === 'name')?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
       const parentNames = (d.node.parent?.attrs.find((a) => a.name === 'name')?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -284,4 +299,23 @@ export function selectAll(this: Editor) {
   const v = this.currentView;
   if (!v) return;
   this.selection = [...v.elements.keys()].filter((n) => !this.locked[n] && this.rects[n] && !(this.rects[n].w > 0.98 && this.rects[n].h > 0.98));
+}
+
+/** Where a part on this game list is also shown, and where it could be (#30). */
+export function alsoOnFor(this: Editor, name: string) {
+  void this.rev;
+  const p = this.project;
+  const res = this.res;
+  if (!p || !res || this.screenFile !== 'theme.xml') return { screens: [] };
+  return alsoOn(p, res, this.view, name);
+}
+
+/** Shows a part on another game list too, or takes it off there (#30). One part either way. */
+export function setAlsoOn(this: Editor, name: string, view: string, on: boolean) {
+  const p = this.project;
+  const res = this.res;
+  if (!p || !res) return;
+  const changes = alsoOnChanges(p, res, this.view, name, view, on);
+  if (!changes) return void this.notify(alsoOn(p, res, this.view, name).why ?? `Couldn't change where ${elementLabel(name)} shows.`, 'error');
+  this.commit(`${on ? 'showing' : 'taking off'} ${elementLabel(name)} ${on ? 'on' : 'from'} ${viewLabel(view)}`, changes);
 }
