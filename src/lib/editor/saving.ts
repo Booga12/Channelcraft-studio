@@ -275,27 +275,39 @@ export async function makePreviewImage(this: Editor, quiet = false, still: () =>
     if (quiet) await stageReady(stage);
     const { toPng } = await import('html-to-image');
     const { width, height } = screenSize(this.settings);
-    const keep = this.selection;
-    this.selection = [];
-    await new Promise((r) => setTimeout(r, 50));
-    if (!still()) return;
-    // Only the fonts this screen uses, inlined (#44).
+    // Only the fonts this screen uses, inlined (#44), loaded first while the screen stays as it is.
     const used = new Set([...stage.querySelectorAll('*')].flatMap((n) => getComputedStyle(n).fontFamily.split(',').map((f) => f.trim().replace(/^["']|["']$/g, ''))));
     const fontEmbedCSS = await themeFontCss((fam) => used.has(fam));
     if (!still()) return;
-    // A picture that can't be loaded (a missing console logo) is left blank, as on screen,
-    // instead of failing the whole capture (#46).
-    const url = await toPng(stage, {
+    await loadPictureFonts(fontEmbedCSS);
+    if (!still()) return;
+    const options = {
       width,
       height,
       pixelRatio: 1,
-      fontEmbedCSS,
+      // Text whose font still isn't ready shows in the next font, never left out (#46).
+      fontEmbedCSS: fontEmbedCSS.replace(/@font-face \{/g, '@font-face { font-display: swap;'),
       style: { transform: 'none' },
+      // A picture that can't be loaded (a missing console logo) is left blank, as on screen,
+      // instead of failing the whole capture (#46).
       imagePlaceholder: BLANK_PNG,
       onImageErrorHandler: () => {},
-      filter: (n) => !(n instanceof HTMLElement && n.classList.contains('overlay')),
-    });
-    this.selection = keep;
+      // It remembers pictures by address; without the part after "?" every file the dev server
+      // sends (/__dev/file?path=…) would count as one picture on the next capture.
+      includeQueryParams: true,
+      filter: (n: Node) => !(n instanceof HTMLElement && n.classList.contains('overlay')) && copyable(n),
+    };
+    // Without the selection outline. It comes back after, unless something else was picked meanwhile.
+    const keep = this.selection;
+    this.selection = [];
+    let url: string;
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      if (!still()) return;
+      url = await toPng(stage, options);
+    } finally {
+      if (!this.selection.length) this.selection = keep;
+    }
     await api.writeBinary(join(p.dir, 'preview.png'), url.split(',')[1]);
     p.setAssets(await api.listThemeFiles(p.dir));
     this.rev++;
@@ -303,6 +315,68 @@ export async function makePreviewImage(this: Editor, quiet = false, still: () =>
     if (!quiet) this.notify('Saved preview.png from this screen');
   } catch (e) {
     if (!quiet) this.notify(`Couldn't capture the screen: ${e instanceof Event ? 'a picture or font on it couldn’t be read' : e}`, 'error');
+  }
+}
+
+/**
+ * Gets the fonts of a picture loaded before it's drawn. A picture is drawn once, while a big font
+ * (RetroBat's spare fonts are 5 MB) is still loading inside it, which leaves that text out. So a
+ * small picture with a line in each font is drawn until every line shows, at most `ms`; the
+ * browser keeps the fonts for the real one (#46).
+ */
+async function loadPictureFonts(css: string, ms = 5000) {
+  const families = [...css.matchAll(/font-family: '([^']+)'/g)].map((m) => m[1]);
+  if (!families.length) return;
+  const W = 64;
+  const H = 24;
+  const style = css.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const lines = families.map((f, i) => `<div style="position:absolute;left:0;top:${i * H}px;font:20px &quot;${f}&quot;;color:#000">AW</div>`).join('');
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = families.length * H;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return;
+  const end = Date.now() + ms;
+  for (let n = 0; Date.now() < end; n++) {
+    // A new picture each time (the comment makes it new): each is only drawn once.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${canvas.height}"><!--${n}--><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="background:#fff;width:${W}px;height:100%"><style>${style}</style>${lines}</div></foreignObject></svg>`;
+    const src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    try {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, W, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      // A line shows once its font has loaded (or failed, so the next font is used).
+      if (families.every((_, i) => ctx.getImageData(0, i * H, W, H).data.some((v, k) => k % 4 === 0 && v < 128))) return;
+    } catch {
+      return; // Can't tell: the capture goes ahead, and text shows in the next font at worst.
+    } finally {
+      URL.revokeObjectURL(src);
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+/**
+ * Whether a video or canvas can be copied into a picture. One the browser won't let the app read
+ * (from a source that didn't allow it) would stop the whole capture, so it's left out (#46).
+ */
+function copyable(n: Node): boolean {
+  // A picture that didn't load shows nothing on screen. Leaving it out also stops the capture
+  // remembering it as blank after the file is added (#46).
+  if (n instanceof HTMLImageElement) return !(n.complete && n.naturalWidth === 0);
+  if (!(n instanceof HTMLVideoElement || n instanceof HTMLCanvasElement)) return true;
+  // A video with no size on screen would be copied as an empty picture, which fails the capture.
+  if (n instanceof HTMLVideoElement && (!n.clientWidth || !n.clientHeight)) return false;
+  try {
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx?.drawImage(n, 0, 0, 1, 1);
+    ctx?.getImageData(0, 0, 1, 1);
+    return true;
+  } catch {
+    return false;
   }
 }
 
