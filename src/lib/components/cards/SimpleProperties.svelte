@@ -217,6 +217,7 @@
     <MoreCard {el} {covered} />
     {#if cards.query.trim()}
       <p class="nofind">Can't find it? Try other words, or look in Advanced mode, which shows every setting.</p>
+      <button class="small advbtn" onclick={() => ed.setMode('advanced')} title="Every setting for this part, such as rotation. Switch back with Simple at the top.">Show in Advanced mode</button>
     {/if}
   </div>
 </div>
@@ -345,5 +346,10 @@
     font-size: 12px;
     color: var(--text-faint);
     text-align: center;
+  }
+  .advbtn {
+    justify-self: center;
+    align-self: center;
+    margin: 0 auto;
   }
 </style>

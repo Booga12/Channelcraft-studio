@@ -274,7 +274,7 @@
       {#if open && info}
         <div class="pointer-events-auto flex h-full" data-panel="dock" transition:fly={{ x: -16, duration: 220, easing: cubicOut }}>
           <FloatingPanel
-            title={open === 'variables' && !ed.simple ? 'Variables' : info.label}
+            title={info.label}
             subtitle={info.help}
             bind:width={prefs.v.panelWidth}
             onresized={() => prefs.save()}

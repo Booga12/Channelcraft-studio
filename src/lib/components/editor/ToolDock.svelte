@@ -20,13 +20,14 @@
   }
 
   /** The panels the dock opens, in order. */
+  // One order for both modes (#36): Simple shows a shorter list in the same order.
   export const PANELS: PanelInfo[] = [
+    { id: 'presets', label: 'Presets', help: 'Designs, layouts and colour palettes', icon: LayoutTemplateIcon },
+    { id: 'variables', label: 'Colours', help: 'Colours and values shared across the theme', icon: PaletteIcon },
+    { id: 'sound', label: 'Sound', help: 'Menu music and the sound when you scroll', icon: MusicIcon },
+    { id: 'assets', label: 'Assets', help: 'Your own pictures, videos, sounds and fonts, and the app’s own sounds; drag one onto an element to use it', icon: ImagesIcon },
     { id: 'elements', label: 'Layers', help: 'Everything drawn on this screen', icon: LayersIcon },
     { id: 'library', label: 'Library', help: 'Ready-made elements that show RetroBat’s game and system data', icon: SparklesIcon },
-    { id: 'assets', label: 'Assets', help: 'Your own pictures, videos, sounds and fonts, and the app’s own sounds; drag one onto an element to use it', icon: ImagesIcon },
-    { id: 'presets', label: 'Presets', help: 'Designs, layouts and colour palettes', icon: LayoutTemplateIcon },
-    { id: 'sound', label: 'Sound', help: 'Menu music and the sound when you scroll', icon: MusicIcon },
-    { id: 'variables', label: 'Colours', help: 'Colours and values shared across the theme', icon: PaletteIcon },
     { id: 'options', label: 'Options', help: 'Choices the theme offers inside RetroBat', icon: SlidersHorizontalIcon },
     { id: 'history', label: 'History', help: 'Every change; click one to go back to it', icon: HistoryIcon },
     { id: 'explorer', label: 'Explorer', help: 'Look through any folder and bring in many files at once', icon: FolderOpenIcon },
@@ -73,8 +74,9 @@
   // Simple mode keeps to what a first theme needs: looks, colours, what's on screen, undo, and
   // your own files (Assets, and Explorer to bring them in).
   const SIMPLE: PanelId[] = ['presets', 'variables', 'sound', 'assets', 'elements', 'history', 'explorer'];
-  const panels = $derived(ed.simple ? SIMPLE.map((id) => PANELS.find((p) => p.id === id)!) : PANELS);
-  const label = (p: PanelInfo) => (p.id === 'variables' && !ed.simple ? 'Variables' : p.label);
+  const panels = $derived(ed.simple ? PANELS.filter((p) => SIMPLE.includes(p.id)) : PANELS);
+  // The same names in both modes (#36), so buttons stay where you learnt them.
+  const label = (p: PanelInfo) => p.label;
   const item = 'relative flex w-full flex-col items-center gap-1 rounded-xl px-1 pt-1.5 pb-1 text-[10px] leading-none font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&_svg]:size-[18px] [&_svg]:shrink-0';
   const on = 'bg-primary/12 font-semibold text-primary hover:bg-primary/18 hover:text-primary';
 </script>
