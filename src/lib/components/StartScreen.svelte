@@ -212,11 +212,14 @@
                     </div>
                   {/if}
                 </button>
-                <div class="flex items-center gap-1 p-2.5 pl-3.5">
-                  <div class="min-w-0 flex-1 truncate text-sm font-medium" title={t.name}>{t.name}</div>
-                  <Button variant="ghost" size="icon-sm" class="text-muted-foreground hover:text-destructive" onclick={() => removeTheme(t)} title="Delete this theme (moves it to the Recycle Bin)" aria-label="Delete {t.name}"><Trash2Icon /></Button>
-                  <Button variant="ghost" size="sm" onclick={() => (dialog = { mode: 'duplicate', source: t })} title="Copy this theme to a new folder and edit the copy">Duplicate</Button>
-                  <Button size="sm" onclick={() => openTheme(t)} disabled={ed.loading}>Edit</Button>
+                <!-- The name gets its own line so long folder names stay readable (#34). -->
+                <div class="flex flex-1 flex-col gap-1.5 p-2.5 pl-3.5">
+                  <div class="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]" title={t.name}>{t.name}</div>
+                  <div class="mt-auto flex items-center gap-1">
+                    <Button variant="ghost" size="icon-sm" class="-ml-1.5 text-muted-foreground hover:text-destructive" onclick={() => removeTheme(t)} title="Delete this theme (moves it to the Recycle Bin)" aria-label="Delete {t.name}"><Trash2Icon /></Button>
+                    <Button variant="ghost" size="sm" class="ml-auto" onclick={() => (dialog = { mode: 'duplicate', source: t })} title="Copy this theme to a new folder and edit the copy">Duplicate</Button>
+                    <Button size="sm" onclick={() => openTheme(t)} disabled={ed.loading}>Edit</Button>
+                  </div>
                 </div>
               </article>
             {/each}
