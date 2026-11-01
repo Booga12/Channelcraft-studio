@@ -68,3 +68,57 @@ describe('theme health check', () => {
     expect(checkTheme(p, resolveTheme(p, e), e).map((i) => `${i.kind} ${i.element} ${i.text}`)).toEqual([]);
   });
 });
+
+const TEXTS = `<theme>
+  <formatVersion>7</formatVersion>
+  <variables><designAccent>6A2A80FF</designAccent></variables>
+  <view name="detailed">
+    <text name="play" extra="true"><pos>0.1 0.1</pos><size>0.3 0.05</size><text>PLAY ▶ ★ {game:name}</text><fontPath>./a.ttf</fontPath></text>
+    <video name="md_video"><pos>0.1 0.5</pos><size>0.3 0.3</size></video>
+    <text name="under" extra="true"><pos>0.15 0.55</pos><size>0.2 0.05</size><text>Hi</text><zIndex>10</zIndex></text>
+    <ninepatch name="ccs_panel" extra="true"><pos>0.5 0.1</pos><size>0.4 0.3</size><path>./panel.svg</path><color>3A1060FF</color><zIndex>5</zIndex></ninepatch>
+    <text name="pink" extra="true"><pos>0.55 0.15</pos><size>0.3 0.05</size><text>Hi</text><color>6A2A90</color><zIndex>20</zIndex></text>
+    <text name="accent" extra="true"><pos>0.55 0.25</pos><size>0.3 0.05</size><text>Hi</text><color>\${designAccent}</color><zIndex>20</zIndex></text>
+    <text name="white" extra="true"><pos>0.55 0.32</pos><size>0.3 0.05</size><text>Hi</text><color>FFFFFF</color><zIndex>20</zIndex></text>
+  </view>
+</theme>`;
+
+describe('checks on what texts show (#26)', () => {
+  async function loadTexts() {
+    const home = mkdtempSync(join(tmpdir(), 'ccs-health-'));
+    const dir = join(home, 'themes', 'test');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'theme.xml'), TEXTS);
+    writeFileSync(join(dir, 'a.ttf'), 'x');
+    writeFileSync(join(dir, 'panel.svg'), '<svg/>');
+    const p = await ThemeProject.load(dir, nodeFs);
+    return { p, e: env(home) };
+  }
+  // The theme font has plain letters only; one of RetroBat's own fonts has ★, none has ▶.
+  const chars = (abs: string) => (abs.endsWith('a.ttf') ? (cp: number) => cp < 128 : abs.includes('Pyeojin') ? (cp: number) => cp === 0x2605 : () => false);
+
+  it("finds letters neither the font nor RetroBat's fonts have, game art over text, and colours too alike", async () => {
+    const { p, e } = await loadTexts();
+    const got = checkTheme(p, resolveTheme(p, e), e, chars).map((i) => `${i.kind}:${i.element}`).sort();
+    expect(got).toEqual(['covered:under', 'hard-to-read:pink', 'missing-character:play']);
+    const play = checkTheme(p, resolveTheme(p, e), e, chars).find((i) => i.element === 'play')!;
+    expect(play.text).toContain('“▶”');
+    expect(play.text).not.toContain('★');
+  });
+
+  it("says nothing about letters until RetroBat's fonts have been read", async () => {
+    const { p, e } = await loadTexts();
+    const loading = (abs: string) => (abs.endsWith('a.ttf') ? chars(abs) : undefined);
+    expect(checkTheme(p, resolveTheme(p, e), e, loading).some((i) => i.kind === 'missing-character')).toBe(false);
+    expect(checkTheme(p, resolveTheme(p, e), { ...e, resourcesDir: '' }, chars).some((i) => i.kind === 'missing-character')).toBe(false);
+  });
+
+  it('makes a hard-to-read colour readable', async () => {
+    const { p, e } = await loadTexts();
+    const pink = checkTheme(p, resolveTheme(p, e), e, chars).find((i) => i.element === 'pink')!;
+    expect(pink.fix?.label).toBe('Make it readable');
+    applyChanges(p, pink.fix!.changes);
+    expect(p.entry!.src).toContain('<color>FFFFFF</color><zIndex>20</zIndex></text>\n    <text name="accent"');
+    expect(checkTheme(p, resolveTheme(p, e), e, chars).some((i) => i.element === 'pink')).toBe(false);
+  });
+});

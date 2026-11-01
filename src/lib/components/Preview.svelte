@@ -17,7 +17,7 @@
   import { usesGameData } from '$lib/theme/library';
   import type { SystemInfo } from '$lib/theme/systems';
   import { elementLabel } from '$lib/friendly';
-  import { fontState } from '$lib/preview.svelte';
+  import { fontState, setRetroBatFonts } from '$lib/preview.svelte';
   import { join, pathKey } from '$lib/path';
   import { cssColor } from '$lib/theme/schema';
   import { splashScene } from '$lib/theme/splash';
@@ -46,6 +46,9 @@
   let stageEl: HTMLDivElement | undefined = $state();
   let cw = $state(800);
   let ch = $state(450);
+
+  // Characters a theme font lacks come from RetroBat's own fonts, as in RetroBat (#26).
+  $effect(() => setRetroBatFonts(ed.root?.resourcesDir ?? ''));
 
   $effect(() => {
     if (!host) return;

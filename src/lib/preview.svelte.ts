@@ -1,30 +1,56 @@
 import { fileUrl } from './api';
 import { parsePair } from './theme/schema';
 import type { ResolvedElement } from './theme/resolver';
+import { fontChars, RETROBAT_FALLBACK_FONTS, type HasChar } from './theme/fontChars';
+import { join } from './path';
 
 /** Bumped whenever a theme font finishes loading, so text re-measures. */
 export const fontState = $state({ loaded: 0 });
 
 const families = new Map<string, string>();
+/** Fallback fonts the browser hasn't needed yet, so they aren't loaded (nor put in pictures). */
+const unneeded = new Set<string>();
+const SYSTEM = "'Segoe UI', system-ui, sans-serif";
+/** RetroBat's own fonts it borrows missing characters from, as CSS families (see setRetroBatFonts). */
+const spare = $state({ css: '' });
+
+/**
+ * Uses RetroBat's fallback fonts (from its resources folder) for characters a theme font lacks,
+ * in RetroBat's order, so a ▶ looks as it will there (#26).
+ */
+export function setRetroBatFonts(resourcesDir: string) {
+  spare.css = resourcesDir ? RETROBAT_FALLBACK_FONTS.map((f) => `'${load(join(resourcesDir, f), true)}', `).join('') : '';
+}
 
 /** CSS font-family for a theme font file, loading it on first use. */
 export function familyFor(abs: string | null): string {
-  const fallback = "'Segoe UI', system-ui, sans-serif";
-  if (!abs) return fallback;
+  if (!abs) return SYSTEM;
+  return `'${load(abs)}', ${spare.css}${SYSTEM}`;
+}
+
+/**
+ * The CSS family name for a font file, loading it on first use. `lazy` leaves the loading to the
+ * browser, which fetches it only when a character needs it (RetroBat's big fallback fonts).
+ */
+function load(abs: string, lazy = false): string {
   let fam = families.get(abs);
   if (!fam) {
     fam = `ccs-font-${families.size}`;
     families.set(abs, fam);
     const face = new FontFace(fam, `url("${fileUrl(abs)}")`);
-    face
-      .load()
+    if (lazy) {
+      unneeded.add(fam);
+      document.fonts.add(face);
+    }
+    (lazy ? face.loaded : face.load())
       .then((f) => {
-        document.fonts.add(f);
+        if (lazy) unneeded.delete(fam!);
+        else document.fonts.add(f);
         fontState.loaded++;
       })
       .catch(() => {});
   }
-  return `'${fam}', ${fallback}`;
+  return fam;
 }
 
 /**
@@ -33,7 +59,7 @@ export function familyFor(abs: string | null): string {
  */
 export async function themeFontCss(wanted: (family: string) => boolean = () => true): Promise<string> {
   const rules = await Promise.all(
-    [...families].filter(([, fam]) => wanted(fam)).map(async ([abs, fam]) => {
+    [...families].filter(([, fam]) => wanted(fam) && !unneeded.has(fam)).map(async ([abs, fam]) => {
       try {
         const blob = await (await fetch(fileUrl(abs))).blob();
         const data = await new Promise<string>((ok, fail) => {
@@ -49,6 +75,22 @@ export async function themeFontCss(wanted: (family: string) => boolean = () => t
     }),
   );
   return rules.filter(Boolean).join('\n');
+}
+
+/** Bumped whenever a font file's character list has been read. */
+export const fontCharsState = $state({ loaded: 0 });
+const charLists = new Map<string, HasChar | null | undefined>();
+
+/** Which characters a theme font has: undefined while it is being read, null if it can't be. */
+export function charsOf(abs: string): HasChar | null | undefined {
+  if (charLists.has(abs)) return charLists.get(abs);
+  charLists.set(abs, undefined);
+  fetch(fileUrl(abs))
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+    .then((buf) => charLists.set(abs, fontChars(buf)))
+    .catch(() => charLists.set(abs, null))
+    .finally(() => fontCharsState.loaded++);
+  return undefined;
 }
 
 export interface Box {
