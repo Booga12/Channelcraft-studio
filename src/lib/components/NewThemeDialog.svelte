@@ -25,6 +25,7 @@
   import DesignGroupChips from './DesignGroupChips.svelte';
   import LayoutCard from './LayoutCard.svelte';
   import { task } from '$lib/task.svelte';
+  import { tick } from 'svelte';
 
   let {
     mode,
@@ -33,11 +34,22 @@
     oncancel,
   }: { mode: 'new' | 'duplicate'; source?: ThemeInfo; oncreated: (path: string, starter?: StarterChoice) => void; oncancel: () => void } = $props();
 
+  const taken = (n: string) => ed.themes.some((t) => t.name.toLowerCase() === n.trim().toLowerCase());
+
+  /** The name, or the first free one after it: “My Theme 2”, “My Theme 3”… (#23). */
+  function freeName(n: string): string {
+    const base = n.trim();
+    if (!taken(base)) return base;
+    const m = base.match(/^(.*?)\s*(\d+)$/);
+    const stem = m ? m[1] : base;
+    for (let i = m ? Number(m[2]) + 1 : 2; ; i++) if (!taken(`${stem} ${i}`)) return `${stem} ${i}`;
+  }
+
   function suggest(): string {
-    if (mode === 'new') return 'My Theme';
+    if (mode === 'new') return freeName('My Theme');
     const n = source?.name ?? 'Theme';
     const m = n.match(/^(.*?)(\d+)$/);
-    return m ? `${m[1]}${Number(m[2]) + 1}` : `${n} copy`;
+    return freeName(m ? `${m[1]}${Number(m[2]) + 1}` : `${n} copy`);
   }
 
   const STEPS = ['Name and style', 'Design', 'System menu', 'Game list'];
@@ -61,8 +73,18 @@
   let sources = $state<{ theme: ThemeInfo; logos: number; consoles: number }[]>([]);
   let scanning = $state(false);
 
-  const exists = $derived(ed.themes.some((t) => t.name.toLowerCase() === name.trim().toLowerCase()));
+  const exists = $derived(taken(name));
   const canCreate = $derived(!!name.trim() && !exists && !working);
+  /** Why Create is greyed out, shown beside it on the steps without the name (#23). */
+  const why = $derived(!name.trim() ? 'Give the theme a name first.' : exists ? `There's already a theme called “${name.trim()}”.` : '');
+
+  /** Back to the first step, with the name ready to change. */
+  async function changeName() {
+    step = 0;
+    await tick();
+    input?.focus();
+    input?.select();
+  }
 
   $effect(() => {
     input?.select();
@@ -153,6 +175,11 @@
   class={mode === 'new' ? 'sm:max-w-[900px]' : 'sm:max-w-[460px]'}
 >
   {#snippet footer()}
+    {#if why && !working && mode === 'new' && step > 0}
+      <p class="mr-auto self-center text-sm text-destructive" role="status">
+        {why} <button type="button" class="font-medium underline underline-offset-2" onclick={changeName}>Change name</button>
+      </p>
+    {/if}
     <Button variant="outline" onclick={oncancel} disabled={working}>Cancel</Button>
     {#if mode === 'new'}
       <Button variant="ghost" onclick={surprise} disabled={working} title="A random design and layouts that go together. Press again for another.">Surprise me</Button>
@@ -181,7 +208,10 @@
         <input bind:this={input} bind:value={name} spellcheck="false" />
       </label>
       {#if exists}
-        <p class="err">A theme with this name already exists.</p>
+        <p class="err">
+          There's already a theme called “{name.trim()}”.
+          <button type="button" class="use" onclick={() => (name = freeName(name))}>Use “{freeName(name)}”</button>
+        </p>
       {/if}
     {/if}
 
@@ -401,5 +431,17 @@
   .err {
     color: var(--danger);
     margin: 8px 0 0;
+  }
+  .use {
+    margin-left: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
   }
 </style>
