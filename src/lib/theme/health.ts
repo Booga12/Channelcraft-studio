@@ -6,10 +6,14 @@ import { patchRemoveNode } from '../xml/cst';
 import { setTextChange, type Change } from './edits';
 import type { Environment } from './context';
 import type { ThemeProject } from './project';
-import { resolveAsset, type PropDef, type ResolvedElement, type Resolution } from './resolver';
+import { resolveAsset, resolveAssetWithFallbacks, type PropDef, type ResolvedElement, type Resolution } from './resolver';
 import { parsePair } from './schema';
+import { zOf } from '../render';
+import { contrast, over } from './presets';
+import { fontName } from './fonts';
+import { RETROBAT_FALLBACK_FONTS, type HasChar } from './fontChars';
 
-export type HealthKind = 'missing-file' | 'missing-font' | 'off-screen' | 'cut-off' | 'hard-to-read';
+export type HealthKind = 'missing-file' | 'missing-font' | 'off-screen' | 'cut-off' | 'hard-to-read' | 'missing-character' | 'covered';
 
 export interface HealthIssue {
   kind: HealthKind;
@@ -31,6 +35,8 @@ export const HEALTH_LABEL: Record<HealthKind, string> = {
   'off-screen': 'Off the screen',
   'cut-off': 'Cut off at the edge',
   'hard-to-read': 'Hard to read',
+  'missing-character': 'Letter the font lacks',
+  covered: 'Covered by game art',
 };
 
 /** Properties that name a picture, video or sound file. */
@@ -61,11 +67,14 @@ const shown = (el: ResolvedElement) => {
 
 const r3 = (n: number) => String(Math.round(n * 1000) / 1000);
 
-/** Every check, across every screen of the resolved theme. */
-export function checkTheme(project: ThemeProject, res: Resolution, env: Environment): HealthIssue[] {
+/**
+ * Every check, across every screen of the resolved theme. `charsOf` tells which characters a
+ * font file has (undefined while it is still being read); without it, letters aren't checked.
+ */
+export function checkTheme(project: ThemeProject, res: Resolution, env: Environment, charsOf?: CharsOf): HealthIssue[] {
   // One issue per definition in the files, however many screens use it.
-  const issues = new Map<object, HealthIssue>();
-  const add = (key: object, view: string, make: () => HealthIssue) => {
+  const issues = new Map<unknown, HealthIssue>();
+  const add = (key: unknown, view: string, make: () => HealthIssue) => {
     const had = issues.get(key);
     if (had) {
       if (!had.views.includes(view)) had.views.push(view);
@@ -146,6 +155,178 @@ export function checkTheme(project: ThemeProject, res: Resolution, env: Environm
         };
       });
     }
+    textChecks(project, res, env, view, [...v.elements.values()], add, charsOf);
   }
   return [...issues.values()];
+}
+
+type CharsOf = (abs: string) => HasChar | null | undefined;
+type Add = (key: unknown, view: string, make: () => HealthIssue) => void;
+
+interface Rect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Where a part sits on the screen (0 to 1), or null when that can't be told without drawing it. */
+function rectOf(el: ResolvedElement): Rect | null {
+  const pos = parsePair(el.props.get('pos')?.value);
+  if (!pos || parseFloat(el.props.get('rotation')?.value ?? '0')) return null;
+  const size = parsePair(el.props.get('size')?.value) ?? parsePair(el.props.get('maxSize')?.value) ?? parsePair(el.props.get('minSize')?.value);
+  if (!size) return null;
+  let [w, h] = size;
+  // Text sized by its content: one line high.
+  if (h <= 0 && (el.type === 'text' || el.type === 'datetime')) h = parseFloat(el.props.get('fontSize')?.value ?? '') || 0.045;
+  if (w <= 0 || h <= 0) return null;
+  const origin = parsePair(el.props.get('origin')?.value) ?? [0, 0];
+  const x0 = pos[0] - origin[0] * w;
+  const y0 = pos[1] - origin[1] * h;
+  return { x0, y0, x1: x0 + w, y1: y0 + h };
+}
+
+const area = (r: Rect) => Math.max(0, r.x1 - r.x0) * Math.max(0, r.y1 - r.y0);
+const overlap = (a: Rect, b: Rect) => area({ x0: Math.max(a.x0, b.x0), y0: Math.max(a.y0, b.y0), x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1) });
+/** Whether `a` is drawn after (over) `b`. */
+const above = (a: ResolvedElement, b: ResolvedElement) => zOf(a) > zOf(b) || (zOf(a) === zOf(b) && a.order > b.order);
+
+/** A game's own picture or video, which RetroBat fills in per game. */
+function gameArt(el: ResolvedElement): 'video' | 'picture' | null {
+  if (el.type === 'video' || el.name === 'md_video') return 'video';
+  if (/^md_(image|thumbnail|marquee|fanart)$/.test(el.name)) return 'picture';
+  return el.type === 'image' && /\{(game|md):/.test(el.props.get('path')?.value ?? '') ? 'picture' : null;
+}
+
+const hexOf = (c: string | undefined) => {
+  const t = (c ?? '').trim().toUpperCase();
+  return /^[0-9A-F]{6}$/.test(t) ? t + 'FF' : /^[0-9A-F]{8}$/.test(t) ? t : null;
+};
+const alphaOf = (c: string) => parseInt(c.slice(6, 8), 16) / 255;
+const withAlpha = (c: string, a: number) => c.slice(0, 6) + Math.round(Math.min(1, Math.max(0, a)) * 255).toString(16).padStart(2, '0').toUpperCase();
+const opacityOf = (el: ResolvedElement) => {
+  const o = parseFloat(el.props.get('opacity')?.value ?? '1');
+  return Number.isFinite(o) ? o : 1;
+};
+
+/**
+ * The colour behind a point under `top` (RRGGBB), from what is drawn there: tinted panels, a
+ * text's background box and a design's background. null when a picture or anything else is
+ * there, whose colour can't be known without drawing it.
+ */
+function colourBehind(top: ResolvedElement, x: number, y: number, els: ResolvedElement[], res: Resolution): string | null {
+  const under = els
+    .filter((e) => e !== top && shown(e) && !e.name.includes('.') && above(top, e))
+    .filter((e) => {
+      const r = rectOf(e);
+      return r && x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+    })
+    .sort((a, b) => (above(a, b) ? -1 : 1));
+  // Colours from the top down, until one hides everything under it. RetroBat clears to black.
+  const layers: string[] = [];
+  const own = hexOf(top.props.get('backgroundColor')?.value);
+  if (own && alphaOf(own) > 0) layers.push(own);
+  for (const e of under) {
+    if (layers.length && alphaOf(layers[layers.length - 1]) >= 1) break;
+    const path = e.props.get('path')?.value ?? '';
+    let c: string | null;
+    // ChannelCraft's panels are a white shape tinted with their colour.
+    if ((e.type === 'ninepatch' || e.type === 'image') && /(^|[\\/])panel\.svg$/i.test(path)) c = hexOf(e.props.get('color')?.value) ?? 'FFFFFFFF';
+    else if (e.type === 'text' || e.type === 'datetime') c = hexOf(e.props.get('backgroundColor')?.value) ?? '00000000';
+    else if (e.type === 'image' && /background\.(png|jpe?g)$/i.test(path)) c = hexOf(res.vars.get('designBackground')?.value);
+    else c = null;
+    if (!c) {
+      // A faint picture hardly changes the colour, nor do a design's scattered decorations;
+      // any other picture could be any colour.
+      if (alphaOf(hexOf(e.props.get('color')?.value) ?? 'FFFFFFFF') * opacityOf(e) <= 0.2 || /(^|[\\/])deco\.png$/i.test(path)) continue;
+      return null;
+    }
+    if (alphaOf(c) * opacityOf(e) > 0) layers.push(withAlpha(c, alphaOf(c) * opacityOf(e)));
+  }
+  let colour = '000000';
+  for (const c of layers.reverse()) colour = over(c, colour);
+  return colour;
+}
+
+/** Checks on what a text shows: letters its font lacks, game art drawn over it, colours too alike. */
+function textChecks(project: ThemeProject, res: Resolution, env: Environment, view: string, els: ResolvedElement[], add: Add, charsOf?: CharsOf) {
+  // A design's text colours, also when a theme has them as fixed values.
+  const palette = new Set(['designText', 'designDimText', 'designAccent', 'designSelectedText'].map((n) => hexOf(res.vars.get(n)?.value)?.slice(0, 6)).filter(Boolean));
+  for (const el of els) {
+    if ((el.type !== 'text' && el.type !== 'datetime') || !shown(el) || el.name.includes('.')) continue;
+
+    // Letters the theme's own font doesn't have.
+    const textDef = el.props.get('text');
+    const font = charsOf && textDef ? resolveAssetWithFallbacks(el, 'fontPath', res, project, env) : null;
+    const own = font ? charsOf!(font) : null;
+    // RetroBat borrows a character from its own fonts first: only one none of them has shows
+    // as a box. Until they have all been read (or without RetroBat), nothing is said.
+    const spare = font && env.resourcesDir ? RETROBAT_FALLBACK_FONTS.map((f) => charsOf!(join(env.resourcesDir, f))) : [];
+    const has = own && spare.length && spare.every((s) => s) ? (cp: number) => own(cp) || spare.some((s) => s!(cp)) : null;
+    if (font && has && textDef) {
+      const kase = `${el.props.get('letterCase')?.value ?? ''} ${el.props.get('forceUppercase')?.value ?? ''}`.toLowerCase();
+      let t = textDef.value.replace(/\{[^}]*\}/g, '');
+      if (/upper|true|1/.test(kase)) t = t.toUpperCase();
+      else if (/lower/.test(kase)) t = t.toLowerCase();
+      const lacks = [...new Set([...t].filter((ch) => /\S/.test(ch) && !has(ch.codePointAt(0)!)))];
+      if (lacks.length) {
+        const key = `chars|${textDef.file.rel}|${el.name}|${lacks.join('')}`;
+        const list = lacks.slice(0, 5).map((c) => `“${c}”`);
+        const words = list.length > 1 ? `${list.slice(0, -1).join(', ')} or ${list[list.length - 1]}` : list[0];
+        add(key, view, () => ({
+          kind: 'missing-character',
+          key,
+          text: `The font ${fontName(font)} has no ${words}${lacks.length > 5 ? ' and more' : ''}, and neither do RetroBat's own fonts, so RetroBat shows an empty box for ${lacks.length > 1 ? 'them' : 'it'}.`,
+          views: [view],
+          element: el.name,
+        }));
+      }
+    }
+
+    const box = rectOf(el);
+    if (!box) continue;
+
+    // A game's picture or video drawn over the text hides it for games that have one.
+    for (const m of els) {
+      const kind = gameArt(m);
+      const r = kind && shown(m) && !m.name.includes('.') && above(m, el) ? rectOf(m) : null;
+      if (!r) continue;
+      // A picture fitted into a maxSize box may not fill it: only a big overlap counts then.
+      const size = parsePair(m.props.get('size')?.value);
+      const fitted = !size || size.some((n) => n <= 0);
+      if (overlap(box, r) < area(box) * (fitted ? 0.3 : 0.1)) continue;
+      const key = `covered|${el.name}|${m.name}`;
+      add(key, view, () => ({
+        kind: 'covered',
+        key,
+        text: `The game's ${kind} is drawn over part of this text, so the text is hidden for games that have one.`,
+        views: [view],
+        element: el.name,
+      }));
+      break;
+    }
+
+    // Text colour against what's behind it, for colours picked for a text. The design's own
+    // colours are for the whole theme: the editor's theme-wide check covers those.
+    const colDef = el.props.get('color');
+    const col = hexOf(colDef?.value);
+    if (!colDef || !col || !alphaOf(col) || colDef.raw.includes('${design') || palette.has(col.slice(0, 6))) continue;
+    const behind = colourBehind(el, (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, els, res);
+    if (!behind) continue;
+    const ratio = contrast(col.slice(0, 6), behind);
+    if (ratio >= 3) continue;
+    const key = `contrast|${colDef.file.rel}|${el.name}`;
+    add(key, view, () => {
+      const design = hexOf(res.vars.get('designText')?.value);
+      const to = design && contrast(design.slice(0, 6), behind) >= 3 ? '${designText}' : contrast('111111', behind) >= contrast('FFFFFF', behind) ? '111111' : 'FFFFFF';
+      return {
+        kind: 'hard-to-read',
+        key,
+        text: `Its colour is too close to what's behind it (contrast ${Math.floor(ratio * 10) / 10}:1; 3 or more reads well).`,
+        views: [view],
+        element: el.name,
+        fix: { label: to === '${designText}' ? 'Use the text colour' : 'Make it readable', changes: [setTextChange(colDef.file, colDef.node, to)] },
+      };
+    });
+  }
 }

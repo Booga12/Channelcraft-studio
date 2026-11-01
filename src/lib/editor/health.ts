@@ -9,7 +9,7 @@ import { elementLabel } from '../friendly';
 
 /** Applies one issue's fix as one undo step. The list re-checks by itself afterwards. */
 export function fixHealth(this: Editor, issue: HealthIssue) {
-  if (issue.kind === 'hard-to-read') return this.fixReadability();
+  if (issue.key === 'hard-to-read') return this.fixReadability();
   if (!issue.fix) return;
   this.commit(`fix: ${elementLabel(issue.element)}`, issue.fix.changes);
 }
@@ -20,9 +20,9 @@ export function fixAllHealth(this: Editor) {
   if (!issues.length) return;
   this.group(`${issues.length} fixes from the health check`, () => {
     // Each fix was worked out on the theme as it is now, so they go in as one change.
-    const changes = issues.flatMap((i) => (i.kind === 'hard-to-read' ? [] : (i.fix?.changes ?? [])));
+    const changes = issues.flatMap((i) => (i.key === 'hard-to-read' ? [] : (i.fix?.changes ?? [])));
     if (changes.length) this.commit('health check fixes', changes);
-    if (issues.some((i) => i.kind === 'hard-to-read')) this.fixReadability();
+    if (issues.some((i) => i.key === 'hard-to-read')) this.fixReadability();
   });
   this.notify(`Fixed ${issues.length} thing${issues.length === 1 ? '' : 's'}. Save to keep it, or Ctrl+Z to undo.`);
 }

@@ -36,6 +36,7 @@ import * as health from './editor/health';
 import * as sharing from './editor/sharing';
 import * as sound from './editor/sound';
 import { checkTheme, type HealthIssue } from './theme/health';
+import { charsOf, fontCharsState } from './preview.svelte';
 import { designSplashLook, splashTemplate } from './theme/splash';
 
 /** RetroBat's loading screen files, read on their own (not through theme.xml). */
@@ -981,7 +982,8 @@ export class Editor {
     const p = this.project;
     const res = this.themeRes;
     if (!p || !res) return [];
-    const list = checkTheme(p, res, this.env);
+    fontCharsState.loaded;
+    const list = checkTheme(p, res, this.env, charsOf);
     const r = this.readability;
     if (r && !r.ok) list.unshift({ kind: 'hard-to-read', key: 'hard-to-read', text: `Text is hard to read on the background (contrast ${r.ratio}:1; 3 or more reads well).`, views: [], element: '', fix: { label: 'Make it readable', changes: [] } });
     return list;

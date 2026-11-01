@@ -7,6 +7,8 @@
   import MoveIcon from '@lucide/svelte/icons/move';
   import ScissorsIcon from '@lucide/svelte/icons/scissors';
   import ContrastIcon from '@lucide/svelte/icons/contrast';
+  import CaseSensitiveIcon from '@lucide/svelte/icons/case-sensitive';
+  import LayersIcon from '@lucide/svelte/icons/layers';
   import { Button } from '$lib/components/ui/button';
   import { ed } from '$lib/editor.svelte';
   import { elementLabel, viewLabel } from '$lib/friendly';
@@ -19,6 +21,8 @@
     'off-screen': MoveIcon,
     'cut-off': ScissorsIcon,
     'hard-to-read': ContrastIcon,
+    'missing-character': CaseSensitiveIcon,
+    covered: LayersIcon,
   };
 
   const issues = $derived(ed.healthIssues);
@@ -41,7 +45,7 @@
 
 <AppDialog
   title="Check theme"
-  description={then ? 'A few things may look wrong in RetroBat. Fix them first, or carry on.' : 'Things that may look wrong in RetroBat: missing pictures and fonts, parts off the screen and hard-to-read text.'}
+  description={then ? 'A few things may look wrong in RetroBat. Fix them first, or carry on.' : 'Things that may look wrong in RetroBat: missing pictures, fonts and letters, parts off the screen or under game art, and hard-to-read text.'}
   onclose={close}
   class="sm:max-w-2xl"
 >
