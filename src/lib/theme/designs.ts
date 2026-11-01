@@ -286,7 +286,17 @@ export function accentForText(accent: string, bg: string, bg2: string, panel: st
   return toward;
 }
 
+const varsCache = new Map<string, Record<DesignVar, string>>();
+
+/** A design's colours as variables. Looked up for every coloured part, so worked out once per palette. */
 export function designVars(p: Palette6): Record<DesignVar, string> {
+  const key = [p.bg, p.bg2, p.surface, p.text, p.dim, p.accent, p.accentText].join(' ');
+  let v = varsCache.get(key);
+  if (!v) varsCache.set(key, (v = paletteVars(p)));
+  return { ...v };
+}
+
+function paletteVars(p: Palette6): Record<DesignVar, string> {
   const faint = p.surface.length === 8 && parseInt(p.surface.slice(6), 16) < 0x30;
   return {
     designBackground: col(p.bg),
