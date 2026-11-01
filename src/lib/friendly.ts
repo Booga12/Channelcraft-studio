@@ -201,7 +201,9 @@ export function propHelp(name: string): string | undefined {
 }
 
 export function viewLabel(name: string, displayName?: string | null): string {
-  return VIEWS[name]?.label ?? displayName ?? humanize(name);
+  // A display name still holding a ${variable} isn't a name to show (#40).
+  const shown = displayName && !displayName.includes('${') ? displayName : null;
+  return VIEWS[name]?.label ?? shown ?? humanize(name);
 }
 
 export function viewHelp(name: string): string | undefined {

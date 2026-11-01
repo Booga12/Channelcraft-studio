@@ -249,13 +249,23 @@ async function stageReady(stage: HTMLElement, ms = 4000) {
  * picture.
  */
 export async function makePreviewFromSystemMenu(this: Editor) {
+  await this.makePreviewFromScreen({ view: 'system', file: 'theme.xml' });
+}
+
+/**
+ * Makes preview.png from the given screen (the Publish dialog lets you pick one, #40), then goes
+ * back to the screen that was showing. Quiet: a failure is only a missing picture.
+ */
+export async function makePreviewFromScreen(this: Editor, to: { view: string; file: string }) {
   const back = { view: this.view, file: this.screenFile };
   const keep = this.selection;
-  const moved = this.viewNames.includes('system') && (back.view !== 'system' || back.file !== 'theme.xml');
-  if (moved) this.showScreen({ view: 'system', file: 'theme.xml' });
+  const known = this.screens.some((s) => s.view === to.view && s.file === to.file);
+  const moved = known && (back.view !== to.view || back.file !== to.file);
+  const there = () => this.view === to.view && this.screenFile === to.file;
+  if (moved) this.showScreen(to);
   // Not if the user moved to another screen meanwhile (Share doesn't block the window).
-  await this.makePreviewImage(true, () => !moved || (this.view === 'system' && this.screenFile === 'theme.xml'));
-  if (moved && this.view === 'system' && this.screenFile === 'theme.xml') {
+  await this.makePreviewImage(true, () => !moved || there());
+  if (moved && there()) {
     this.showScreen(back);
     this.selection = keep;
   }
