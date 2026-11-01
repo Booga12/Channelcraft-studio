@@ -116,7 +116,7 @@
           {:else}
             <div class="grid aspect-video w-full place-items-center rounded-lg bg-muted p-2 text-center text-xs text-muted-foreground">No preview yet</div>
           {/if}
-          <figcaption class="text-xs text-muted-foreground">{preview ? 'Shown in the gallery' : 'Made from this screen when you publish'}</figcaption>
+          <figcaption class="text-xs text-muted-foreground">{preview ? 'Shown in the gallery' : 'Made from the System menu when you publish'}</figcaption>
         </figure>
       </div>
 

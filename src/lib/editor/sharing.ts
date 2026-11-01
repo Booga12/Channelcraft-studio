@@ -108,7 +108,7 @@ export async function shareTheme(this: Editor) {
   try {
     if (this.dirtyCount) await this.save();
     if (this.dirtyCount) return void this.notify('The theme couldn’t be saved, so it wasn’t shared.', 'error');
-    if (!p.assets.some((a) => a.rel.toLowerCase() === 'preview.png')) await this.makePreviewImage();
+    if (!this.hasPreview()) await this.makePreviewFromSystemMenu();
     this.notify(`Packing “${p.name}”… With many pictures this can take a little while.`, 'info', 600000);
     const { leftOut } = await api.shareTheme(p.dir, dest, this.systems.map((s) => s.theme));
     // Console art copied from another theme stays out: Import copies it from the other person's themes.
@@ -129,13 +129,13 @@ export function hasPreview(this: Editor): boolean {
 
 /**
  * Publishes the theme to the gallery as Share theme makes it: saved first, with a preview
- * picture (taken from the screen when the theme has none). Throws a sentence to show.
+ * picture (made from the System menu when the theme has none). Throws a sentence to show.
  */
 export async function publishToGallery(this: Editor, name: string, maker: string): Promise<{ slug: string; url: string; leftOut: string[] }> {
   const p = this.project;
   if (!p) throw 'Open a theme first.';
   if (this.dirtyCount) await this.save();
   if (this.dirtyCount) throw 'The theme couldn’t be saved, so it wasn’t published.';
-  if (!this.hasPreview()) await this.makePreviewImage();
+  if (!this.hasPreview()) await this.makePreviewFromSystemMenu();
   return api.publishTheme(p.dir, name.trim(), maker.trim(), GALLERY_SITE, this.systems.map((s) => s.theme));
 }

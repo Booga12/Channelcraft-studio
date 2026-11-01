@@ -243,6 +243,18 @@ async function stageReady(stage: HTMLElement, ms = 4000) {
 }
 
 /**
+ * Makes preview.png from the System menu, the screen RetroBat's theme list and the gallery show
+ * (#31, #40), then goes back to the screen that was showing. Quiet: a failure is only a missing
+ * picture.
+ */
+export async function makePreviewFromSystemMenu(this: Editor) {
+  const back = { view: this.view, file: this.screenFile };
+  if (this.viewNames.includes('system') && (back.view !== 'system' || back.file !== 'theme.xml')) this.showScreen({ view: 'system', file: 'theme.xml' });
+  await this.makePreviewImage(true);
+  if (this.view !== back.view || this.screenFile !== back.file) this.showScreen(back);
+}
+
+/**
  * Captures the current screen as the theme's preview.png (shown in RetroBat and here). `quiet`:
  * no message, and a failure is only a missing picture (used when a theme is made).
  */
