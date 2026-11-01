@@ -39,7 +39,7 @@ function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) walk(p, out);
-    else out.push(p);
+    else if (!name.startsWith('.channelcraft-')) out.push(p);
   }
   return out;
 }
@@ -102,7 +102,7 @@ export function devFs() {
     list_themes: () =>
       readdirSync(themesDir())
         .map((name) => join(themesDir(), name))
-        .filter((p) => existsSync(join(p, 'theme.xml')))
+        .filter((p) => existsSync(join(p, 'theme.xml')) && !existsSync(join(p, '.channelcraft-unfinished')))
         .map((p) => {
           const preview = ['preview.png', 'preview.jpg', '_inc/images/preview.png', 'screenshot.png'].map((f) => join(p, f)).find((f) => existsSync(f)) ?? null;
           return { name: basename(p), path: p, preview, modified: 0, made: existsSync(join(p, '_inc', 'ccs')) };

@@ -27,6 +27,9 @@ use walkdir::WalkDir;
 const MANIFEST: &str = "channelcraft-backup.json";
 /// Folders this module makes next to a theme start with this, so they're easy to recognise.
 pub(crate) const WORK_PREFIX: &str = ".channelcraft-";
+/// In a theme ChannelCraft is still setting up (New theme): Home doesn't list it, and its first
+/// save removes this, so a theme left half-built by a crash or reload never shows as finished (#22).
+pub(crate) const UNFINISHED: &str = ".channelcraft-unfinished";
 const RESTORE_MAX_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const RESTORE_MAX_FILES: usize = 100_000;
 
@@ -739,6 +742,7 @@ pub fn save_files(app: AppHandle, roots: State<Roots>, projects: State<Projects>
             }
         }
     }
+    mark_finished(&path);
     Ok(())
 }
 
@@ -779,6 +783,16 @@ pub fn export_theme(dir: String, dest: String) -> CmdResult<String> {
 /// Copies a folder to `dest` through a staging folder next to it, so a failed copy never leaves a
 /// half-made theme behind.
 fn copy_dir_staged(src: &Path, dest: &Path) -> CmdResult<()> {
+    copy_dir_staged_as(src, dest, false)
+}
+
+/// Saved once: the theme is no longer half-built (#22).
+fn mark_finished(dir: &Path) {
+    let _ = fs::remove_file(dir.join(UNFINISHED));
+}
+
+/// `copy_dir_staged`, optionally marking the copy as still being set up (see `UNFINISHED`).
+fn copy_dir_staged_as(src: &Path, dest: &Path, unfinished: bool) -> CmdResult<()> {
     let parent = dest.parent().ok_or("No parent folder")?;
     let stage = parent.join(format!("{WORK_PREFIX}copy-{}", unique_id()));
     let result = (|| {
@@ -794,6 +808,9 @@ fn copy_dir_staged(src: &Path, dest: &Path) -> CmdResult<()> {
                 let rel = e.path().strip_prefix(src).map_err(err)?;
                 fs::create_dir_all(stage.join(rel)).map_err(err)?;
             }
+        }
+        if unfinished {
+            fs::write(stage.join(UNFINISHED), b"ChannelCraft is still setting up this theme.").map_err(err)?;
         }
         if dest.exists() {
             return Err(format!("{} already exists", dest.display()));
@@ -818,7 +835,7 @@ pub fn create_theme_from_starter(app: AppHandle, roots: State<Roots>, name: Stri
     let dest = new_theme_path(&roots, &name)?;
     let starter = app.path().resolve("starter-theme", tauri::path::BaseDirectory::Resource).map_err(err)?;
     let starter = if starter.join("theme.xml").is_file() { starter } else { crate::commands::dev_resource("starter-theme").ok_or("The starter theme is missing from this copy of the app.")? };
-    copy_dir_staged(&starter, &dest)?;
+    copy_dir_staged_as(&starter, &dest, true)?;
     Ok(dest.to_string_lossy().into_owned())
 }
 
@@ -1191,6 +1208,23 @@ mod tests {
         assert!(dest.join("_inc/systems/logos").is_dir());
         assert!(copy_dir_staged(&s.theme(), &dest).is_err(), "never copies over an existing folder");
         assert!(!s.leftovers().iter().any(|n| n.starts_with(WORK_PREFIX)));
+    }
+
+    #[test]
+    fn a_new_theme_is_unfinished_until_saved() {
+        let s = Scratch::new("unfinished");
+        let dest = s.base.join("themes").join("New");
+        copy_dir_staged_as(&s.theme(), &dest, true).unwrap();
+        assert!(dest.join(UNFINISHED).is_file());
+        // Never part of a backup, export or share.
+        assert!(!theme_files(&dest).any(|(_, rel)| rel.contains(UNFINISHED)));
+        mark_finished(&dest);
+        assert!(!dest.join(UNFINISHED).exists());
+        assert!(dest.join("theme.xml").is_file());
+        // A plain copy (Duplicate) is never marked.
+        let dup = s.base.join("themes").join("Dup");
+        copy_dir_staged(&s.theme(), &dup).unwrap();
+        assert!(!dup.join(UNFINISHED).exists());
     }
 
     #[test]
