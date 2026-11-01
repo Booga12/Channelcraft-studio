@@ -9,6 +9,10 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(() => ({
   plugins: [tailwindcss(), sveltekit(), devFs()],
 
+  // Tests that go through every design or thousands of edits take a few seconds, more on GitHub's
+  // shared machines. Speed has its own budgets in perf.test.ts; this only stops a stuck test.
+  test: { testTimeout: 30_000 },
+
   // Bundle these up front, so the dev server never reloads the page while the app is starting.
   optimizeDeps: {
     include: [
