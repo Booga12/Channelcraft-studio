@@ -10,6 +10,8 @@
   import { assetExists, resolveAsset, resolveAssetWithFallbacks } from '$lib/theme/resolver';
   import { fmtNum, parsePair } from '$lib/theme/schema';
   import { isCarouselPart, isVisible, zOf } from '$lib/render';
+  /** What a Screen overlay can draw over the other screens (see overlayParts). */
+  const OVERLAY_TYPES = new Set(['image', 'video', 'text', 'ninepatch', 'datetime', 'screenshader']);
   import { usesGameData } from '$lib/theme/library';
   import type { SystemInfo } from '$lib/theme/systems';
   import { elementLabel } from '$lib/friendly';
@@ -144,6 +146,18 @@
     if (ed.root?.es?.drawClock === false || ed.view === 'screen' || ed.view === 'menu' || ed.screenFile !== 'theme.xml') return null;
     const el = ed.res?.views.get('screen')?.elements.get('clock');
     return el && isVisible(el) ? el : 'default';
+  });
+  /**
+   * The Screen overlay's own pictures, text and effects, which RetroBat draws over every screen
+   * (#29). Its clock is esClock above.
+   */
+  const overlayParts = $derived.by(() => {
+    if (ed.view === 'screen' || ed.view === 'menu' || ed.screenFile !== 'theme.xml') return [];
+    const v = ed.res?.views.get('screen');
+    if (!v) return [];
+    return [...v.elements.values()]
+      .filter((e) => e.name !== 'clock' && OVERLAY_TYPES.has(e.type) && isVisible(e))
+      .sort((a, b) => zOf(a) - zOf(b) || a.order - b.order);
   });
   /** Parts hidden in the preview only (the eye in Layers) that RetroBat still draws on this screen. */
   const hiddenHere = $derived(ed.currentView ? [...ed.currentView.elements.values()].filter((e) => ed.hidden[e.name] && isVisible(e)).map((e) => e.name) : []);
@@ -703,6 +717,11 @@
                   {play}
                   {slide}
                 />
+              {/each}
+              {#each overlayParts as el (el.name)}
+                <div class="esclock-el" title="From the Screen overlay, drawn over every screen. Change it on the Screen overlay screen.">
+                  <PreviewElement z={2000 + zOf(el)} {el} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
+                </div>
               {/each}
               {#if esClock === 'default'}
                 <span class="esclock" style:font-size="{dims.height * 0.03}px" title="RetroBat's own clock (its “Show clock” setting). This theme doesn't place it, so RetroBat puts it here.">{ed.root?.es?.clock12 ? '08:15 PM' : '20:15'}</span>
