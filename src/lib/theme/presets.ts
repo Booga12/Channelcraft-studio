@@ -245,7 +245,7 @@ export const PALETTES: Palette[] = [
   { id: 'starry', label: 'Starry night', colors: { bgColor: '070B24FF', panelColor: 'FFFFFF14', textColor: 'F1F3FFFF', dimTextColor: 'A3A8D9FF', accentColor: 'FFD66BFF', selectedTextColor: '070B24FF' } },
   // Moods
   { id: 'vaporwave', label: 'Vaporwave', colors: { bgColor: '1B0A33FF', panelColor: 'FFFFFF14', textColor: 'FFF0FBFF', dimTextColor: 'E5A8E0FF', accentColor: 'FF4FD8FF', selectedTextColor: '1B0A33FF' } },
-  { id: 'cabin', label: 'Cosy cabin', colors: { bgColor: '3A2416FF', panelColor: '1A0E0799', textColor: 'FFF3E2FF', dimTextColor: 'D9BC9CFF', accentColor: 'FFB45CFF', selectedTextColor: '2A1709FF' } },
+  { id: 'cabin', label: 'Cozy cabin', colors: { bgColor: '3A2416FF', panelColor: '1A0E0799', textColor: 'FFF3E2FF', dimTextColor: 'D9BC9CFF', accentColor: 'FFB45CFF', selectedTextColor: '2A1709FF' } },
   { id: 'haunted', label: 'Haunted', colors: { bgColor: '07070AFF', panelColor: 'FFFFFF10', textColor: 'EDE7E3FF', dimTextColor: '9C8F8AFF', accentColor: 'C1121FFF', selectedTextColor: 'FFFFFFFF' } },
   { id: 'comic', label: 'Comic yellow', colors: { bgColor: 'FFE14DFF', panelColor: 'FFFFFFF0', textColor: '111111FF', dimTextColor: '3A3A3AFF', accentColor: 'E62429FF', selectedTextColor: 'FFFFFFFF' } },
 ];

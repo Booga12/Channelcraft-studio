@@ -200,7 +200,7 @@ const SONGS: Record<string, { label: string; help: string; seed: number; song: S
     },
   },
   lofi: {
-    label: 'Cosy Lo-fi',
+    label: 'Cozy Lo-fi',
     help: 'Slow, mellow keys with a lazy beat',
     seed: 37,
     song: {

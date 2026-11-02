@@ -16,7 +16,7 @@ export type SceneGroup = 'shapes' | 'nature' | 'retro' | 'abstract' | 'space' | 
 
 export const SCENE_GROUPS: { id: SceneGroup; label: string }[] = [
   { id: 'shapes', label: 'Hearts & shapes' },
-  { id: 'nature', label: 'Cosy & nature' },
+  { id: 'nature', label: 'Cozy & nature' },
   { id: 'retro', label: 'Retro & arcade' },
   { id: 'abstract', label: 'Abstract & calm' },
   { id: 'space', label: 'Space' },

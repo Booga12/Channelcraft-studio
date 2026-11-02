@@ -216,7 +216,7 @@ async function main() {
     // More themes for the home screen, each with its own preview.
     for (const [name, design] of [
       ['Arcade Nights', 'Arcade Marquee'],
-      ['Rainy Sunday', 'Cosy Cabin'],
+      ['Rainy Sunday', 'Cozy Cabin'],
       ['Pocket Pixels', 'Pocket LCD'],
     ]) {
       await wizardTo(page, name, design);
