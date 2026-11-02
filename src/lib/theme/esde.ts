@@ -3,6 +3,8 @@
 // follow ES-DE's THEMES.md. What has no ES-DE equivalent is left out and listed in the notes.
 
 import type { Environment } from './context';
+import { evaluate, type ExprEnv } from './expr';
+import type { SystemInfo } from './systems';
 import type { ThemeProject } from './project';
 import { resolveAssetWithFallbacks, resolvePath, resolveTheme, type PropDef, type Resolution, type ResolvedElement, type ResolvedView } from './resolver';
 
@@ -16,6 +18,44 @@ export interface EsdeFile {
 
 /** Draws an SVG file as a PNG, returned as base64 (or null when it can't). */
 export type SvgToPng = (abs: string) => Promise<string | null>;
+
+export interface EsdeOptions {
+  /** Turns SVG logos into PNGs when a theme mixes the two. */
+  svgToPng?: SvgToPng;
+  /** The consoles, for details ES-DE doesn't have itself (maker, year, kind of machine). */
+  systems?: SystemInfo[];
+}
+
+/** A plain white square: the picture a stretchable frame becomes, tinted with its color. */
+const SOLID_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAD0lEQVR4nGP4jwYYSBcAAHg8P8FY7imoAAAAAElFTkSuQmCC';
+const SOLID = '_esde/solid.png';
+/** Where each console's maker, year and kind go: ES-DE reads the one for the console shown. */
+const SYSTEM_INFO = '_esde/systems';
+
+/**
+ * RetroBat consoles ES-DE knows by another name (from ES-DE's es_systems.xml). ES-DE looks for
+ * per-console files under its own name, so they're copied under that.
+ */
+const ESDE_NAMES: Record<string, string> = {
+  '3ds': 'n3ds',
+  amiga500: 'amiga',
+  amigacdtv: 'cdtv',
+  cdi: 'cdimono1',
+  cplus4: 'plus4',
+  c20: 'vic20',
+  'pce-cd': 'pcenginecd',
+  segastv: 'stv',
+};
+export const esdeSystem = (name: string) => ESDE_NAMES[name.toLowerCase()] ?? name;
+
+/** Console details ES-DE has as variables, and the ones the export adds per console (see SYSTEM_INFO). */
+const SYSTEM_VARS: Record<string, string> = {
+  fullname: '${system.fullName}',
+  name: '${system.name}',
+  manufacturer: '${ccsSystemMaker}',
+  releaseyear: '${ccsSystemYear}',
+  hardwaretype: '${ccsSystemType}',
+};
 
 export interface EsdeExport {
   /** The theme's folder name inside the zip, ending in `-es-de` as ES-DE themes do. */
@@ -152,6 +192,10 @@ class Converter {
   files = new Map<string, string>();
   /** SVG files to hand over as PNG, by where they go. */
   toConvert = new Map<string, string>();
+  /** Files the export makes itself, by where they go. */
+  made = new Map<string, { text?: string; data?: string }>();
+  /** Some text shows a console's maker, year or kind: write SYSTEM_INFO. */
+  usesSystemInfo = false;
   notes = new Set<string>();
   skipped = new Map<string, number>();
 
@@ -345,8 +389,13 @@ class Converter {
     const svgs = [...found.values()].filter((f) => f.ext === '.svg').length;
     const target = this.svgToPng && png && svgs && png.count + svgs > best.count ? png : best;
     let lost = 0;
-    for (const f of found.values()) {
-      const dest = target.destOf(f.name);
+    // Consoles under ES-DE's own names; a console already named that way wins over a renamed one.
+    const all = [...found.values()].sort((a, b) => Number(esdeSystem(a.name) !== a.name) - Number(esdeSystem(b.name) !== b.name));
+    const taken = new Set<string>();
+    for (const f of all) {
+      const dest = target.destOf(esdeSystem(f.name));
+      if (taken.has(dest.toLowerCase())) continue;
+      taken.add(dest.toLowerCase());
       if (f.ext === target.ext) this.files.set(dest, f.src);
       else if (f.ext === '.svg' && target.ext === '.png' && this.svgToPng) this.toConvert.set(dest, f.src);
       else lost++;
@@ -390,6 +439,40 @@ class Converter {
     if (/^md_(name|description|developer|publisher|genre|players|playcount|gametime|lbl_.+)$/.test(el.name)) return 'text';
     if (el.name.startsWith('md_')) return 'image';
     return 'control';
+  }
+
+  /**
+   * A text made of console details and words (`{system:manufacturer} + "  ·  " + {system:releaseYear}`,
+   * or `Made by {system:manufacturer}`) as ES-DE variables. Null when it uses anything else, changes
+   * a detail (upper(), year()…) or works something out (a choice, a comparison or a sum).
+   */
+  systemText(raw: string): string | null {
+    const binds = [...raw.matchAll(/\{([a-zA-Z]+[:.][\w.:]+)\}/g)].map((m) => m[1]);
+    if (!binds.length) return null;
+    const vars = binds.map((b) => SYSTEM_VARS[b.match(/^system[:.](\w+)$/i)?.[1].toLowerCase() ?? '']);
+    if (vars.some((v) => !v)) return null;
+    const rest = raw.replace(/\{[a-zA-Z]+[:.][\w.:]+\}/g, ' ').replace(/"[^"]*"|'[^']*'/g, ' ');
+    if (/\w\s*\(/.test(rest)) return null;
+    const env = (value: (name: string) => string): ExprEnv => ({ binding: (n) => value(n), exists: () => false });
+    const placeholder = (n: string) => SYSTEM_VARS[n.match(/^system[:.](\w+)$/i)![1].toLowerCase()];
+    let text: string;
+    let evaluates = true;
+    try {
+      evaluate(raw, env(() => 'Sample'));
+    } catch {
+      evaluates = false;
+    }
+    if (evaluates) {
+      // An expression: fine when it only joins words and details.
+      if (!/^[\s+()]*$/.test(rest)) return null;
+      text = String(evaluate(raw, env(placeholder)) ?? '');
+    } else {
+      // Words with details written in, as RetroBat shows them.
+      text = raw.replace(/\{([a-zA-Z]+[:.][\w.:]+)\}/g, (_, n: string) => placeholder(n));
+    }
+    if (!text.trim()) return null;
+    if (/\$\{ccsSystem/.test(text)) this.usesSystemInfo = true;
+    return text;
   }
 
   /** The game field an element shows: from its md_ name or a single {game:…} binding. */
@@ -460,9 +543,10 @@ class Converter {
         const field = lbl ? undefined : this.gameField(el, 'text');
         if (lbl) o.set('text', this.val(el, 'text') ?? LABELS[lbl[1]] ?? '');
         else if (field && META[field]) o.set('metadata', META[field]);
-        else if (isSystem && (el.name === 'systemInfo' || /\{binding:total\}|\$\{system\.(gameCount|totalGames)\}/i.test(raw))) o.set('systemdata', 'gamecountGames');
-        else if (raw === '${system.fullName}') o.set('systemdata', 'fullname');
-        else if (raw === '${system.name}') o.set('systemdata', 'name');
+        else if (isSystem && (el.name === 'systemInfo' || gameCount(raw))) o.set('systemdata', el.name === 'systemInfo' ? 'gamecountGames' : gameCount(raw)!);
+        else if (/^(\$\{system\.fullName\}|\{system[:.]fullName\})$/i.test(raw)) o.set('systemdata', 'fullname');
+        else if (/^(\$\{system\.name\}|\{system[:.]name\})$/i.test(raw)) o.set('systemdata', 'name');
+        else if (isSystem && !field && this.systemText(raw)) o.set('text', this.systemText(raw)!);
         else if (field || /[{]|\$\{system\./.test(raw)) {
           this.note('Texts that mix your own words with RetroBat details, or show details ES-DE doesn’t have, are left out.');
           return null;
@@ -546,6 +630,26 @@ class Converter {
       case 'sound':
       case 'control': // only clipping or similar was set: nothing to draw
         return null; // sounds are gathered separately
+      case 'ninepatch': {
+        // ES-DE has no stretchable frame: a plain panel in its color, without the frame's corners.
+        const o = new Out('image', name);
+        this.place(el, o);
+        if (!o.has('size')) return (this.skip(type), null);
+        const color = this.color(el, 'color');
+        if (color) {
+          this.made.set(SOLID, { data: SOLID_PNG });
+          o.set('path', `./${SOLID}`);
+          o.set('color', color);
+          this.note('Stretchable frames (panels and bands) become plain panels in their color, with square corners.');
+        } else {
+          // Its picture carries the look (a border, a see-through middle): stretched as it is.
+          const path = await this.asset(el, 'path');
+          if (!path) return (this.skip(type), null);
+          o.set('path', path);
+          this.note('Stretchable frames without a color of their own are stretched as pictures, so their corners stretch too.');
+        }
+        return o;
+      }
       default:
         this.skip(type);
         return null;
@@ -643,14 +747,23 @@ class Converter {
   }
 }
 
+/** ES-DE's game count for a text that's only the count (`{system:total}`, or with " games"). */
+function gameCount(raw: string): string | null {
+  const t = raw.replace(/\s+/g, '');
+  if (/^\$\{system\.(gameCount|totalGames)\}$/i.test(t)) return 'gamecountGames';
+  if (/^\{(binding|system)[:.]total\}$/i.test(t)) return 'gamecountGamesNoText';
+  if (/^(?:(['"])\1\+)?\{(?:binding|system)[:.]total\}(?:\+(['"])games\2|games)$/i.test(t)) return 'gamecountGames';
+  return null;
+}
+
 function esc(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Converts a RetroBat theme to ES-DE. `env` picks the console the per-console parts come from. */
-export async function toEsde(project: ThemeProject, env: Environment, listDir: ListDir, themeName = project.name, svgToPng?: SvgToPng): Promise<EsdeExport> {
+export async function toEsde(project: ThemeProject, env: Environment, listDir: ListDir, themeName = project.name, opts: EsdeOptions = {}): Promise<EsdeExport> {
   const res = resolveTheme(project, env);
-  const c = new Converter(project, env, res, listDir, svgToPng);
+  const c = new Converter(project, env, res, listDir, opts.svgToPng);
   const folder = esdeFolder(themeName);
 
   const lists = GAME_LISTS.filter((g) => {
@@ -667,6 +780,19 @@ export async function toEsde(project: ThemeProject, env: Environment, listDir: L
   for (const g of lists) {
     const els = await c.view(res.views.get(g.view)!, false);
     body.push(`  <variant name="${g.variant}">\n    <view name="gamelist">\n${els.map((o) => o.toXml('      ')).join('\n')}\n    </view>\n  </variant>`);
+  }
+  if (c.usesSystemInfo) {
+    // Each console's maker, year and kind, in a file ES-DE loads for the console shown.
+    const seen = new Set<string>();
+    const list = [...(opts.systems ?? [env.settings.system])].sort((a, b) => Number(esdeSystem(a.theme || a.name) !== (a.theme || a.name)) - Number(esdeSystem(b.theme || b.name) !== (b.theme || b.name)));
+    for (const s of list) {
+      const key = esdeSystem(s.theme || s.name).toLowerCase();
+      if (!key || seen.has(key) || !/^[\w.-]+$/.test(key)) continue;
+      seen.add(key);
+      const v = (n: string, x: string) => (x ? `    <${n}>${xml(x)}</${n}>\n` : '');
+      c.made.set(`${SYSTEM_INFO}/${key}.xml`, { text: `<?xml version="1.0"?>\n<theme>\n  <variables>\n${v('ccsSystemMaker', s.manufacturer)}${v('ccsSystemYear', s.releaseYear)}${v('ccsSystemType', s.hardwareType)}  </variables>\n</theme>\n` });
+    }
+    body.unshift(`  <include>./${SYSTEM_INFO}/\${system.theme}.xml</include>`);
   }
   const theme = `<?xml version="1.0"?>\n<!-- Made with ChannelCraft Studio from the RetroBat theme “${xml(project.name)}”. -->\n<theme>\n${body.join('\n')}\n</theme>\n`;
   const caps = `<?xml version="1.0"?>\n<themeCapabilities>\n  <themeName>${xml(themeName)}</themeName>\n${variants.map((v) => `  <variant name="${v.name}">\n    <label>${xml(v.label)}</label>\n    <selectable>true</selectable>\n  </variant>`).join('\n')}\n</themeCapabilities>\n`;
@@ -712,6 +838,7 @@ export async function toEsde(project: ThemeProject, env: Environment, listDir: L
     { dest: `${folder}/theme.xml`, text: theme },
     { dest: `${folder}/CONVERSION-NOTES.txt`, text: readme },
     ...[...c.files].map(([dest, src]) => ({ dest: `${folder}/${dest}`, src })),
+    ...[...c.made].map(([dest, f]) => ({ dest: `${folder}/${dest}`, ...f })),
   ];
   let failed = 0;
   for (const [dest, src] of c.toConvert) {

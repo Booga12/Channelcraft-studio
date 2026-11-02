@@ -159,7 +159,7 @@ describe('Export for ES-DE', () => {
     try {
       const p = await ThemeProject.load(dir, nodeFs);
       const drawn: string[] = [];
-      const out = await toEsde(p, envFor(root), listDir, 'Logos', async (abs) => (drawn.push(abs.split(/[\\/]/).pop()!), 'UE5H'));
+      const out = await toEsde(p, envFor(root), listDir, 'Logos', { svgToPng: async (abs) => (drawn.push(abs.split(/[\\/]/).pop()!), 'UE5H') });
       expect(staticImage(out)).toBe('./logos/${system.theme}.png');
       expect(dests(out)).toEqual(['logos/gb.png', 'logos/gba.png', 'logos/n64.png', 'logos/nds.png', 'logos/nes.png', 'logos/psx.png', 'logos/snes.png']);
       expect(drawn.sort()).toEqual(['gba.svg', 'nds.svg', 'nes.svg']);
@@ -177,7 +177,7 @@ describe('Export for ES-DE', () => {
   it('keeps the type most logos use when no SVGs are involved', async () => {
     const { root, dir } = logoTheme(['nes.jpg', 'nds.jpg', 'gba.jpg', 'snes.png'], ['./logos/${system.theme}.jpg', './logos/${system.theme}.png']);
     try {
-      const out = await toEsde(await ThemeProject.load(dir, nodeFs), envFor(root), listDir, 'Logos', async () => 'UE5H');
+      const out = await toEsde(await ThemeProject.load(dir, nodeFs), envFor(root), listDir, 'Logos', { svgToPng: async () => 'UE5H' });
       expect(staticImage(out)).toBe('./logos/${system.theme}.jpg');
       expect(dests(out)).toEqual(['logos/gba.jpg', 'logos/nds.jpg', 'logos/nes.jpg']);
     } finally {
@@ -210,10 +210,100 @@ describe('Export for ES-DE', () => {
   it('says so when an SVG logo can’t be turned into a PNG', async () => {
     const { root, dir } = logoTheme(['nes.png', 'snes.png', 'gba.svg']);
     try {
-      const out = await toEsde(await ThemeProject.load(dir, nodeFs), envFor(root), listDir, 'Logos', async () => null);
+      const out = await toEsde(await ThemeProject.load(dir, nodeFs), envFor(root), listDir, 'Logos', { svgToPng: async () => null });
       expect(dests(out)).toEqual(['logos/nes.png', 'logos/snes.png']);
       expect(out.notes.join('\n')).toMatch(/1 console picture couldn’t be turned into PNG/);
       expect(out.files.find((f) => f.dest.endsWith('CONVERSION-NOTES.txt'))!.text).toMatch(/couldn’t be turned into PNG/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('carries the console name, count, maker and year, and bands over to the console screen', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ccs-esde-sys-'));
+    const dir = join(root, 'themes', 'Sys');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'theme.xml'),
+      `<theme><formatVersion>7</formatVersion><view name="system">
+        <carousel name="systemcarousel"><type>horizontal</type></carousel>
+        <ninepatch name="band" extra="true"><path>./panel.svg</path><pos>0 0.6</pos><size>1 0.09</size><color>30303080</color></ninepatch>
+        <text name="sysname" extra="true"><text>{system:fullName}</text><pos>0.1 0.72</pos><size>0.8 0.07</size></text>
+        <text name="maker" extra="true"><text>{system:manufacturer} + "  ·  " + {system:releaseYear}</text><pos>0.1 0.79</pos><size>0.8 0.04</size></text>
+        <text name="count" extra="true"><text>'' + {system:total} + ' games'</text><pos>0.1 0.835</pos><size>0.8 0.04</size></text>
+        <text name="plural" extra="true"><text>{system:total} == 1 ? 'game' : 'games'</text><pos>0 0</pos></text>
+      </view></theme>`,
+    );
+    try {
+      const systems = [
+        { name: 'snes', theme: 'snes', fullName: 'Super Nintendo', manufacturer: 'Nintendo', releaseYear: '1990', hardwareType: 'console' },
+        { name: 'nds', theme: 'nds', fullName: 'Nintendo DS', manufacturer: 'Nintendo', releaseYear: '2004', hardwareType: 'portable' },
+      ];
+      const out = await toEsde(await ThemeProject.load(dir, nodeFs), envFor(root), listDir, 'Sys', { systems });
+      const theme = out.files.find((f) => f.dest.endsWith('/theme.xml'))!.text!;
+      expect(checkEsde(theme)).toEqual([]);
+      expect(theme).toMatch(/<text name="sysname">[\s\S]*?<systemdata>fullname<\/systemdata>/);
+      expect(theme).toMatch(/<text name="count">[\s\S]*?<systemdata>gamecountGames<\/systemdata>/);
+      expect(theme).toContain('<text>${ccsSystemMaker}  ·  ${ccsSystemYear}</text>');
+      expect(theme).toContain('<include>./_esde/systems/${system.theme}.xml</include>');
+      expect(theme).not.toContain('name="plural"');
+      const nds = out.files.find((f) => f.dest.endsWith('_esde/systems/nds.xml'))!.text!;
+      expect(nds).toContain('<ccsSystemMaker>Nintendo</ccsSystemMaker>');
+      expect(nds).toContain('<ccsSystemYear>2004</ccsSystemYear>');
+      // The band: a plain panel in its color.
+      expect(theme).toMatch(/<image name="band">[\s\S]*?<size>1 0.09<\/size>[\s\S]*?<path>\.\/_esde\/solid\.png<\/path>[\s\S]*?<color>30303080<\/color>/);
+      expect(out.files.find((f) => f.dest.endsWith('_esde/solid.png'))!.data).toMatch(/^iVBORw0KGgo/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses ES-DE’s names for consoles it calls something else (3ds is n3ds)', async () => {
+    const { root, dir } = logoTheme(['3ds.svg', 'nds.svg', 'n3ds.svg', 'amiga500.svg']);
+    try {
+      const systems = [
+        { name: '3ds', theme: '3ds', fullName: 'Nintendo 3DS', manufacturer: 'Nintendo', releaseYear: '2011', hardwareType: 'portable' },
+        { name: 'nds', theme: 'nds', fullName: 'Nintendo DS', manufacturer: 'Nintendo', releaseYear: '2004', hardwareType: 'portable' },
+      ];
+      const p = await ThemeProject.load(dir, nodeFs);
+      const out = await toEsde(p, envFor(root), listDir, 'Logos', { systems });
+      // n3ds.svg was already there under ES-DE's name, so it wins over the renamed 3ds.svg.
+      expect(dests(out)).toEqual(['logos/amiga.svg', 'logos/n3ds.svg', 'logos/nds.svg']);
+      expect(out.files.find((f) => f.dest.endsWith('logos/n3ds.svg'))!.src).toMatch(/n3ds\.svg$/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('only carries over console texts it can show the same way', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ccs-esde-txt-'));
+    const dir = join(root, 'themes', 'Txt');
+    mkdirSync(dir, { recursive: true });
+    const t = (name: string, text: string) => `<text name="${name}" extra="true"><text>${text}</text><pos>0 0</pos><size>1 0.05</size></text>`;
+    writeFileSync(
+      join(dir, 'theme.xml'),
+      `<theme><formatVersion>7</formatVersion><view name="system">
+        ${t('inline', '{system:fullName} - {system:releaseYear}')}
+        ${t('upper', 'upper({system:fullName})')}
+        ${t('bare', '{system:total}')}
+        ${t('mixed', "{system:fullName} + ' · ' + {system:total} + ' games'")}
+        ${t('words', 'Made by {system:manufacturer}')}
+        <ninepatch name="frame" extra="true"><path>./frame.png</path><pos>0 0</pos><size>0.5 0.5</size></ninepatch>
+      </view></theme>`,
+    );
+    writeFileSync(join(dir, 'frame.png'), 'x');
+    try {
+      const systems = [{ name: '3ds', theme: '3ds', fullName: 'Nintendo 3DS', manufacturer: 'Nintendo', releaseYear: '2011', hardwareType: 'portable' }];
+      const out = await toEsde(await ThemeProject.load(dir, nodeFs), envFor(root), listDir, 'Txt', { systems });
+      const theme = out.files.find((f) => f.dest.endsWith('/theme.xml'))!.text!;
+      expect(checkEsde(theme)).toEqual([]);
+      expect(theme).toContain('<text>${system.fullName} - ${ccsSystemYear}</text>');
+      expect(theme).toContain('<text>Made by ${ccsSystemMaker}</text>');
+      expect(theme).toMatch(/<text name="bare">[\s\S]*?<systemdata>gamecountGamesNoText<\/systemdata>/);
+      expect(theme).not.toContain('name="upper"');
+      expect(theme).not.toContain('name="mixed"');
+      expect(theme).toMatch(/<image name="frame">[\s\S]*?<path>\.\/frame\.png<\/path>/);
+      expect(out.files.some((f) => f.dest.endsWith('_esde/systems/n3ds.xml'))).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
