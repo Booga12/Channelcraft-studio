@@ -30,7 +30,7 @@ export default {
     {
       id: 'whats-inside',
       title: 'What\'s in the zip',
-      skipped: 'Looking inside the zip happens in Windows File Explorer ("Show file" in the message opens its folder), which can\'t be filmed in the browser version of the app. The zip holds the theme\'s folder: theme.xml and its other XML files, the pictures, fonts, sounds and videos it uses (with the fonts\' licence files), and preview.png. Console logos copied from another theme are left out (Import adds them back). Nothing from your games or your RetroBat settings goes in.',
+      skipped: 'Looking inside the zip happens in Windows File Explorer ("Show file" in the message opens its folder), which can\'t be filmed in the browser version of the app. The zip holds the theme\'s folder: theme.xml and its other XML files, the pictures, fonts, sounds and videos it uses (with the fonts\' license files), and preview.png. Console logos copied from another theme are left out (Import adds them back). Nothing from your games or your RetroBat settings goes in.',
     },
     {
       id: 'import',

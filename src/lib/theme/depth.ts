@@ -65,7 +65,7 @@ export const SCREEN_FX = [
   { id: 'crt', label: 'CRT', help: 'An old tube TV: curved, glowing and lined. RetroBat draws it with its own CRT shader.', path: ':/shaders/crt.glsl' },
   { id: 'scanlines', label: 'Scanlines', help: 'Fine dark lines across the screen, like an arcade monitor.', path: ':/shaders/scanlines.glsl' },
   { id: 'pixelate', label: 'Pixelate', help: 'Everything drawn in chunky pixels.', path: ':/shaders/pixelate.glsl' },
-  { id: 'grayscale', label: 'Black and white', help: 'Everything in shades of grey, like an old photo.', path: ':/shaders/grayscale.glsl' },
+  { id: 'grayscale', label: 'Black and white', help: 'Everything in shades of gray, like an old photo.', path: ':/shaders/grayscale.glsl' },
 ] as const;
 export type ScreenFx = (typeof SCREEN_FX)[number]['id'];
 export const screenFxOf = (id: string | null | undefined) => SCREEN_FX.find((f) => f.id === id?.trim()) ?? SCREEN_FX[0];

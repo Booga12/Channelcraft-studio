@@ -22,8 +22,8 @@
   /** The panels the dock opens, in order. */
   // One order for both modes (#36): Simple shows a shorter list in the same order.
   export const PANELS: PanelInfo[] = [
-    { id: 'presets', label: 'Presets', help: 'Designs, layouts and colour palettes', icon: LayoutTemplateIcon },
-    { id: 'variables', label: 'Colours', help: 'Colours and values shared across the theme', icon: PaletteIcon },
+    { id: 'presets', label: 'Presets', help: 'Designs, layouts and color palettes', icon: LayoutTemplateIcon },
+    { id: 'variables', label: 'Colors', help: 'Colors and values shared across the theme', icon: PaletteIcon },
     { id: 'sound', label: 'Sound', help: 'Menu music and the sound when you scroll', icon: MusicIcon },
     { id: 'assets', label: 'Assets', help: 'Your own pictures, videos, sounds and fonts, and the app’s own sounds; drag one onto an element to use it', icon: ImagesIcon },
     { id: 'elements', label: 'Layers', help: 'Everything drawn on this screen', icon: LayersIcon },

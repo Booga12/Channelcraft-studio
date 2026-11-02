@@ -70,7 +70,7 @@ export const TILE_STYLES: TileStyle[] = [
   {
     id: 'classic',
     label: 'Square',
-    help: 'Plain tiles with slightly rounded corners; the selected one fills with your accent colour.',
+    help: 'Plain tiles with slightly rounded corners; the selected one fills with your accent color.',
     radius: 8,
     zoom: 1.06,
     dim: 0.7,
@@ -125,7 +125,7 @@ export const TILE_STYLES: TileStyle[] = [
   {
     id: 'neon',
     label: 'Neon glow',
-    help: 'Glowing outlines in your accent colour, brightest on the selected tile. Great on dark themes.',
+    help: 'Glowing outlines in your accent color, brightest on the selected tile. Great on dark themes.',
     radius: 14,
     zoom: 1.08,
     dim: 0.65,

@@ -913,7 +913,7 @@ export class Editor {
   }
 
   setVar(name: string, value: string) {
-    if (this.sharedOnly('Colours and theme values')) return;
+    if (this.sharedOnly('Colors and theme values')) return;
     const change = this.varChange(name, value);
     if (!change) return;
     // The accent's text shade follows the colours it is worked out from (#45).
@@ -1146,7 +1146,7 @@ export class Editor {
     const missingFont = !font ? ' Its font could not be downloaded (offline?), so the theme’s font is used.' : '';
     if (layoutId) {
       const where = opts.systemLayout ? 'the System screen' : views.map((v) => viewLabel(v)).join(', ');
-      return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to ${where}.${keepColours ? ' Your colours stay.' : ''}${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
+      return this.notify(wrote ? `${label[0].toUpperCase()}${label.slice(1)} applied to ${where}.${keepColours ? ' Your colors stay.' : ''}${missingFont} Save to keep it, or Ctrl+Z to undo.` : `${label} applied in the preview only (files can’t be written here).`);
     }
     this.notify(wrote ? `Design “${design.label}” applied.${missingFont} Save to keep it, or Ctrl+Z to undo.` : `Design “${design.label}” applied in the preview only (files can’t be written here).`);
   }

@@ -70,10 +70,10 @@
   <!-- Wraps in a narrow inspector: the right-hand group moves to a second line (#41). -->
   <div class="flex flex-wrap items-center gap-x-0.5 gap-y-1">
     <IconButton label={many ? 'Align left edges' : 'Move to the left edge'} onclick={() => ed.align('left')}><AlignStartVerticalIcon /></IconButton>
-    <IconButton label={many ? 'Align centres' : 'Centre across the screen'} onclick={() => ed.align('hcenter')}><AlignCenterVerticalIcon /></IconButton>
+    <IconButton label={many ? 'Align centers' : 'Center across the screen'} onclick={() => ed.align('hcenter')}><AlignCenterVerticalIcon /></IconButton>
     <IconButton label={many ? 'Align right edges' : 'Move to the right edge'} onclick={() => ed.align('right')}><AlignEndVerticalIcon /></IconButton>
     <IconButton label={many ? 'Align top edges' : 'Move to the top'} onclick={() => ed.align('top')}><AlignStartHorizontalIcon /></IconButton>
-    <IconButton label={many ? 'Align middles' : 'Centre down the screen'} onclick={() => ed.align('vcenter')}><AlignCenterHorizontalIcon /></IconButton>
+    <IconButton label={many ? 'Align middles' : 'Center down the screen'} onclick={() => ed.align('vcenter')}><AlignCenterHorizontalIcon /></IconButton>
     <IconButton label={many ? 'Align bottom edges' : 'Move to the bottom'} onclick={() => ed.align('bottom')}><AlignEndHorizontalIcon /></IconButton>
     <div class="ml-auto flex items-center gap-0.5">
     {#if many}

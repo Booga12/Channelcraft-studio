@@ -30,7 +30,7 @@ const p = (name: string, kind: Kind, group: PropSpec['group'], extra: Partial<Pr
 const LAYOUT = [
   p('pos', 'pair', 'layout', { hint: 'Position as a fraction of the screen (x y)' }),
   p('size', 'pair', 'layout', { hint: 'Size as a fraction of the screen; 0 keeps the aspect ratio' }),
-  p('origin', 'pair', 'layout', { hint: 'Anchor point inside the element (0 0 = top left, 0.5 0.5 = centre)' }),
+  p('origin', 'pair', 'layout', { hint: 'Anchor point inside the element (0 0 = top left, 0.5 0.5 = center)' }),
   p('rotation', 'float', 'layout'),
   p('rotationOrigin', 'pair', 'layout'),
   p('zIndex', 'float', 'layout', { hint: 'Higher draws on top' }),
@@ -259,7 +259,7 @@ export const ELEMENT_LABELS: Record<string, string> = {
   md_lbl_playcount: 'Play count label',
   md_name: 'Game name',
   // RetroBat's loading screens (splash.xml, gamesplash.xml).
-  splash: 'Screen colour',
+  splash: 'Screen color',
   label: 'Loading text',
   progressbar: 'Progress bar',
   'progressbar:active': 'Progress bar fill',

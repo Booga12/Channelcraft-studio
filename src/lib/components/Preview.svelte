@@ -570,7 +570,7 @@
           { label: 'Send to back', shortcut: 'Ctrl+Shift+[', action: () => ed.arrange('back') },
           { separator: true },
           { label: ed.selection.length > 1 ? 'Align left' : 'Align to screen left', action: () => ed.align('left') },
-          { label: ed.selection.length > 1 ? 'Align centres' : 'Centre on screen', action: () => (ed.align('hcenter'), ed.selection.length === 1 && ed.align('vcenter')) },
+          { label: ed.selection.length > 1 ? 'Align centers' : 'Center on screen', action: () => (ed.align('hcenter'), ed.selection.length === 1 && ed.align('vcenter')) },
           { label: ed.selection.length > 1 ? 'Align right' : 'Align to screen right', action: () => ed.align('right') },
           { separator: true },
           { label: 'Lock', action: () => ed.selection.forEach((n) => ed.setLocked(n, true)) },
@@ -807,7 +807,7 @@
                 {#if primary}
                   {#each HANDLES as h}
                     {@const p = handlePos(h, primary)}
-                    <div class="handle {h}" data-handle={h} style:left="{p.x * dims.width}px" style:top="{p.y * dims.height}px" title="Drag to resize (Shift keeps proportions, Alt resizes from the centre)"></div>
+                    <div class="handle {h}" data-handle={h} style:left="{p.x * dims.width}px" style:top="{p.y * dims.height}px" title="Drag to resize (Shift keeps proportions, Alt resizes from the center)"></div>
                   {/each}
                   {#if sizeLabel}
                     <div class="sizelabel" style:left="{(primary.x + primary.w / 2) * dims.width}px" style:top="{(primary.y + primary.h) * dims.height}px">{sizeLabel}</div>

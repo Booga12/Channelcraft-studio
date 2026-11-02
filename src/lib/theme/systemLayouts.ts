@@ -142,7 +142,7 @@ export const SYSTEM_LAYOUTS: SystemLayout[] = [
   {
     id: 'spotlight',
     label: 'Spotlight',
-    description: 'One huge logo in the centre of the stage. Scroll to bring the next console into the light.',
+    description: 'One huge logo in the center of the stage. Scroll to bring the next console into the light.',
     diagram: [pic(0.42, 0.1, 0.16, 0.18), { x: 0.25, y: 0.36, w: 0.5, h: 0.3, role: 'carousel' }, info(0.3, 0.72)],
     carousel: { type: 'horizontal', pos: '0.25 0.36', size: '0.5 0.3', logoSize: '0.38 0.24', maxLogoCount: '1', logoScale: '1.1' },
     info: ['0 0.7', '1 0.05', 'center'],
@@ -256,7 +256,7 @@ export const SYSTEM_LAYOUTS: SystemLayout[] = [
   {
     id: 'big-tiles',
     label: 'Big tiles',
-    description: 'Five large tiles across the middle, the selected one in the centre. A modern handheld feel.',
+    description: 'Five large tiles across the middle, the selected one in the center. A modern handheld feel.',
     diagram: [...cells(0.04, 0.3, 0.92, 0.36, 5, 1), info(0.3, 0.12)],
     grid: { pos: '0.04 0.3', size: '0.92 0.36', autoLayout: '5 1', margin: '0.016 0', scrollDirection: 'horizontal', centerSelection: 'true', autoLayoutSelectedZoom: '1.12' },
     info: ['0 0.72', '1 0.05', 'center'],

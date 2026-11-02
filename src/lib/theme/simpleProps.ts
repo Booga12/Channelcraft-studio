@@ -232,7 +232,7 @@ export function varUsers(res: Resolution, name: string): number {
 /** Plain names for the design colours, by what they paint (#28). */
 export const DESIGN_COLOUR_NAMES: Record<string, string> = {
   designBackground: 'Background',
-  designBackground2: 'Background, second colour',
+  designBackground2: 'Background, second color',
   designPanel: 'Panels',
   designListPanel: 'Game list panel',
   designTile: 'Tiles',

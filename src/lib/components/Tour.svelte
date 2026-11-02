@@ -14,8 +14,8 @@
 
   const STEPS: Step[] = [
     { target: 'preview', title: 'This is your theme', text: 'The preview shows a screen as RetroBat draws it. Click any part to change it; drag it to move it.' },
-    { target: 'dock', title: 'Your tools', text: 'Add pictures, text and more with the + button. The buttons below open Layers, Colours and the other panels.' },
-    { target: 'panel-presets', title: 'Restyle in one click', text: 'Presets has whole designs, layouts and colour sets. Try one: Ctrl+Z puts everything back.' },
+    { target: 'dock', title: 'Your tools', text: 'Add pictures, text and more with the + button. The buttons below open Layers, Colors and the other panels.' },
+    { target: 'panel-presets', title: 'Restyle in one click', text: 'Presets has whole designs, layouts and color sets. Try one: Ctrl+Z puts everything back.' },
     { target: 'search', title: 'Can’t find something?', text: 'Search finds any command, part or setting by name. Shortcut: Ctrl+K.' },
     { target: 'save', title: 'Save when you like it', text: 'Nothing is written to your theme until you save, and a backup is made first.' },
     { target: 'try', title: 'See it on the TV', text: 'Try in RetroBat saves, switches RetroBat to this theme and starts it, so you see it for real.' },

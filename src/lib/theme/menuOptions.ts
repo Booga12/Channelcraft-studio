@@ -71,7 +71,7 @@ export interface ColorSet {
 
 /** Every colour set offered: each design's own colours, then the general palettes. */
 export function colorSets(): ColorSet[] {
-  const fromDesigns = DESIGNS.map((d) => ({ key: `d-${d.id}`, label: `${d.label} colours`, palette: d.palette }));
+  const fromDesigns = DESIGNS.map((d) => ({ key: `d-${d.id}`, label: `${d.label} colors`, palette: d.palette }));
   const fromPalettes = PALETTES.map((p) => {
     const c = p.colors;
     const bg = c.bgColor.slice(0, 6);

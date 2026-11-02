@@ -4,7 +4,7 @@ import { appMenu, dialog, dockButton, editorReady, NO_TOUR, panel, quickClear, q
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** A quick colour change without the pointer (setup). */
+/** A quick color change without the pointer (setup). */
 async function quickPalette(page, name) {
   await dockButton(page, 'presets').click();
   await sleep(400);
@@ -77,12 +77,12 @@ export default {
       leadIn: 400,
       hold: 1000,
       title: 'Go back with History',
-      shows: 'Two more palettes are tried. History lists every change in order; clicking an earlier entry ("Palette “Neon”") goes straight back to it in the preview, and the later ones stay listed in grey so you can go forward again.',
+      shows: 'Two more palettes are tried. History lists every change in order; clicking an earlier entry ("Palette “Neon”") goes straight back to it in the preview, and the later ones stay listed in gray so you can go forward again.',
       uiLabels: ['Presets', 'History', 'Palette “Neon”'],
       async run(ctx) {
         const { page } = ctx;
         await ctx.click(dockButton(page, 'presets'), { after: 700 });
-        const head = panel(page).getByText('Colour palettes', { exact: true });
+        const head = panel(page).getByText('Color palettes', { exact: true });
         await ctx.moveTo({ x: 240, y: 520 }, { ms: 500 });
         for (let i = 0; i < 12 && !(await head.isVisible().then(async (v) => v && (await head.boundingBox()).y < 420)); i++) await ctx.scroll(null, 900, { ms: 200 });
         await ctx.click(panel(page).getByTitle('Apply the Lava palette'), { after: 700 });

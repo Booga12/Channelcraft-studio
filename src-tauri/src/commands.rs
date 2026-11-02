@@ -418,7 +418,7 @@ pub fn notices_path(app: AppHandle) -> CmdResult<String> {
     let installed = app.path().resolve("THIRD-PARTY-NOTICES.txt", tauri::path::BaseDirectory::Resource).map_err(err)?;
     let p = if installed.is_file() { installed } else { dev_resource("THIRD-PARTY-NOTICES.txt").unwrap_or_default() };
     if !p.is_file() {
-        return Err("The licences file is missing from this copy of the app.".into());
+        return Err("The licenses file is missing from this copy of the app.".into());
     }
     Ok(p.to_string_lossy().into_owned())
 }
@@ -643,11 +643,11 @@ pub fn download_font(roots: State<Roots>, theme_dir: String, url: String, file_n
 }
 
 fn fetch_ofl(dir_url: &str, dest: &Path) -> CmdResult<()> {
-    let resp = ureq::get(&format!("{dir_url}/OFL.txt")).call().map_err(|e| format!("The font's licence couldn't be downloaded ({e})"))?;
+    let resp = ureq::get(&format!("{dir_url}/OFL.txt")).call().map_err(|e| format!("The font's license couldn't be downloaded ({e})"))?;
     let mut text = String::new();
     std::io::Read::read_to_string(&mut std::io::Read::take(resp.into_reader(), 256 * 1024), &mut text).map_err(err)?;
     if !text.to_ascii_uppercase().contains("SIL OPEN FONT LICENSE") {
-        return Err("The font's licence file isn't the Open Font License".into());
+        return Err("The font's license file isn't the Open Font License".into());
     }
     fs::create_dir_all(dest.parent().ok_or("No folder")?).map_err(err)?;
     crate::storage::write_atomic(dest, text.as_bytes())

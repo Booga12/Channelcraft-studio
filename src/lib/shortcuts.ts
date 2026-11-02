@@ -26,7 +26,7 @@ export const SHORTCUTS: { group: string; items: [string, string][] }[] = [
     group: 'Editing',
     items: [
       ['Drag', 'Move the selection (Shift: in a straight line, Alt: no snapping)'],
-      ['Drag a handle', 'Resize (Shift: keep proportions, Alt: from the centre)'],
+      ['Drag a handle', 'Resize (Shift: keep proportions, Alt: from the center)'],
       ['Arrow keys', 'Nudge (Shift: 10× further)'],
       ['Ctrl+D', 'Duplicate'],
       ['Ctrl+C / Ctrl+V', 'Copy / paste (Ctrl+V also adds a copied picture or screenshot as a new layer)'],

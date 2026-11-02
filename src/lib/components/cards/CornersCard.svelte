@@ -22,7 +22,7 @@
   const kinds = $derived([
     { id: 'none' as const, label: 'None', title: 'No effect' },
     ...(canShadow ? [{ id: 'shadow' as const, label: 'Shadow', title: 'A soft shadow under the picture (works on any picture, logos too)' }] : []),
-    { id: 'glow' as const, label: 'Glow', title: 'Coloured light round the edges (pictures with solid corners)' },
+    { id: 'glow' as const, label: 'Glow', title: 'Colored light round the edges (pictures with solid corners)' },
     { id: 'frame' as const, label: 'Frame', title: 'A border with a shadow (pictures with solid corners)' },
   ]);
 
@@ -132,7 +132,7 @@
         </div>
       </div>
       <div class="row">
-        <div class="lbl">Glow colour</div>
+        <div class="lbl">Glow color</div>
         <FxSwatches value={shown(frame.frame.shadowColor).slice(0, 6)} onpick={(c) => change({ shadowColor: c + hexA(alphaOf(frame.frame.shadowColor)) })} />
       </div>
       <div class="row">
@@ -154,7 +154,7 @@
         </div>
       </div>
       <div class="row">
-        <div class="lbl">Border colour</div>
+        <div class="lbl">Border color</div>
         <FxSwatches value={shown(frame.frame.borderColor).slice(0, 6)} onpick={(c) => change({ borderColor: c + hexA(alphaOf(frame.frame.borderColor)) })} />
       </div>
       <div class="row">
@@ -166,7 +166,7 @@
         <input type="range" min="0" max="30" step="1" value={frame.frame.shadow} aria-label="Frame shadow" oninput={(e) => change({ shadow: e.currentTarget.valueAsNumber }, 'shadow')} />
       </div>
       <div class="row">
-        <div class="lbl">Shadow colour</div>
+        <div class="lbl">Shadow color</div>
         <FxSwatches value={shown(frame.frame.shadowColor).slice(0, 6)} onpick={(c) => change({ shadowColor: c + hexA(alphaOf(frame.frame.shadowColor)) })} />
       </div>
       <p class="note">Suits box art, screenshots and videos. RetroBat leaves pictures with see-through corners (most logos) plain; give those a Shadow instead.</p>

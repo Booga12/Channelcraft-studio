@@ -49,7 +49,7 @@ export default {
     {
       id: 'pick-design',
       title: 'Choose a design',
-      shows: 'The "Arcade Marquee" design (gold on deep red) is clicked and gets the highlight; the line at the top of the wizard now names it with its layouts. Every design comes with its own colours, fonts, artwork and layouts.',
+      shows: 'The "Arcade Marquee" design (gold on deep red) is clicked and gets the highlight; the line at the top of the wizard now names it with its layouts. Every design comes with its own colors, fonts, artwork and layouts.',
       uiLabels: ['Pick a design', 'Arcade Marquee'],
       async run(ctx) {
         const { page } = ctx;
@@ -91,8 +91,8 @@ export default {
     {
       id: 'editor-tour',
       title: 'Find your way around the editor',
-      shows: 'A quick look around the editor: the screen menu at the top (System menu, game lists), the tools column on the left (Presets, Colours, Sound, Assets, Layers, History), the live preview in the middle, and Try in RetroBat and Save at the top right.',
-      uiLabels: ['Game list (detailed)', 'Presets', 'Colours', 'Sound', 'Assets', 'Layers', 'History', 'Try in RetroBat', 'Saved'],
+      shows: 'A quick look around the editor: the screen menu at the top (System menu, game lists), the tools column on the left (Presets, Colors, Sound, Assets, Layers, History), the live preview in the middle, and Try in RetroBat and Save at the top right.',
+      uiLabels: ['Game list (detailed)', 'Presets', 'Colors', 'Sound', 'Assets', 'Layers', 'History', 'Try in RetroBat', 'Saved'],
       async run(ctx) {
         const { page } = ctx;
         await ctx.hover(page.getByTitle('Which screen of the theme to show'), { hold: 900 });

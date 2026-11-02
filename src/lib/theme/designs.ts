@@ -269,7 +269,7 @@ const blend = (a: string, b: string, t: number) => [0, 2, 4].map((i) => Math.rou
 const laid = (top: string, under: string) => blend(under, top, top.length >= 8 ? parseInt(top.slice(6, 8), 16) / 255 : 1);
 
 /**
- * The accent as small text ("★ Favourite", a console's game count): the accent itself when it
+ * The accent as small text ("★ Favorite", a console's game count): the accent itself when it
  * reads well (3:1) on the background and on panels, else darkened (on light designs) or lightened
  * until it does (#45). Panels count with the shadow a solid one floats on.
  */
@@ -429,7 +429,7 @@ function gameScreen(d: Design, c: DesignContext, view: string, archetype: GameAr
       value('md_developer', 2, w - g.labelW),
       label('md_lbl_players', 3),
       value('md_players', 3, g.favX - g.labelW - 0.004),
-      text(d, c, 'ccs_favorite', { pos: `${f(x + g.favX)} ${rowY(3)}`, size: `${f(w - g.favX)} ${f(g.row)}`, fontSize: String(g.valueFs), alignment: 'right', text: '★ Favourite', color: K(d, c, 'designAccentText'), visible: '{game:favorite}', zIndex: '40' }),
+      text(d, c, 'ccs_favorite', { pos: `${f(x + g.favX)} ${rowY(3)}`, size: `${f(w - g.favX)} ${f(g.row)}`, fontSize: String(g.valueFs), alignment: 'right', text: '★ Favorite', color: K(d, c, 'designAccentText'), visible: '{game:favorite}', zIndex: '40' }),
     ];
     return els.map((e) => ({ ...e, group: [x, w] }));
   };

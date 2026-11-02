@@ -40,7 +40,7 @@
       </label>
       <div class="thumb"><DesignThumb design={preview} /></div>
       <p class="text-xs text-muted-foreground">
-        It keeps your colours, depth, console screen layout, game list layout and fonts, with the artwork style of {baseLabel}.
+        It keeps your colors, depth, console screen layout, game list layout and fonts, with the artwork style of {baseLabel}.
         Parts you added yourself and pictures you chose stay in this theme only.
       </p>
     </form>

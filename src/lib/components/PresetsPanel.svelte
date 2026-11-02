@@ -161,7 +161,7 @@
   function palette(id: string) {
     const p = PALETTES.find((x) => x.id === id)!;
     const n = ed.applyPalette(p);
-    ed.notify(n ? `Palette “${p.label}” applied${ed.consoleOnly ? ` to ${ed.consoleName} only` : ''}. Press Ctrl+Z to undo.` : 'This theme names its colours differently; change them in Colours.');
+    ed.notify(n ? `Palette “${p.label}” applied${ed.consoleOnly ? ` to ${ed.consoleName} only` : ''}. Press Ctrl+Z to undo.` : 'This theme names its colors differently; change them in Colors.');
   }
 
   /** Arrow keys (and Home/End) in a radio group: move to the next choice and pick it. */
@@ -200,7 +200,7 @@
 <div class="presets">
   <section>
     <h4>Designs</h4>
-    <p class="dim note">A complete look for every screen: artwork, colours, font, animations, and all of RetroBat's game and system data placed for you.</p>
+    <p class="dim note">A complete look for every screen: artwork, colors, font, animations, and all of RetroBat's game and system data placed for you.</p>
     <label class="chk"><input type="checkbox" bind:checked={hideOwn} /> Hide this theme's own decorations</label>
     <label class="chk" title="The new design is laid out the way your screens are now, instead of with its own layouts."><input type="checkbox" bind:checked={keepLayouts} /> Keep my layouts</label>
     <button class="secondary small surprise" disabled={applying} onclick={async () => { applying = true; try { await ed.surprise({ hideOwn, group: designGroup }); } finally { applying = false; } }} title="A random design with layouts that go together. Press again for another; Ctrl+Z goes back.">Surprise me</button>
@@ -228,7 +228,7 @@
       {/each}
     </div>
     <div class="mytools">
-      <button class="secondary small" onclick={() => (ed.showSaveDesign = true)} disabled={!canSave} title={canSave ? 'Keep this theme’s colours, depth, layouts and fonts as a design of your own' : 'Pick a design first: only themes made from one can be saved as one'}>Save as my design</button>
+      <button class="secondary small" onclick={() => (ed.showSaveDesign = true)} disabled={!canSave} title={canSave ? 'Keep this theme’s colors, depth, layouts and fonts as a design of your own' : 'Pick a design first: only themes made from one can be saved as one'}>Save as my design</button>
       <button class="ghost small" onclick={() => ed.importMyDesign()} title="Add a design someone shared with you (.ccdesign file)">Import a design</button>
     </div>
   </section>
@@ -239,7 +239,7 @@
       <p class="faint note">There are no layout presets for this screen.</p>
     {:else}
       {#if isSystem}
-        <p class="dim note">How the consoles are laid out: a carousel, a wheel, an arc or a grid of tiles. Pick a style to get the background, colours, fonts, console picture, name, maker and game count placed to match.</p>
+        <p class="dim note">How the consoles are laid out: a carousel, a wheel, an arc or a grid of tiles. Pick a style to get the background, colors, fonts, console picture, name, maker and game count placed to match.</p>
         <label class="style">
           <span>Style</span>
           <select bind:value={styleChoice}>
@@ -257,8 +257,8 @@
           <p class="faint note">Only RetroBat's carousel (or grid) and its game count move. The theme's decorations stay where they are.</p>
         {/if}
       {:else if listDesign}
-        <p class="dim note">Where everything goes, drawn in {listDesign.label}: your colours, fonts, animations and anything you added stay.</p>
-        <button class="ghost small" onclick={() => ed.resetScreen(ed.view)} title="Undo everything you changed on this screen, keeping the design, colours and layout. Other screens aren't touched.">Reset this screen to the design</button>
+        <p class="dim note">Where everything goes, drawn in {listDesign.label}: your colors, fonts, animations and anything you added stay.</p>
+        <button class="ghost small" onclick={() => ed.resetScreen(ed.view)} title="Undo everything you changed on this screen, keeping the design, colors and layout. Other screens aren't touched.">Reset this screen to the design</button>
       {:else}
         <p class="dim note">This theme isn't made from a design, so you can choose: just move RetroBat's own parts (list, picture, description), or restyle the screen with a design.</p>
       {/if}
@@ -366,9 +366,9 @@
   {/if}
 
   <section>
-    <h4>Colour palettes</h4>
+    <h4>Color palettes</h4>
     {#if covered === 0}
-      <p class="faint note">This theme names its colours its own way, so palettes can't map onto it. Change its colours in Colours instead. Themes made with “New theme” work with palettes.</p>
+      <p class="faint note">This theme names its colors its own way, so palettes can't map onto it. Change its colors in Colors instead. Themes made with “New theme” work with palettes.</p>
     {:else}
       <div class="pals">
         {#each PALETTES as p (p.id)}

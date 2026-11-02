@@ -78,7 +78,7 @@
         { label: 'Send to back', shortcut: 'Ctrl+Shift+[', action: () => ed.arrange('back'), disabled: !sel },
         'sep',
         { label: 'Align left', action: () => ed.align('left'), disabled: !sel },
-        { label: 'Align centre', action: () => ed.align('hcenter'), disabled: !sel },
+        { label: 'Align center', action: () => ed.align('hcenter'), disabled: !sel },
         { label: 'Align right', action: () => ed.align('right'), disabled: !sel },
         { label: 'Align top', action: () => ed.align('top'), disabled: !sel },
         { label: 'Align middle', action: () => ed.align('vcenter'), disabled: !sel },

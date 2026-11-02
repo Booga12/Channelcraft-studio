@@ -114,17 +114,17 @@
 <div class="pick" bind:this={wrap}>
   <div class="swatches" bind:this={box}>
     {#each swatches as s (s.name)}
-      <button class="sw" class:on={linked === s.name} aria-current={linked === s.name ? 'true' : undefined} data-rove tabindex={stop === `t${s.name}` ? 0 : -1} style:--c={cssColor(s.hex)} title="The theme's {colourName(s.name).toLowerCase()} colour" aria-label="Theme colour {colourName(s.name)}" onclick={() => link(s.name)} onkeydown={rove}></button>
+      <button class="sw" class:on={linked === s.name} aria-current={linked === s.name ? 'true' : undefined} data-rove tabindex={stop === `t${s.name}` ? 0 : -1} style:--c={cssColor(s.hex)} title="The theme's {colourName(s.name).toLowerCase()} color" aria-label="Theme color {colourName(s.name)}" onclick={() => link(s.name)} onkeydown={rove}></button>
     {/each}
     {#if swatches.length}<span class="gap"></span>{/if}
     {#each BASIC_SWATCHES as h (h)}
-      <button class="sw" class:on={basicOn(h)} aria-current={basicOn(h) ? 'true' : undefined} data-rove tabindex={stop === `b${h}` ? 0 : -1} style:--c={cssColor(h)} title="#{h.slice(0, 6)}" aria-label="Colour #{h.slice(0, 6)}" onclick={() => pick(h)} onkeydown={rove}></button>
+      <button class="sw" class:on={basicOn(h)} aria-current={basicOn(h) ? 'true' : undefined} data-rove tabindex={stop === `b${h}` ? 0 : -1} style:--c={cssColor(h)} title="#{h.slice(0, 6)}" aria-label="Color #{h.slice(0, 6)}" onclick={() => pick(h)} onkeydown={rove}></button>
     {/each}
-    <label class="sw any" title="Pick any colour">
-      <input type="color" value="#{current.slice(0, 6)}" aria-label="Pick any colour" onchange={(e) => custom(e.currentTarget.value)} />
+    <label class="sw any" title="Pick any color">
+      <input type="color" value="#{current.slice(0, 6)}" aria-label="Pick any color" onchange={(e) => custom(e.currentTarget.value)} />
     </label>
     {#if canDrop}
-      <button class="sw drop" title="Pick a colour from anywhere on the screen" aria-label="Pick a colour from the screen" onclick={fromScreen}><PipetteIcon size={13} /></button>
+      <button class="sw drop" title="Pick a color from anywhere on the screen" aria-label="Pick a color from the screen" onclick={fromScreen}><PipetteIcon size={13} /></button>
     {/if}
   </div>
 
@@ -132,7 +132,7 @@
     <div class="recent">
       <span>Recent</span>
       {#each cards.recent as h, i (h)}
-        <button class="sw small" data-rove tabindex={i === 0 ? 0 : -1} style:--c={cssColor(h)} title="#{h.slice(0, 6)}" aria-label="Recent colour #{h.slice(0, 6)}" onclick={() => pick(h)} onkeydown={rove}></button>
+        <button class="sw small" data-rove tabindex={i === 0 ? 0 : -1} style:--c={cssColor(h)} title="#{h.slice(0, 6)}" aria-label="Recent color #{h.slice(0, 6)}" onclick={() => pick(h)} onkeydown={rove}></button>
       {/each}
     </div>
   {/if}
@@ -140,7 +140,7 @@
   {#if pending}
     <div class="ask" role="group" aria-labelledby="ask-{el.name}-{prop}" bind:this={askBox}>
       <div id="ask-{el.name}-{prop}">
-        This uses the theme's <b>{colourName(linked ?? '').toLowerCase()}</b> colour, shared by {users} parts. Change it where?
+        This uses the theme's <b>{colourName(linked ?? '').toLowerCase()}</b> color, shared by {users} parts. Change it where?
       </div>
       <div class="two">
         <button
@@ -171,10 +171,10 @@
   {:else if linked}
     <div class="linked">
       <span class="dot" style:--c={cssColor(current)}></span>
-      <span>Uses the theme's <b>{colourName(linked).toLowerCase()}</b> colour{users > 1 ? ` · ${users} parts use it` : ''}</span>
+      <span>Uses the theme's <b>{colourName(linked).toLowerCase()}</b> color{users > 1 ? ` · ${users} parts use it` : ''}</span>
       <button
         class="ghost small"
-        title="Give only this part its own colour"
+        title="Give only this part its own color"
         onclick={() => {
           ed.setProp(el.name, prop, current, { literal: true });
           backToSwatches();

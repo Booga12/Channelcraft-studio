@@ -14,7 +14,7 @@
     },
     {
       title: 'Move, restyle, add',
-      text: 'Drag the selected part to move it, or use the arrow keys for small steps. The column on the left has Add (pictures, text, panels and more) and opens Layers, Presets, Colours and the other panels.',
+      text: 'Drag the selected part to move it, or use the arrow keys for small steps. The column on the left has Add (pictures, text, panels and more) and opens Layers, Presets, Colors and the other panels.',
     },
     {
       title: 'Save and try it',
@@ -25,8 +25,8 @@
   const WORDS = [
     ['Element', 'One thing drawn on screen: a picture, a piece of text, the game list…'],
     ['Layer', 'Decides what is drawn on top. Higher numbers cover lower ones.'],
-    ['Options', 'Choices the theme offers inside RetroBat, like colour sets. Changing them here only changes the preview.'],
-    ['Colours', 'Colours used in many places at once. Change one and every element using it follows.'],
+    ['Options', 'Choices the theme offers inside RetroBat, like color sets. Changing them here only changes the preview.'],
+    ['Colors', 'Colors used in many places at once. Change one and every element using it follows.'],
   ];
 </script>
 

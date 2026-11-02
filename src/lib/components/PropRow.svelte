@@ -91,7 +91,7 @@
   {#if varDef}
     <div class="link">
       {#if ed.simple}
-        <span class="badge accent" title="Theme colour “{varName}”">Shared: {humanize(varName ?? '')}</span>
+        <span class="badge accent" title="Theme color “{varName}”">Shared: {humanize(varName ?? '')}</span>
         <span class="faint">changes it everywhere</span>
         <button class="ghost small" onclick={unlink} title="Give only this element its own value">Only here</button>
       {:else}

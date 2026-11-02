@@ -107,7 +107,7 @@
       {:else if section === 'canvas'}
         <h3>Canvas</h3>
         <div class="row">
-          <div><strong>Snap to guides</strong><small>Edges and centres snap to the screen and to other elements while you move or resize. Hold Alt to switch it off for a moment.</small></div>
+          <div><strong>Snap to guides</strong><small>Edges and centers snap to the screen and to other elements while you move or resize. Hold Alt to switch it off for a moment.</small></div>
           <input type="checkbox" aria-label="Snap to guides" checked={prefs.v.snap} onchange={(e) => prefs.set('snap', e.currentTarget.checked)} />
         </div>
         <div class="row">
@@ -181,16 +181,16 @@
           </select>
         </div>
         <div class="row">
-          <div><strong>Accent colour</strong></div>
-          <div class="accents" role="radiogroup" aria-label="Accent colour" tabindex="-1" onkeydown={arrows}>
+          <div><strong>Accent color</strong></div>
+          <div class="accents" role="radiogroup" aria-label="Accent color" tabindex="-1" onkeydown={arrows}>
             {#each Object.entries(ACCENTS) as [id, a]}
               <button class="swatch" class:sel={prefs.v.accent === id} style:background={a.base} title={a.label} aria-label={a.label} role="radio" aria-checked={prefs.v.accent === id} tabindex={accentStop === id ? 0 : -1} onclick={() => prefs.set('accent', id)}></button>
             {/each}
           </div>
         </div>
         <div class="row">
-          <div><strong>Logo colour</strong><small>The logo in the app, the title bar and the taskbar. Shortcuts and the Start menu keep {LOGO_COLOURS[DEFAULT_LOGO].label}.</small></div>
-          <div class="accents" role="radiogroup" aria-label="Logo colour" tabindex="-1" onkeydown={arrows}>
+          <div><strong>Logo color</strong><small>The logo in the app, the title bar and the taskbar. Shortcuts and the Start menu keep {LOGO_COLOURS[DEFAULT_LOGO].label}.</small></div>
+          <div class="accents" role="radiogroup" aria-label="Logo color" tabindex="-1" onkeydown={arrows}>
             {#each Object.entries(LOGO_COLOURS) as [id, c]}
               <button class="swatch" class:sel={logoStop === id} style:background={logoGradient(id)} title={c.label} aria-label={c.label} role="radio" aria-checked={logoStop === id} tabindex={logoStop === id ? 0 : -1} onclick={() => prefs.set('logoColour', id)}></button>
             {/each}
@@ -217,7 +217,7 @@
           <div><strong>Your files stay on your computer</strong><small>Themes, games and settings are only read and written on this PC. The app only goes online to download a free font (from the Google Fonts collection on GitHub), to check for updates, to publish a theme to the gallery (only when you choose to), and, if you turn it on in Preview, to fill missing pictures from libretro-thumbnails.</small></div>
         </div>
         <div class="row">
-          <div><strong>Licence: MIT</strong><small>Free to use, copy, change and share, including the changes you make. It comes without any warranty.</small></div>
+          <div><strong>License: MIT</strong><small>Free to use, copy, change and share, including the changes you make. It comes without any warranty.</small></div>
           <button class="secondary small" onclick={() => (showLicence = !showLicence)}>{showLicence ? 'Hide' : 'Read it'}</button>
         </div>
         {#if showLicence}<pre class="licence">{licenceText}</pre>{/if}
@@ -226,7 +226,7 @@
           <button class="secondary small" disabled={updates.state === 'checking'} onclick={async () => (updateMsg = (await updates.check()) ?? '')}>{updates.state === 'checking' ? 'Checking…' : 'Check for updates'}</button>
         </div>
         <div class="row">
-          <div><strong>Open-source licences</strong><small>The open-source software this app is built with, and their licences.</small></div>
+          <div><strong>Open-source licenses</strong><small>The open-source software this app is built with, and their licenses.</small></div>
           <button class="secondary small" onclick={showNotices}>Show file</button>
         </div>
       {:else}

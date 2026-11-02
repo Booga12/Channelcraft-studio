@@ -115,7 +115,7 @@
       </button>
     {/each}
   </div>
-  <p class="text-xs text-muted-foreground">Point at one to see it move. Picking one makes a short video in your colours (a few seconds) that loops behind everything. After changing colours, pick it again to redraw it.</p>
+  <p class="text-xs text-muted-foreground">Point at one to see it move. Picking one makes a short video in your colors (a few seconds) that loops behind everything. After changing colors, pick it again to redraw it.</p>
 </div>
 
 <style>

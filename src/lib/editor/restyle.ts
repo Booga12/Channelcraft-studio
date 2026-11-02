@@ -329,7 +329,7 @@ export function fixReadability(this: Editor) {
   if (!r) return;
   const changes = [this.varChange('designText', `${r.text}FF`), this.varChange('designDimText', `${r.dim}FF`)].filter((c): c is Change => !!c);
   if (changes.length) this.commit('readable text', changes);
-  this.notify('Text colours changed so everything is easy to read. Ctrl+Z to undo.');
+  this.notify('Text colors changed so everything is easy to read. Ctrl+Z to undo.');
 }
 
 /**
@@ -357,7 +357,7 @@ export async function surprise(this: Editor, opts: { hideOwn?: boolean; group?: 
 
 export function applyPalette(this: Editor, palette: Palette): number {
   const res = this.res;
-  if (!res || this.sharedOnly('Colour palettes')) return 0;
+  if (!res || this.sharedOnly('Color palettes')) return 0;
   // Themes made from a design draw with the design colours (designAccent...), so those change
   // too; their artwork follows by itself (syncDesignArt).
   const colours: Record<string, string> = { ...palette.colors, ...(res.vars.has('designAccent') ? paletteDesignVars(palette) : {}) };
