@@ -1,16 +1,25 @@
-import { describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { ThemeProject } from './project';
-import { nodeFs } from './nodefs';
-import { FALLBACK_SYSTEMS } from './systems';
-import { checkEsde, esdeFolder, toEsde } from './esde';
-import type { Environment } from './context';
+import { describe, expect, it } from "vitest";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { ThemeProject } from "./project";
+import { nodeFs } from "./nodefs";
+import { FALLBACK_SYSTEMS } from "./systems";
+import { checkEsde, esdeFolder, toEsde } from "./esde";
+import type { Environment } from "./context";
 
 const listDir = async (dir: string) => {
   try {
-    return readdirSync(dir);
+    return readdirSync(dir, { withFileTypes: true }).map((e) =>
+      e.isDirectory() ? `${e.name}/` : e.name,
+    );
   } catch {
     return [];
   }
@@ -19,8 +28,18 @@ const listDir = async (dir: string) => {
 function envFor(esHome: string): Environment {
   return {
     esHome,
-    resourcesDir: join(esHome, '..', 'resources'),
-    settings: { system: FALLBACK_SYSTEMS.find((s) => s.name === 'snes')!, subsets: {}, lang: 'en', region: 'us', ratio: '16/9', tinyScreen: false, verticalScreen: false, helpPrompts: true, cheevos: false },
+    resourcesDir: join(esHome, "..", "resources"),
+    settings: {
+      system: FALLBACK_SYSTEMS.find((s) => s.name === "snes")!,
+      subsets: {},
+      lang: "en",
+      region: "us",
+      ratio: "16/9",
+      tinyScreen: false,
+      verticalScreen: false,
+      helpPrompts: true,
+      cheevos: false,
+    },
   };
 }
 
@@ -52,16 +71,16 @@ const THEME = `<theme>
 </theme>`;
 
 function makeTheme(): { root: string; dir: string } {
-  const root = mkdtempSync(join(tmpdir(), 'ccs-esde-'));
-  const dir = join(root, 'themes', 'My Theme');
+  const root = mkdtempSync(join(tmpdir(), "ccs-esde-"));
+  const dir = join(root, "themes", "My Theme");
   const files: Record<string, string> = {
-    'theme.xml': THEME,
-    'art/logos/snes.png': 'png',
-    'art/logos/nes.png': 'png',
-    'art/logos/readme.txt': 'not a logo',
-    'art/bg.png': 'png',
-    'art/fav.png': 'png',
-    'fonts/a.ttf': 'ttf',
+    "theme.xml": THEME,
+    "art/logos/snes.png": "png",
+    "art/logos/nes.png": "png",
+    "art/logos/readme.txt": "not a logo",
+    "art/bg.png": "png",
+    "art/fav.png": "png",
+    "fonts/a.ttf": "ttf",
   };
   for (const [rel, text] of Object.entries(files)) {
     mkdirSync(dirname(join(dir, rel)), { recursive: true });
@@ -70,69 +89,280 @@ function makeTheme(): { root: string; dir: string } {
   return { root, dir };
 }
 
-describe('Export for ES-DE', () => {
-  it('names the folder the way ES-DE themes are named', () => {
-    expect(esdeFolder('My Theme')).toBe('my-theme-es-de');
-    expect(esdeFolder('cool-es-de')).toBe('cool-es-de');
-    expect(esdeFolder('  ')).toBe('theme-es-de');
+describe("Export for ES-DE", () => {
+  it("names the folder the way ES-DE themes are named", () => {
+    expect(esdeFolder("My Theme")).toBe("my-theme-es-de");
+    expect(esdeFolder("cool-es-de")).toBe("cool-es-de");
+    expect(esdeFolder("  ")).toBe("theme-es-de");
   });
 
-  it('converts screens, parts and files', async () => {
+  it("converts screens, parts and files", async () => {
     const { root, dir } = makeTheme();
     try {
       const p = await ThemeProject.load(dir, nodeFs);
       const out = await toEsde(p, envFor(join(root)), listDir);
-      const theme = out.files.find((f) => f.dest.endsWith('/theme.xml'))!.text!;
-      const caps = out.files.find((f) => f.dest.endsWith('/capabilities.xml'))!.text!;
-      const copied = out.files.filter((f) => f.src).map((f) => f.dest).sort();
+      const theme = out.files.find((f) => f.dest.endsWith("/theme.xml"))!.text!;
+      const caps = out.files.find((f) =>
+        f.dest.endsWith("/capabilities.xml"),
+      )!.text!;
+      const copied = out.files
+        .filter((f) => f.src)
+        .map((f) => f.dest)
+        .sort();
 
-      expect(out.folder).toBe('my-theme-es-de');
-      expect(out.variants.map((v) => v.name)).toEqual(['detailed', 'video']);
-      expect(caps).toContain('<themeName>My Theme</themeName>');
+      expect(out.folder).toBe("my-theme-es-de");
+      expect(out.variants.map((v) => v.name)).toEqual(["detailed", "video"]);
+      expect(caps).toContain("<themeName>My Theme</themeName>");
       expect(caps).toContain('<variant name="detailed">');
       expect(checkEsde(theme)).toEqual([]);
 
       // Console list: logos per console, the carousel's text from logoText.
-      expect(theme).toContain('<staticImage>./art/logos/${system.theme}.png</staticImage>');
-      expect(theme).toContain('<type>horizontalWheel</type>');
-      expect(theme).toContain('<itemSize>0.2 0.1</itemSize>');
-      expect(theme).toContain('<systemdata>fullname</systemdata>');
-      expect(theme).not.toContain('sortedBy');
-      expect(copied).toEqual(['my-theme-es-de/art/bg.png', 'my-theme-es-de/art/logos/nes.png', 'my-theme-es-de/art/logos/snes.png', 'my-theme-es-de/fonts/a.ttf']);
+      expect(theme).toContain(
+        "<staticImage>./art/logos/${system.theme}.png</staticImage>",
+      );
+      expect(theme).toContain("<type>horizontalWheel</type>");
+      expect(theme).toContain("<itemSize>0.2 0.1</itemSize>");
+      expect(theme).toContain("<systemdata>fullname</systemdata>");
+      expect(theme).not.toContain("sortedBy");
+      expect(copied).toEqual([
+        "my-theme-es-de/art/bg.png",
+        "my-theme-es-de/art/logos/nes.png",
+        "my-theme-es-de/art/logos/snes.png",
+        "my-theme-es-de/fonts/a.ttf",
+      ]);
 
       // Game list: details, art and labels.
       expect(theme).toContain('<variant name="detailed">');
-      expect(theme).toContain('<metadata>description</metadata>');
-      expect(theme).toContain('<metadata>developer</metadata>');
-      expect(theme).toContain('<imageType>miximage, screenshot</imageType>');
-      expect(theme).toContain('<text>Developer:</text>');
+      expect(theme).toContain("<metadata>description</metadata>");
+      expect(theme).toContain("<metadata>developer</metadata>");
+      expect(theme).toContain("<imageType>miximage, screenshot</imageType>");
+      expect(theme).toContain("<text>Developer:</text>");
       expect(theme).toContain('<datetime name="md_releasedate">');
-      expect(theme).toContain('<selectorVerticalOffset>0.01</selectorVerticalOffset>');
-      expect(theme).toContain('<letterCase>uppercase</letterCase>');
-      expect(theme).toContain('<selectorColor>4060A0</selectorColor>');
+      expect(theme).toContain(
+        "<selectorVerticalOffset>0.01</selectorVerticalOffset>",
+      );
+      expect(theme).toContain("<letterCase>uppercase</letterCase>");
+      expect(theme).toContain("<selectorColor>4060A0</selectorColor>");
       expect(theme).not.toContain('name="gone"');
-      expect(theme).not.toContain('md_favorite');
+      expect(theme).not.toContain("md_favorite");
       expect(theme).toContain('<video name="md_video">');
 
       // What couldn't come along is said.
-      expect(out.notes.join('\n')).toMatch(/status icons/);
-      expect(out.notes.join('\n')).toMatch(/1 blur or screen effect\b/);
-      const readme = out.files.find((f) => f.dest.endsWith('CONVERSION-NOTES.txt'))!.text!;
-      expect(readme).toContain('Detailed, Video');
+      expect(out.notes.join("\n")).toMatch(/status icons/);
+      expect(out.notes.join("\n")).toMatch(/1 blur or screen effect\b/);
+      const readme = out.files.find((f) =>
+        f.dest.endsWith("CONVERSION-NOTES.txt"),
+      )!.text!;
+      expect(readme).toContain("Detailed, Video");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  const DEMO = 'G:/projects/channelcraft/guides-demo/RetroBat/emulationstation/.emulationstation';
-  it.skipIf(!existsSync(`${DEMO}/themes/es-theme-carbon`))('converts a full RetroBat theme into valid ES-DE', async () => {
-    const p = await ThemeProject.load(`${DEMO}/themes/es-theme-carbon`, nodeFs);
-    const out = await toEsde(p, envFor(DEMO), listDir);
-    const theme = out.files.find((f) => f.dest.endsWith('/theme.xml'))!.text!;
-    expect(checkEsde(theme)).toEqual([]);
-    expect(out.variants.map((v) => v.name)).toEqual(expect.arrayContaining(['detailed', 'grid', 'carousel']));
-    expect(theme).toMatch(/<staticImage>[^<]*\$\{system\.theme\}[^<]*<\/staticImage>/);
-    for (const f of out.files.filter((x) => x.src)) expect(existsSync(f.src!), f.src).toBe(true);
-    expect(out.files.filter((f) => f.src).length).toBeGreaterThan(10);
+  // #56: logos as RetroBat finds them: an .svg, else a .png; the previewed console may have neither.
+  function logoTheme(
+    files: string[],
+    paths = ["./logos/${system.theme}.svg", "./logos/${system.theme}.png"],
+  ): { root: string; dir: string } {
+    const root = mkdtempSync(join(tmpdir(), "ccs-esde-logos-"));
+    const dir = join(root, "themes", "Logos");
+    const xml = `<theme><formatVersion>7</formatVersion><view name="system">
+      <image name="logo">${paths.map((x) => `<path>${x}</path>`).join("")}</image>
+      <carousel name="systemcarousel"><type>horizontal</type></carousel></view></theme>`;
+    mkdirSync(join(dir, "logos"), { recursive: true });
+    writeFileSync(join(dir, "theme.xml"), xml);
+    for (const f of files) {
+      const at = f.includes("/") ? join(dir, f) : join(dir, "logos", f);
+      mkdirSync(dirname(at), { recursive: true });
+      if (!f.endsWith("/")) writeFileSync(at, "x");
+    }
+    return { root, dir };
+  }
+  const staticImage = (out: { files: { dest: string; text?: string }[] }) =>
+    out.files
+      .find((f) => f.dest.endsWith("/theme.xml"))!
+      .text!.match(/<staticImage>([^<]*)</)?.[1];
+  const dests = (out: {
+    files: { dest: string; src?: string; data?: string }[];
+  }) =>
+    out.files
+      .filter((f) => f.src || f.data)
+      .map((f) => f.dest.split("/").slice(1).join("/"))
+      .sort();
+
+  it("keeps every console logo when the previewed console has none", async () => {
+    const { root, dir } = logoTheme(["nes.svg", "nds.svg", "n64.svg"]); // no snes, the previewed one
+    try {
+      const out = await toEsde(
+        await ThemeProject.load(dir, nodeFs),
+        envFor(root),
+        listDir,
+      );
+      expect(staticImage(out)).toBe("./logos/${system.theme}.svg");
+      expect(dests(out)).toEqual([
+        "logos/n64.svg",
+        "logos/nds.svg",
+        "logos/nes.svg",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
+
+  it("turns SVG logos into PNGs when a theme mixes the two", async () => {
+    const { root, dir } = logoTheme([
+      "nes.svg",
+      "nds.svg",
+      "snes.png",
+      "n64.png",
+      "gb.png",
+      "gba.svg",
+      "psx.png",
+    ]);
+    try {
+      const p = await ThemeProject.load(dir, nodeFs);
+      const drawn: string[] = [];
+      const out = await toEsde(
+        p,
+        envFor(root),
+        listDir,
+        "Logos",
+        async (abs) => (drawn.push(abs.split(/[\\/]/).pop()!), "UE5H"),
+      );
+      expect(staticImage(out)).toBe("./logos/${system.theme}.png");
+      expect(dests(out)).toEqual([
+        "logos/gb.png",
+        "logos/gba.png",
+        "logos/n64.png",
+        "logos/nds.png",
+        "logos/nes.png",
+        "logos/psx.png",
+        "logos/snes.png",
+      ]);
+      expect(drawn.sort()).toEqual(["gba.svg", "nds.svg", "nes.svg"]);
+      expect(
+        out.files.find((f) => f.dest.endsWith("logos/nes.png"))!.data,
+      ).toBe("UE5H");
+
+      // Without a way to draw SVGs, the type most logos use wins and the rest are said.
+      const plain = await toEsde(p, envFor(root), listDir);
+      expect(dests(plain)).toEqual([
+        "logos/gb.png",
+        "logos/n64.png",
+        "logos/psx.png",
+        "logos/snes.png",
+      ]);
+      expect(plain.notes.join("\n")).toMatch(
+        /3 console pictures are a different file type/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the type most logos use when no SVGs are involved", async () => {
+    const { root, dir } = logoTheme(
+      ["nes.jpg", "nds.jpg", "gba.jpg", "snes.png"],
+      ["./logos/${system.theme}.jpg", "./logos/${system.theme}.png"],
+    );
+    try {
+      const out = await toEsde(
+        await ThemeProject.load(dir, nodeFs),
+        envFor(root),
+        listDir,
+        "Logos",
+        async () => "UE5H",
+      );
+      expect(staticImage(out)).toBe("./logos/${system.theme}.jpg");
+      expect(dests(out)).toEqual([
+        "logos/gba.jpg",
+        "logos/nds.jpg",
+        "logos/nes.jpg",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("finds the logos from a path written in the wrong folder, as RetroBat does", async () => {
+    const { root, dir } = logoTheme(
+      ["art/logos/snes.svg", "art/logos/nes.svg"],
+      ["./../art/logos/${system.theme}.svg"],
+    );
+    try {
+      const out = await toEsde(
+        await ThemeProject.load(dir, nodeFs),
+        envFor(root),
+        listDir,
+      );
+      expect(staticImage(out)).toBe("./art/logos/${system.theme}.svg");
+      expect(dests(out)).toEqual(["art/logos/nes.svg", "art/logos/snes.svg"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("copies logos kept in a folder per console, and never copies a folder", async () => {
+    const { root, dir } = logoTheme(
+      ["art/snes/logo.svg", "art/nes/logo.svg", "art/logo.svg/"],
+      ["./art/${system.theme}/logo.svg"],
+    );
+    try {
+      const out = await toEsde(
+        await ThemeProject.load(dir, nodeFs),
+        envFor(root),
+        listDir,
+      );
+      expect(staticImage(out)).toBe("./art/${system.theme}/logo.svg");
+      expect(dests(out)).toEqual(["art/nes/logo.svg", "art/snes/logo.svg"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("says so when an SVG logo can’t be turned into a PNG", async () => {
+    const { root, dir } = logoTheme(["nes.png", "snes.png", "gba.svg"]);
+    try {
+      const out = await toEsde(
+        await ThemeProject.load(dir, nodeFs),
+        envFor(root),
+        listDir,
+        "Logos",
+        async () => null,
+      );
+      expect(dests(out)).toEqual(["logos/nes.png", "logos/snes.png"]);
+      expect(out.notes.join("\n")).toMatch(
+        /1 console picture couldn’t be turned into PNG/,
+      );
+      expect(
+        out.files.find((f) => f.dest.endsWith("CONVERSION-NOTES.txt"))!.text,
+      ).toMatch(/couldn’t be turned into PNG/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  const DEMO =
+    "G:/projects/channelcraft/guides-demo/RetroBat/emulationstation/.emulationstation";
+  it.skipIf(!existsSync(`${DEMO}/themes/es-theme-carbon`))(
+    "converts a full RetroBat theme into valid ES-DE",
+    async () => {
+      const p = await ThemeProject.load(
+        `${DEMO}/themes/es-theme-carbon`,
+        nodeFs,
+      );
+      const out = await toEsde(p, envFor(DEMO), listDir);
+      const theme = out.files.find((f) => f.dest.endsWith("/theme.xml"))!.text!;
+      expect(checkEsde(theme)).toEqual([]);
+      expect(out.variants.map((v) => v.name)).toEqual(
+        expect.arrayContaining(["detailed", "grid", "carousel"]),
+      );
+      expect(theme).toMatch(
+        /<staticImage>[^<]*\$\{system\.theme\}[^<]*<\/staticImage>/,
+      );
+      for (const f of out.files.filter((x) => x.src))
+        expect(existsSync(f.src!), f.src).toBe(true);
+      expect(out.files.filter((f) => f.src).length).toBeGreaterThan(10);
+    },
+  );
 });
