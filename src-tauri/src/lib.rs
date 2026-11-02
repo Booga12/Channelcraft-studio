@@ -6,6 +6,7 @@ mod explorer;
 mod intro;
 mod problems;
 mod gallery;
+mod esde;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -158,6 +159,7 @@ pub fn run() {
             problems::clear_problem_log,
             gallery::publish_theme,
             gallery::share_theme,
+            esde::export_esde,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

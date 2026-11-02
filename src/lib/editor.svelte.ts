@@ -988,6 +988,8 @@ export class Editor {
   showSaveDesign = $state(false);
   /** The Publish to the gallery dialog. */
   showPublish = $state(false);
+  /** The Export for ES-DE dialog (#49). */
+  showEsde = $state(false);
   /** What the check opened before (Try it in RetroBat, Export), to carry on with. */
   healthThen = $state.raw<{ label: string; run: () => void } | null>(null);
   /** Issues ignored on purpose, by theme folder. */

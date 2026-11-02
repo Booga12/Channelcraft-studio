@@ -116,7 +116,7 @@ describe('Export for ES-DE', () => {
 
       // What couldn't come along is said.
       expect(out.notes.join('\n')).toMatch(/status icons/);
-      expect(out.notes.join('\n')).toMatch(/screenshader/);
+      expect(out.notes.join('\n')).toMatch(/1 blur or screen effect\b/);
       const readme = out.files.find((f) => f.dest.endsWith('CONVERSION-NOTES.txt'))!.text!;
       expect(readme).toContain('Detailed, Video');
     } finally {

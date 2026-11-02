@@ -89,6 +89,21 @@ const LABELS: Record<string, string> = {
   rating: 'Rating:',
   gametime: 'Game time:',
 };
+/** RetroBat part types in plain words, for the notes: one, many. */
+const TYPE_WORDS: Record<string, [string, string]> = {
+  screenshader: ['blur or screen effect', 'blur or screen effects'],
+  ninepatch: ['stretchable frame', 'stretchable frames'],
+  stackpanel: ['stacked group', 'stacked groups'],
+  container: ['group of parts', 'groups of parts'],
+  webimage: ['picture from the internet', 'pictures from the internet'],
+  imagegrid: ['grid', 'grids'],
+  menuIcons: ['menu icon set', 'menu icon sets'],
+  batteryIndicator: ['battery indicator', 'battery indicators'],
+  controllerActivity: ['controller indicator', 'controller indicators'],
+  gameextras: ['game extras panel', 'game extras panels'],
+  splash: ['loading screen part', 'loading screen parts'],
+};
+
 /** Navigation sounds both share. */
 const SOUNDS = new Set(['systembrowse', 'quicksysselect', 'select', 'back', 'scroll', 'favorite', 'launch']);
 /** RetroBat's game status icons, which ES-DE shows with its own badges instead. */
@@ -453,7 +468,8 @@ class Converter {
         return o;
       }
       case 'sound':
-        return null; // gathered separately
+      case 'control': // only clipping or similar was set: nothing to draw
+        return null; // sounds are gathered separately
       default:
         this.skip(type);
         return null;
@@ -594,7 +610,13 @@ export async function toEsde(project: ThemeProject, env: Environment, listDir: L
   if (project.files.has('splash.xml') || project.assets.some((a) => /(^|\/)(splash|gamesplash)\.xml$/i.test(a.rel))) c.note('Loading and game launch screens are left out.');
   if (res.subsets.length) c.note(`The theme’s ${res.subsets.length} option${res.subsets.length === 1 ? '' : 's'} (colors, layouts and so on) are exported with their default choices.`);
   if (res.unknownConditions || [...res.views.values()].some((v) => [...v.elements.values()].some((e) => e.conditional))) c.note(`Parts that change per console use ${env.settings.system.fullName}’s version.`);
-  for (const [type, n] of c.skipped) c.note(`${n} ${type} part${n === 1 ? '' : 's'} left out (ES-DE has no equivalent).`);
+  if (c.skipped.size) {
+    const words = [...c.skipped].map(([type, n]) => {
+      const [one, many] = TYPE_WORDS[type] ?? [`${type} part`, `${type} parts`];
+      return `${n} ${n === 1 ? one : many}`;
+    });
+    c.note(`Also left out, as ES-DE has nothing like them: ${words.join(', ')}.`);
+  }
 
   const notes = [...c.notes];
   const readme = [
