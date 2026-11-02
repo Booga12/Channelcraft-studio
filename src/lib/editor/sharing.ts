@@ -160,7 +160,7 @@ export async function esdeExport(this: Editor): Promise<EsdeExport | null> {
       return [];
     }
   };
-  return toEsde(p, this.env, listDir, p.name, svgToPng);
+  return toEsde(p, this.env, listDir, p.name, { svgToPng, systems: this.systems });
 }
 
 /** Draws an SVG file as a PNG (longest side 640 px) for ES-DE, as base64; null when it can't. */
