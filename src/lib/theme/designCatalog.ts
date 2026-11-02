@@ -655,7 +655,7 @@ export const BUILT_IN_DESIGNS: Design[] = [
   },
   {
     id: 'cosy',
-    label: 'Cosy Cabin',
+    label: 'Cozy Cabin',
     description: 'Warm wooden planks, lamp light, autumn leaves and soft serif type. Grab a blanket.',
     group: 'mood',
     tags: ['warm', 'calm'],
