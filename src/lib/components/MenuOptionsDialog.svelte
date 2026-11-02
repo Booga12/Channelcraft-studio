@@ -46,13 +46,13 @@
 
 <AppDialog title="RetroBat menu options" onclose={close} busy={busy} class="sm:max-w-[900px] h-[min(760px,92vh)]" bodyClass="flex flex-col overflow-hidden p-0">
   {#snippet footer()}
-    {#if base}<span class="mr-auto self-center text-xs text-muted-foreground">Makes the option files in _inc/ccs/options and artwork for {combos} design and colour combination{combos === 1 ? '' : 's'}. A backup comes first, and Ctrl+Z undoes it.</span>{/if}
+    {#if base}<span class="mr-auto self-center text-xs text-muted-foreground">Makes the option files in _inc/ccs/options and artwork for {combos} design and color combination{combos === 1 ? '' : 's'}. A backup comes first, and Ctrl+Z undoes it.</span>{/if}
     <Button variant="outline" onclick={close} disabled={busy}>Cancel</Button>
     <Button onclick={apply} disabled={!base || busy}>{#if busy}<Spinner data-icon="inline-start" />Making options…{:else}{saved ? 'Update options' : 'Add to RetroBat menu'}{/if}</Button>
   {/snippet}
     <header>
       <p class="dim">
-        RetroBat's <b>Theme configuration</b> menu (Main menu → UI settings) lists a theme's options. Tick what you want to switch between there, without ChannelCraft. The first ticked choice in each list is RetroBat's default; RetroBat also lets you pick the game list style and colour set per console.
+        RetroBat's <b>Theme configuration</b> menu (Main menu → UI settings) lists a theme's options. Tick what you want to switch between there, without ChannelCraft. The first ticked choice in each list is RetroBat's default; RetroBat also lets you pick the game list style and color set per console.
       </p>
     </header>
 
@@ -96,7 +96,7 @@
         </section>
 
         <section>
-          <h3>Color set <span class="faint">recolours the designs, their artwork too</span></h3>
+          <h3>Color set <span class="faint">recolors the designs, their artwork too</span></h3>
           <div class="tiles">
             {#each ALL_SETS as c (c.key)}
               {@const on = sets.includes(c.key)}
@@ -110,7 +110,7 @@
               </label>
             {/each}
           </div>
-          <p class="faint">The theme's own colour sets stay in the list after these.</p>
+          <p class="faint">The theme's own color sets stay in the list after these.</p>
         </section>
 
         <section>

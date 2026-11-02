@@ -121,7 +121,7 @@
         {#if scope.mode === 'all'}
           <p class="m-0 text-muted-foreground">Every console and game gets your changes. Pick “Only {ed.consoleName}”{scope.gameScreen ? ' or “Only this game”' : ''} to give one its own look.</p>
         {:else if scope.mode === 'console'}
-          <p class="m-0 text-muted-foreground">Colours, pictures and settings you change now apply only to {ed.consoleName}. Every other console keeps the shared ones.</p>
+          <p class="m-0 text-muted-foreground">Colors, pictures and settings you change now apply only to {ed.consoleName}. Every other console keeps the shared ones.</p>
         {:else if blocker}
           <p class="m-0 text-muted-foreground">{blocker}</p>
         {:else}

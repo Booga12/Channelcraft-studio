@@ -28,7 +28,7 @@
   /** The parts a colour paints, for the line under its name. */
   function paints(name: string): string {
     const parts = [...new Set([...(use.users.get(name) ?? [])].map((n) => elementLabel(n)))];
-    if (!parts.length) return use.used.has(name) ? 'Used through another colour' : '';
+    if (!parts.length) return use.used.has(name) ? 'Used through another color' : '';
     return parts.length > 3 ? `${parts.slice(0, 3).join(', ')} and ${parts.length - 3} more` : parts.join(', ');
   }
 
@@ -61,7 +61,7 @@
         {/if}
         {#if ed.simple}
           <span class="name" title={v.name}>{plain(v.name)}</span>
-          {#if v.conditional && consoleOf(v.node) !== ed.consoleTheme}<span class="badge" title="This colour depends on the console being shown">per console</span>{/if}
+          {#if v.conditional && consoleOf(v.node) !== ed.consoleTheme}<span class="badge" title="This color depends on the console being shown">per console</span>{/if}
         {:else}
           <span class="name mono" title={v.name}>{v.name}</span>
           {#if v.conditional}<span class="badge" title="This value only applies under a condition (for example the current system)">if</span>{/if}
@@ -70,10 +70,10 @@
         {/if}
       </div>
       {#if ed.simple && paints(v.name)}
-        <div class="paints faint" title="The parts that use this colour">{paints(v.name)}</div>
+        <div class="paints faint" title="The parts that use this color">{paints(v.name)}</div>
       {/if}
       {#if ed.simple && optionOf.get(v.file.key)}
-        <div class="from faint" title="Only this option changes; other colour sets keep their own colours">{optionOf.get(v.file.key)}</div>
+        <div class="from faint" title="Only this option changes; other color sets keep their own colors">{optionOf.get(v.file.key)}</div>
       {/if}
       {#if COLOR_RE.test(v.raw)}
         <ColorInput value={v.raw} label={ed.simple ? plain(v.name) : v.name} seeThrough={ed.simple} onchange={(val) => ed.setVar(v.name, val)} />
@@ -86,18 +86,18 @@
 
 <div class="wrap">
   {#if ed.simple}
-    <p class="dim intro">Colours used in many places at once. Change one here and every part of the theme that uses it follows.</p>
+    <p class="dim intro">Colors used in many places at once. Change one here and every part of the theme that uses it follows.</p>
   {:else}
     <p class="dim intro">Values defined in <span class="mono">&lt;variables&gt;</span> and used as <span class="mono">${'{name}'}</span>. Editing one changes every element that uses it.</p>
   {/if}
   <div class="head">
-    <input placeholder={ed.simple ? 'Find a colour…' : 'Filter variables…'} aria-label={ed.simple ? 'Find a colour' : 'Filter variables'} bind:value={filter} />
-    {#if !ed.simple}<label class="chk"><input type="checkbox" bind:checked={onlyColors} /> Colours</label>{/if}
+    <input placeholder={ed.simple ? 'Find a color…' : 'Filter variables…'} aria-label={ed.simple ? 'Find a color' : 'Filter variables'} bind:value={filter} />
+    {#if !ed.simple}<label class="chk"><input type="checkbox" bind:checked={onlyColors} /> Colors</label>{/if}
   </div>
   {#each shown as v (v.name)}
     {@render row(v)}
   {:else}
-    <p class="faint">{ed.simple ? (unused.length ? 'No colours in use' : 'No shared colours') : 'No variables'}{filter ? ' match' : ''}.</p>
+    <p class="faint">{ed.simple ? (unused.length ? 'No colors in use' : 'No shared colors') : 'No variables'}{filter ? ' match' : ''}.</p>
   {/each}
   {#if unused.length}
     <details class="unused">

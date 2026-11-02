@@ -9,7 +9,7 @@
   let { el, props }: { el: ResolvedElement; props: string[] } = $props();
 </script>
 
-<Card id="colours" title={props.length === 1 ? propLabel(props[0]) : 'Colours'} icon={PaletteIcon} words={props.map(propLabel).join(' ')}>
+<Card id="colours" title={props.length === 1 ? propLabel(props[0]) : 'Colors'} icon={PaletteIcon} words={`${props.map(propLabel).join(' ')} colours`}>
   {#each props as p (p)}
     <div class="row">
       <div class="lbl" title={propHelp(p)}>{propLabel(p)}</div>

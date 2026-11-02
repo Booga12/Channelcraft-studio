@@ -56,9 +56,9 @@
   const presetOn = (p: { fx: Omit<TextFx, 'kind' | 'color'> }) => Math.round(p.fx.size) === fx.size && Math.abs(p.fx.strength - fx.strength) < 0.04 && (fx.kind !== 'shadow' || (p.fx.dx === fx.dx && p.fx.dy === fx.dy));
 </script>
 
-<Card id="colour" title="Colour & glow" icon={PaletteIcon} {summary} words="glow shadow outline" {onreset}>
+<Card id="colour" title="Color & glow" icon={PaletteIcon} {summary} words="glow shadow outline colour" {onreset}>
   <div class="row">
-    <div class="lbl">Colour</div>
+    <div class="lbl">Color</div>
     <ColourPick {el} prop="color" />
     {#if hard}
       <div class="alert">
@@ -87,7 +87,7 @@
     </div>
 
     <div class="row">
-      <div class="lbl">{fx.kind === 'outline' ? 'Line colour' : fx.kind === 'shadow' ? 'Shadow colour' : 'Glow colour'}</div>
+      <div class="lbl">{fx.kind === 'outline' ? 'Line color' : fx.kind === 'shadow' ? 'Shadow color' : 'Glow color'}</div>
       <FxSwatches value={fx.color} own={colour} onpick={(c) => set({ color: c })} />
     </div>
 

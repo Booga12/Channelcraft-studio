@@ -10,7 +10,7 @@
   const options = $derived.by(() => {
     const list: { hex: string; title: string }[] = [];
     if (own) list.push({ hex: own.slice(0, 6).toUpperCase(), title: 'Same as the text' });
-    for (const s of ed.res ? themeSwatches(ed.res, ed.view, 5) : []) list.push({ hex: s.hex.slice(0, 6), title: `Theme colour: ${s.name.replace(/^design/, '')}` });
+    for (const s of ed.res ? themeSwatches(ed.res, ed.view, 5) : []) list.push({ hex: s.hex.slice(0, 6), title: `Theme color: ${s.name.replace(/^design/, '')}` });
     list.push({ hex: '000000', title: 'Black' }, { hex: 'FFFFFF', title: 'White' });
     const seen = new Set<string>();
     return list.filter((o) => !seen.has(o.hex) && seen.add(o.hex));
@@ -32,11 +32,11 @@
   }
 </script>
 
-<div class="sw" role="radiogroup" aria-label="Colour" bind:this={box}>
+<div class="sw" role="radiogroup" aria-label="Color" bind:this={box}>
   {#each options as o, i (o.hex)}
     <button role="radio" aria-checked={o.hex === value.toUpperCase()} tabindex={i === stop ? 0 : -1} class:on={o.hex === value.toUpperCase()} style:background="#{o.hex}" title={o.title} aria-label={o.title} onclick={() => onpick(o.hex)} onkeydown={(e) => onkeydown(e, i)}></button>
   {/each}
-  <div class="any"><ColorInput value={value} label="Colour" onchange={(v) => onpick(v.trim().slice(0, 6).toUpperCase())} /></div>
+  <div class="any"><ColorInput value={value} label="Color" onchange={(v) => onpick(v.trim().slice(0, 6).toUpperCase())} /></div>
 </div>
 
 <style>

@@ -323,7 +323,7 @@
           {:else if googleState === 'ready'}
             <p class="faint gtitle">Type a name to search all {google.length.toLocaleString()} Google Fonts.</p>
           {/if}
-          <p class="faint lic">Free fonts (Open Font License) from Google Fonts, downloaded into the theme when picked, with their licence file next to them so the theme can be shared.</p>
+          <p class="faint lic">Free fonts (Open Font License) from Google Fonts, downloaded into the theme when picked, with their license file next to them so the theme can be shared.</p>
         </div>
       {:else if kind === 'font' && fontTab === 'pc'}
         <div class="items">
@@ -336,7 +336,7 @@
           {:else}
             <p class="faint">{pcFonts.length ? 'No fonts match.' : 'Looking for fonts…'}</p>
           {/each}
-          <p class="faint lic">The font file is copied into the theme. Check a font's licence before sharing your theme.</p>
+          <p class="faint lic">The font file is copied into the theme. Check a font's license before sharing your theme.</p>
         </div>
       {:else}
       <div class="items" class:imgs={kind === 'image'}>

@@ -55,7 +55,7 @@ export default {
     {
       id: 'how-it-works',
       title: 'Read "How it works"',
-      shows: '"How it works" is clicked and the "Getting started" window opens with the four steps (pick a screen, click something to change it, move, restyle and add, save and try it) and the words you\'ll see (element, layer, options, colours). The pointer reads down the steps, then "Got it" closes it.',
+      shows: '"How it works" is clicked and the "Getting started" window opens with the four steps (pick a screen, click something to change it, move, restyle and add, save and try it) and the words you\'ll see (element, layer, options, colors). The pointer reads down the steps, then "Got it" closes it.',
       uiLabels: ['How it works', 'Getting started', 'Got it'],
       poster: 'open',
       async run(ctx) {

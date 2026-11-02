@@ -19,7 +19,7 @@
     { id: 'layout', label: 'Layout' },
     { id: 'look', label: 'Appearance' },
     { id: 'content', label: 'Content' },
-    { id: 'behavior', label: 'Behaviour' },
+    { id: 'behavior', label: 'Behavior' },
   ];
 
   /** In the inspector, whose header already names the element. */
@@ -128,7 +128,7 @@
     </div>
     <ul class="dim tips">
       <li>Drag the selected part to move it. Arrow keys move it a little; hold Shift for bigger steps.</li>
-      <li>Colours marked “Shared” change everywhere they are used. Find them all in Colours.</li>
+      <li>Colors marked “Shared” change everywhere they are used. Find them all in Colors.</li>
       <li>Nothing is written until you press Save. A backup of the theme is made first, and Ctrl+Z undoes any change.</li>
     </ul>
     <button class="small" onclick={() => (ed.showGuide = true)}>Show the getting started guide</button>
@@ -270,13 +270,13 @@
             <input type="range" min="0" max="12" step="1" value={frame.frame.border} oninput={(e) => changeFrame({ border: e.currentTarget.valueAsNumber })} />
             <b>{frame.frame.border} px</b>
           </label>
-          <div class="colour"><span>Border colour</span><ColorInput label="Border colour" value={shown(frame.frame.borderColor)} onchange={(v) => changeFrame({ borderColor: v })} /></div>
+          <div class="colour"><span>Border color</span><ColorInput label="Border color" value={shown(frame.frame.borderColor)} onchange={(v) => changeFrame({ borderColor: v })} /></div>
           <label>
             <span>Shadow</span>
             <input type="range" min="0" max="30" step="1" value={frame.frame.shadow} oninput={(e) => changeFrame({ shadow: e.currentTarget.valueAsNumber })} />
             <b>{frame.frame.shadow} px</b>
           </label>
-          <div class="colour"><span>Shadow colour</span><ColorInput label="Shadow colour" value={shown(frame.frame.shadowColor)} onchange={(v) => changeFrame({ shadowColor: v })} /></div>
+          <div class="colour"><span>Shadow color</span><ColorInput label="Shadow color" value={shown(frame.frame.shadowColor)} onchange={(v) => changeFrame({ shadowColor: v })} /></div>
           <p class="faint note">RetroBat's frame shader. It suits screenshots, videos, box art and fan art; RetroBat skips pictures with see-through corners (most logos), so give those the soft shadow instead.</p>
         {/if}
       {/if}

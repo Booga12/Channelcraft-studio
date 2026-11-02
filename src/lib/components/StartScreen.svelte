@@ -163,7 +163,7 @@
       <div class="mx-auto flex max-w-6xl flex-col gap-8">
         <header class="flex flex-col gap-2">
           <h1 class="m-0 bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-3xl font-bold tracking-tight text-transparent">Welcome to ChannelCraft Studio</h1>
-          <p class="m-0 max-w-2xl text-sm text-muted-foreground">Change how RetroBat looks: colours, fonts, pictures and layouts, with a live preview. Nothing reaches RetroBat until you save, and a backup is made first.</p>
+          <p class="m-0 max-w-2xl text-sm text-muted-foreground">Change how RetroBat looks: colors, fonts, pictures and layouts, with a live preview. Nothing reaches RetroBat until you save, and a backup is made first.</p>
         </header>
 
         <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">

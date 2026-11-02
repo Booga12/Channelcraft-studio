@@ -324,10 +324,10 @@ function textChecks(project: ThemeProject, res: Resolution, env: Environment, vi
       return {
         kind: 'hard-to-read',
         key,
-        text: `Its colour is too close to what's behind it (contrast ${Math.floor(ratio * 10) / 10}:1; 3 or more reads well).`,
+        text: `Its color is too close to what's behind it (contrast ${Math.floor(ratio * 10) / 10}:1; 3 or more reads well).`,
         views: [view],
         element: el.name,
-        fix: { label: to === '${designAccentText}' ? 'Use the readable accent' : to === '${designText}' ? 'Use the text colour' : 'Make it readable', changes: [setTextChange(colDef.file, colDef.node, to)] },
+        fix: { label: to === '${designAccentText}' ? 'Use the readable accent' : to === '${designText}' ? 'Use the text color' : 'Make it readable', changes: [setTextChange(colDef.file, colDef.node, to)] },
       };
     });
   }

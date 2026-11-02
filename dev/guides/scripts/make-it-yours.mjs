@@ -13,13 +13,13 @@ export default {
     {
       id: 'open-appearance',
       title: 'Open Settings > Appearance',
-      shows: 'Settings is clicked in the side bar of the start screen. The Settings window opens and "Appearance" is picked from its list: Light or dark, Accent colour, Logo colour and Interface size.',
-      uiLabels: ['Settings', 'Appearance', 'Light or dark', 'Accent colour', 'Logo colour', 'Interface size'],
+      shows: 'Settings is clicked in the side bar of the start screen. The Settings window opens and "Appearance" is picked from its list: Light or dark, Accent color, Logo color and Interface size.',
+      uiLabels: ['Settings', 'Appearance', 'Light or dark', 'Accent color', 'Logo color', 'Interface size'],
       async run(ctx) {
         const { page } = ctx;
         await ctx.click(page.getByRole('button', { name: 'Settings', exact: true }), { after: 900 });
         await ctx.click(settings(page).getByRole('tab', { name: 'Appearance' }), { after: 900 });
-        for (const t of ['Light or dark', 'Accent colour', 'Logo colour', 'Interface size']) await ctx.hover(settings(page).getByText(t, { exact: true }), { hold: 550 });
+        for (const t of ['Light or dark', 'Accent color', 'Logo color', 'Interface size']) await ctx.hover(settings(page).getByText(t, { exact: true }), { hold: 550 });
       },
     },
     {
@@ -40,13 +40,13 @@ export default {
     },
     {
       id: 'accent',
-      title: 'Pick an accent colour',
-      shows: 'Different swatches under "Accent colour" are clicked. The highlight colour of the app (buttons, the selected tab, toggles) changes with each one.',
-      uiLabels: ['Accent colour'],
+      title: 'Pick an accent color',
+      shows: 'Different swatches under "Accent color" are clicked. The highlight color of the app (buttons, the selected tab, toggles) changes with each one.',
+      uiLabels: ['Accent color'],
       poster: 'pink',
       async run(ctx) {
         const { page } = ctx;
-        const swatches = settings(page).getByRole('radiogroup', { name: 'Accent colour' }).getByRole('radio');
+        const swatches = settings(page).getByRole('radiogroup', { name: 'Accent color' }).getByRole('radio');
         const n = await swatches.count();
         for (const i of [2, 3, Math.min(5, n - 1)]) await ctx.click(swatches.nth(i), { after: 1000 });
         ctx.clip.mark('pink');
@@ -55,13 +55,13 @@ export default {
     },
     {
       id: 'logo-colour',
-      title: 'Change the logo colour',
-      shows: 'A colour is picked under "Logo colour" and the Settings window is closed: the ChannelCraft logo at the top of the side bar now has the new colour. In the real app the title bar and the taskbar icon follow it too; shortcuts and the Start menu keep the standard Aurora logo.',
-      uiLabels: ['Logo colour'],
+      title: 'Change the logo color',
+      shows: 'A color is picked under "Logo color" and the Settings window is closed: the ChannelCraft logo at the top of the side bar now has the new color. In the real app the title bar and the taskbar icon follow it too; shortcuts and the Start menu keep the standard Aurora logo.',
+      uiLabels: ['Logo color'],
       async run(ctx) {
         const { page } = ctx;
-        const swatches = settings(page).getByRole('radiogroup', { name: 'Logo colour' }).getByRole('radio');
-        await ctx.hover(settings(page).getByText('Logo colour', { exact: true }), { hold: 500 });
+        const swatches = settings(page).getByRole('radiogroup', { name: 'Logo color' }).getByRole('radio');
+        await ctx.hover(settings(page).getByText('Logo color', { exact: true }), { hold: 500 });
         await ctx.click(swatches.nth(2), { after: 900 });
         await ctx.click(swatches.nth(5), { after: 900 });
         await ctx.click(settings(page).getByRole('button', { name: /^Close/ }).first(), { after: 900 });
@@ -79,7 +79,7 @@ export default {
         const { page } = ctx;
         await page.getByRole('button', { name: 'Settings', exact: true }).click();
         await settings(page).getByRole('tab', { name: 'Appearance' }).click();
-        await settings(page).getByRole('radiogroup', { name: 'Logo colour' }).getByRole('radio').nth(0).click();
+        await settings(page).getByRole('radiogroup', { name: 'Logo color' }).getByRole('radio').nth(0).click();
         await page.waitForTimeout(700);
       },
       async run(ctx) {
@@ -96,7 +96,7 @@ export default {
     {
       id: 'simple-advanced',
       title: 'Simple or Advanced',
-      shows: 'In the editor, the "Simple" / "Advanced" switch is at the top. Advanced adds panels to the tools column (Library, Options, Files), names Colours "Variables" and shows every setting with file names and the XML. Simple goes back to the plain names and the most useful settings.',
+      shows: 'In the editor, the "Simple" / "Advanced" switch is at the top. Advanced adds panels to the tools column (Library, Options, Files), names Colors "Variables" and shows every setting with file names and the XML. Simple goes back to the plain names and the most useful settings.',
       uiLabels: ['Simple', 'Advanced', 'Library', 'Variables', 'Options', 'Files'],
       poster: 'advanced',
       async before(ctx) {

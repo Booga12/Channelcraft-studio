@@ -490,7 +490,7 @@ export function demoBridge(demoRoot, h) {
     backups_dir: () => appDir('backups'),
     notices_path: () => {
       const p = join(L.appData, 'THIRD-PARTY-NOTICES.txt');
-      if (!existsSync(p)) throw 'The licences file is missing from this copy of the app.';
+      if (!existsSync(p)) throw 'The licenses file is missing from this copy of the app.';
       return p;
     },
     read_text_optional: ({ path }) => (existsSync(path) && insideDemo(path) && statSync(path).isFile() ? h.readText(path) : null),
@@ -783,7 +783,7 @@ export function demoBridge(demoRoot, h) {
         }
         if (!existsSync(licence)) {
           const ofl = (await cachedFetch(`${dirUrl}/OFL.txt`)).toString('utf8');
-          if (!ofl.toUpperCase().includes('SIL OPEN FONT LICENSE')) throw "The font's licence file isn't the Open Font License, so the font wasn't added.";
+          if (!ofl.toUpperCase().includes('SIL OPEN FONT LICENSE')) throw "The font's license file isn't the Open Font License, so the font wasn't added.";
           writeAtomic(licence, ofl);
         }
         writeAtomic(target, bytes);

@@ -28,13 +28,13 @@
 </script>
 
 <div class="color">
-  <label class="swatch" style:--c={cssColor(value, 'transparent')} title="Pick a colour">
-    <input type="color" aria-label={named('pick a colour')} value={`#${hex6}`} oninput={(e) => emit(e.currentTarget.value.slice(1), alpha)} />
+  <label class="swatch" style:--c={cssColor(value, 'transparent')} title="Pick a color">
+    <input type="color" aria-label={named('pick a color')} value={`#${hex6}`} oninput={(e) => emit(e.currentTarget.value.slice(1), alpha)} />
   </label>
   <input
     class="hex mono"
     class:bad={!valid}
-    aria-label={named('colour code')}
+    aria-label={named('color code')}
     bind:value={text}
     spellcheck="false"
     onchange={() => onchange(text.trim())}

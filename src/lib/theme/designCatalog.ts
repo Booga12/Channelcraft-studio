@@ -117,7 +117,7 @@ export const BUILT_IN_DESIGNS: Design[] = [
   {
     id: 'clean-slate',
     label: 'Clean Slate',
-    description: 'Soft grey paper, rounded cards and one cheerful violet accent. Calm, tidy and easy to read.',
+    description: 'Soft gray paper, rounded cards and one cheerful violet accent. Calm, tidy and easy to read.',
     group: 'professional',
     tags: ['light', 'minimal', 'friendly'],
     palette: P('F2F3F5', 'E4E7EB', 'FFFFFFF0', '1F2430', '667085', '6C5CE7', 'FFFFFF'),
@@ -397,7 +397,7 @@ export const BUILT_IN_DESIGNS: Design[] = [
   {
     id: 'graphite',
     label: 'Graphite',
-    description: 'Brushed dark grey with orange highlights and a sharp stripe, logos along the top and a big console below.',
+    description: 'Brushed dark gray with orange highlights and a sharp stripe, logos along the top and a big console below.',
     group: 'tech',
     tags: ['dark', 'modern', 'minimal'],
     palette: P('16171A', '2A2C31', 'FFFFFF12', 'F1F2F4', '9DA1A9', 'FF7A1A', 'FFFFFF'),

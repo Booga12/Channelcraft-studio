@@ -43,9 +43,9 @@
         cmd('Duplicate selection', 'copy', () => ed.duplicate(), 'Ctrl+D'),
         cmd('Delete selection', 'trash', () => ed.deleteSelection(), 'Del'),
         cmd('Copy', 'copy', () => ed.copy(), 'Ctrl+C'),
-        cmd('Centre on screen', 'fit', () => (ed.align('hcenter'), ed.align('vcenter'))),
+        cmd('Center on screen', 'fit', () => (ed.align('hcenter'), ed.align('vcenter'))),
         cmd('Align left', 'alignLeft', () => ed.align('left')),
-        cmd('Align centre', 'alignHCenter', () => ed.align('hcenter')),
+        cmd('Align center', 'alignHCenter', () => ed.align('hcenter')),
         cmd('Align right', 'alignRight', () => ed.align('right')),
         cmd('Align top', 'alignTop', () => ed.align('top')),
         cmd('Align middle', 'alignVCenter', () => ed.align('vcenter')),
@@ -112,7 +112,8 @@
 
   /** Words in any order; each must appear in the label, hint or group. */
   const shown = $derived.by(() => {
-    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    // British spellings still find things now the app says color, center… (#47).
+    const words = q.toLowerCase().replace(/colour/g, 'color').replace(/centred/g, 'centered').replace(/centre/g, 'center').replace(/favourite/g, 'favorite').replace(/grey/g, 'gray').split(/\s+/).filter(Boolean);
     const list = words.length ? entries.filter((e) => words.every((w) => `${e.label} ${e.hint ?? ''} ${e.group}`.toLowerCase().includes(w))) : entries.filter((e) => e.group === 'Commands' || e.group === 'Elements on this screen');
     return list.slice(0, 80);
   });

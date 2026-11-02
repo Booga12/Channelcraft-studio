@@ -197,15 +197,15 @@ export const LIBRARY: LibraryItem[] = [
   },
   {
     id: 'favorite',
-    label: 'Favourite badge',
-    help: 'A star that only shows when the game is a favourite.',
+    label: 'Favorite badge',
+    help: 'A star that only shows when the game is a favorite.',
     icon: 'star',
     category: 'Game details',
     screens: 'game',
     type: 'text',
     name: 'favoritebadge',
     native: false,
-    body: TEXT('0.04 0.57', '0.2 0.04', '0.028', '<text>★ Favourite</text>\n<color>FFD34DFF</color>\n<visible>{game:favorite}</visible>').replace('<color>FFFFFFFF</color>\n', ''),
+    body: TEXT('0.04 0.57', '0.2 0.04', '0.028', '<text>★ Favorite</text>\n<color>FFD34DFF</color>\n<visible>{game:favorite}</visible>').replace('<color>FFFFFFFF</color>\n', ''),
   },
 
   // ---- game list ----

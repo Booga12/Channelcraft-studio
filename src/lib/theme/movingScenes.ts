@@ -345,7 +345,7 @@ export const SCENES: Scene[] = [
       c.fill();
     }
   }),
-  S('ribbons', 'shapes', 'Ribbons', 'Wide ribbons of colour waving across the screen', (c, p, t, r) => {
+  S('ribbons', 'shapes', 'Ribbons', 'Wide ribbons of color waving across the screen', (c, p, t, r) => {
     c.lineCap = 'round';
     for (let i = 0; i < 5; i++) {
       const base = H * (0.15 + i * 0.18);
@@ -459,7 +459,7 @@ export const SCENES: Scene[] = [
       c.restore();
     }
   }),
-  S('waves', 'nature', 'Gentle waves', 'Layers of colour rolling like the sea', (c, p, t) => {
+  S('waves', 'nature', 'Gentle waves', 'Layers of color rolling like the sea', (c, p, t) => {
     const layers = 5;
     for (let l = 0; l < layers; l++) {
       const f = l / (layers - 1);
@@ -564,7 +564,7 @@ export const SCENES: Scene[] = [
       c.fillRect(W / 2 + Math.cos(a) * d - s / 2, H / 2 + Math.sin(a) * d - s / 2, s, s);
     }
   }),
-  S('vhs', 'retro', 'VHS tape', 'An old video tape: colour bands, noise and a rolling bar', (c, p, t, r) => {
+  S('vhs', 'retro', 'VHS tape', 'An old video tape: color bands, noise and a rolling bar', (c, p, t, r) => {
     const cols = [p.accent, p.dim, p.text, p.bg2];
     for (let i = 0; i < 8; i++) {
       c.fillStyle = rgba(cols[i % 4], 0.06);
@@ -744,14 +744,14 @@ export const SCENES: Scene[] = [
       glow(c, x, y, 140 + r() * 120, cols[i % 3], 0.5);
     }
   }),
-  S('colourdrift', 'abstract', 'Colour drift', 'Slow washes of colour moving round', (c, p, t, r) => {
+  S('colourdrift', 'abstract', 'Color drift', 'Slow washes of color moving round', (c, p, t, r) => {
     const cols = [p.accent, p.dim, p.text, p.bg2];
     for (let i = 0; i < 4; i++) {
       const ph = r();
       glow(c, W / 2 + cos(1, t, ph) * 420, H / 2 + sin(1, t, ph) * 220, 700, cols[i], 0.3);
     }
   }),
-  S('sunburst', 'abstract', 'Sunburst', 'Rays turning slowly round a glowing centre', (c, p, t) => {
+  S('sunburst', 'abstract', 'Sunburst', 'Rays turning slowly round a glowing center', (c, p, t) => {
     const cx = W / 2;
     const cy = H * 0.55;
     const n = 12;
@@ -768,7 +768,7 @@ export const SCENES: Scene[] = [
     }
     glow(c, cx, cy, 300, p.text, 0.25);
   }),
-  S('plasma', 'abstract', 'Plasma', 'Swirling colours like an old demo effect', (c, p, t) => {
+  S('plasma', 'abstract', 'Plasma', 'Swirling colors like an old demo effect', (c, p, t) => {
     const cell = 20;
     const nx = W / cell;
     const ny = H / cell;
@@ -879,7 +879,7 @@ export const SCENES: Scene[] = [
       line(c, W / 2 + Math.cos(a) * d1, H / 2 + Math.sin(a) * d1, W / 2 + Math.cos(a) * d2, H / 2 + Math.sin(a) * d2);
     }
   }),
-  S('nebula', 'space', 'Nebula', 'Glowing clouds of colour among the stars', (c, p, t, r) => {
+  S('nebula', 'space', 'Nebula', 'Glowing clouds of color among the stars', (c, p, t, r) => {
     dim(c, 0.4);
     c.fillStyle = rgba(p.text, 0.7);
     for (let i = 0; i < 150; i++) dot(c, r() * W, r() * H, 0.6 + r());
@@ -1202,7 +1202,7 @@ export const SCENES: Scene[] = [
     c.fillStyle = g;
     c.fillRect(0, band - 30, W, 60);
   }),
-  S('glitch', 'tech', 'Glitch', 'Blocks of colour glitching in and out', (c, p, t) => {
+  S('glitch', 'tech', 'Glitch', 'Blocks of color glitching in and out', (c, p, t) => {
     const s = step(t, 32);
     const cols = [p.accent, p.text, p.dim];
     for (let i = 0; i < 16; i++) {
@@ -1226,7 +1226,7 @@ export const SCENES: Scene[] = [
   }),
 
   // Party
-  S('fireworks', 'party', 'Fireworks', 'Rockets bursting into showers of colour', (c, p, t, r) => {
+  S('fireworks', 'party', 'Fireworks', 'Rockets bursting into showers of color', (c, p, t, r) => {
     dim(c, 0.35);
     const cols = [p.accent, p.text, mix(p.accent, 'ffd040', 0.5), mix(p.accent, '40c0ff', 0.5)];
     for (let i = 0; i < 7; i++) {
@@ -1253,7 +1253,7 @@ export const SCENES: Scene[] = [
       glow(c, cx, cy, 140, col, 0.25 * a);
     }
   }),
-  S('disco', 'party', 'Disco lights', 'Coloured spots of light dancing round the room', (c, p, t, r) => {
+  S('disco', 'party', 'Disco lights', 'Colored spots of light dancing round the room', (c, p, t, r) => {
     dim(c, 0.3);
     c.globalCompositeOperation = 'lighter';
     const cols = [p.accent, p.text, p.dim, mix(p.accent, '40c0ff', 0.6)];
@@ -1873,7 +1873,7 @@ export const SCENES: Scene[] = [
       line(c, x, y, x + len, y);
     }
   }),
-  S('zoom', 'speed', 'Zoom burst', 'Frames rushing outwards from the centre', (c, p, t) => {
+  S('zoom', 'speed', 'Zoom burst', 'Frames rushing outwards from the center', (c, p, t) => {
     c.lineWidth = 3;
     for (let i = 0; i < 16; i++) {
       const z = lap(i / 16, 1, t);

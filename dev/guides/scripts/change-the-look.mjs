@@ -3,7 +3,7 @@ import { dockButton, inspector, NO_TOUR, panel, quickClear, quickScreen, quickTh
 
 export default {
   slug: 'change-the-look',
-  title: 'Colours, fonts and backgrounds',
+  title: 'Colors, fonts and backgrounds',
   order: 3,
   localStorage: NO_TOUR,
   cursorStart: [900, 560],
@@ -14,13 +14,13 @@ export default {
   steps: [
     {
       id: 'palette',
-      title: 'Try a colour palette',
-      shows: 'Presets is opened from the tools column and scrolled down to "Colour palettes". Clicking the "Neon" palette, then "Starry night", recolours the whole theme at once in the live preview: the list highlight, the text and the panels.',
-      uiLabels: ['Presets', 'Colour palettes', 'Neon', 'Starry night'],
+      title: 'Try a color palette',
+      shows: 'Presets is opened from the tools column and scrolled down to "Color palettes". Clicking the "Neon" palette, then "Starry night", recolors the whole theme at once in the live preview: the list highlight, the text and the panels.',
+      uiLabels: ['Presets', 'Color palettes', 'Neon', 'Starry night'],
       async run(ctx) {
         const { page } = ctx;
         await ctx.click(dockButton(page, 'presets'), { after: 700 });
-        const head = panel(page).getByText('Colour palettes', { exact: true });
+        const head = panel(page).getByText('Color palettes', { exact: true });
         await ctx.moveTo({ x: 240, y: 520 }, { ms: 600 });
         for (let i = 0; i < 12 && !(await head.isVisible().then(async (v) => v && (await head.boundingBox()).y < 420)); i++) await ctx.scroll(null, 900, { ms: 260 });
         await ctx.pause(400);
@@ -30,9 +30,9 @@ export default {
     },
     {
       id: 'colours',
-      title: 'Change one colour everywhere',
-      shows: 'Colours is opened. Each colour there is used in many places at once. The "Design accent" colour code is replaced with a new one (FF2E88FF) and Enter is pressed: the list highlight and every other part that uses the accent change together.',
-      uiLabels: ['Colours', 'Design accent'],
+      title: 'Change one color everywhere',
+      shows: 'Colors is opened. Each color there is used in many places at once. The "Design accent" color code is replaced with a new one (FF2E88FF) and Enter is pressed: the list highlight and every other part that uses the accent change together.',
+      uiLabels: ['Colors', 'Design accent'],
       async run(ctx) {
         const { page } = ctx;
         await ctx.click(dockButton(page, 'variables'), { after: 800 });
@@ -80,7 +80,7 @@ export default {
     {
       id: 'background',
       title: 'Give the background some movement',
-      shows: 'On the System menu screen, Presets is opened at "Moving background". The "Space" kind is picked and then a scene; the app makes a short looping video in the theme\'s colours and it plays behind the console picture in the preview.',
+      shows: 'On the System menu screen, Presets is opened at "Moving background". The "Space" kind is picked and then a scene; the app makes a short looping video in the theme\'s colors and it plays behind the console picture in the preview.',
       uiLabels: ['System menu', 'Presets', 'Moving background', 'Space', 'Playing now'],
       leadIn: 500,
       async before(ctx) {
