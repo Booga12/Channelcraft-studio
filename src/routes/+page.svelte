@@ -4,6 +4,7 @@
   import { ask } from '@tauri-apps/plugin-dialog';
   import { ed } from '$lib/editor.svelte';
   import StartScreen from '$lib/components/StartScreen.svelte';
+  import Splash from '$lib/components/Splash.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import TaskOverlay from '$lib/components/TaskOverlay.svelte';
   import UpdateBanner from '$lib/components/UpdateBanner.svelte';
@@ -14,6 +15,17 @@
   // The editor and the dialogs opened now and then are loaded the first time they are needed, so
   // the start screen comes up without waiting for them.
 
+  // The splash (#48) stays while the app starts: until it has read RetroBat's themes, and at
+  // least long enough for the logo to finish painting itself in.
+  let starting = $state(true);
+  const SPLASH_MIN = 2000;
+  const t0 = performance.now();
+  function started() {
+    setTimeout(() => (starting = false), Math.max(0, SPLASH_MIN - (performance.now() - t0)));
+  }
+  // Never stuck on the splash, even if starting up hangs.
+  setTimeout(() => (starting = false), 10000);
+
   onMount(() => {
     prefs.applyLook();
     ed.startAutosave();
@@ -21,13 +33,13 @@
       // Running in a plain browser during development: use the read-only bridge.
       import('$lib/devmock').then((m) => {
         m.installBrowserMock();
-        ed.init();
+        ed.init().finally(started);
       });
       return;
     }
     // Errors in the pages go to the problem log on this PC ("Report a problem" can include it).
     installErrorLog(api.logProblem);
-    ed.init();
+    ed.init().finally(started);
     const win = getCurrentWindow();
     const unlisten = win.onCloseRequested(async (event) => {
       if (ed.busy) {
@@ -66,6 +78,7 @@
   });
 </script>
 
+{#if starting}<Splash />{/if}
 {#if ed.project}
   {#await import('$lib/components/EditorView.svelte') then m}<m.default />{/await}
 {:else}
