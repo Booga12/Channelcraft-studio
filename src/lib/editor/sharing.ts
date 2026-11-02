@@ -14,6 +14,7 @@ import { designFileText, myDesigns, newDesignId, putMyDesign, readDesignFile, ty
 import { appliedDesign, appliedGameLayout, appliedSystemLayout } from '../theme/presets';
 import { FONT_CATALOG } from '../theme/fonts';
 import { GALLERY_SITE } from '../gallery';
+import { esdeFolder, toEsde, type EsdeExport } from '../theme/esde';
 
 /** The catalog font a part of the theme uses, by its file name. */
 function fontOf(ed: Editor, view: string, names: string[]): string | undefined {
@@ -142,4 +143,35 @@ export async function publishToGallery(this: Editor, name: string, maker: string
   // The gallery refuses a theme without one, so say why here rather than after the upload (#46).
   if (!this.hasPreview()) throw 'The preview picture couldn’t be made from that screen. Open it and use Make preview.png from this screen (in the menu or Ctrl+K), then publish again.';
   return api.publishTheme(p.dir, name.trim(), maker.trim(), GALLERY_SITE, this.systems.map((s) => s.theme));
+}
+
+/**
+ * Export for ES-DE (#49): the theme converted for ES-DE, worked out from the files as they are
+ * now. Nothing is written; see writeEsde.
+ */
+export async function esdeExport(this: Editor): Promise<EsdeExport | null> {
+  const p = this.project;
+  if (!p) return null;
+  const listDir = async (dir: string) => {
+    try {
+      return (await api.explorerList(dir)).entries.filter((e) => !e.isDir).map((e) => e.name);
+    } catch {
+      return [];
+    }
+  };
+  return toEsde(p, this.env, listDir);
+}
+
+/** Saves the theme, asks where to put the zip and writes it. Returns the zip's path, or null if cancelled. */
+export async function writeEsde(this: Editor): Promise<string | null> {
+  const p = this.project;
+  if (!p) return null;
+  if (this.dirtyCount) await this.save();
+  if (this.dirtyCount) throw 'The theme couldn’t be saved, so it wasn’t exported.';
+  const dest = await saveDialog({ title: 'Export for ES-DE', defaultPath: `${esdeFolder(p.name)}.zip`, filters: [{ name: 'Zip', extensions: ['zip'] }] });
+  if (!dest) return null;
+  const out = await this.esdeExport();
+  if (!out) return null;
+  await api.exportEsde(dest, out.files);
+  return dest;
 }

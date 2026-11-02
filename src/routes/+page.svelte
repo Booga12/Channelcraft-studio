@@ -111,6 +111,9 @@
 {#if ed.showPublish && ed.project}
   {#await import('$lib/components/PublishDialog.svelte') then m}<m.default />{/await}
 {/if}
+{#if ed.showEsde && ed.project}
+  {#await import('$lib/components/EsdeDialog.svelte') then m}<m.default />{/await}
+{/if}
 {#if ed.showMediaCheck && ed.project}
   {#await import('$lib/components/MediaCheckDialog.svelte') then m}<m.default />{/await}
 {/if}
