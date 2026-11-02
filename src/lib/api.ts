@@ -151,7 +151,7 @@ export const api = {
   exportTheme: (dir: string, dest: string) => invoke<string>('export_theme', { dir, dest }),
   /** Share theme: the zip without console art copied from another installed theme (Import adds it back). */
   /** Export for ES-DE: writes the converted theme's files (theme/esde.ts) to `dest` as a zip. */
-  exportEsde: (dest: string, entries: { dest: string; text?: string; src?: string }[]) => invoke<number>('export_esde', { dest, entries }),
+  exportEsde: (dest: string, entries: { dest: string; text?: string; src?: string; data?: string }[]) => invoke<number>('export_esde', { dest, entries }),
   shareTheme: (dir: string, dest: string, systems: string[]) => invoke<{ path: string; leftOut: number }>('share_theme', { dir, dest, systems }),
   /** Zips the theme as Share theme does and publishes it to the gallery at `site`. */
   publishTheme: (dir: string, name: string, maker: string, site: string, systems: string[]) => invoke<{ slug: string; url: string; leftOut: string[] }>('publish_theme', { dir, name, maker, site, systems }),

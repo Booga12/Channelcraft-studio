@@ -3,17 +3,21 @@
 
 use crate::commands::{err, is_inside, CmdResult, Roots};
 use crate::storage::unique_id;
+use base64::Engine;
 use serde::Deserialize;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-/// One file of the exported theme: written from `text`, or copied from `src`.
+/// One file of the exported theme: written from `text`, copied from `src`, or from base64 `data`
+/// (a picture the app drew, such as an SVG logo turned into a PNG).
 #[derive(Deserialize, Debug)]
 pub struct EsdeEntry {
     pub dest: String,
     pub text: Option<String>,
     pub src: Option<String>,
+    #[serde(default)]
+    pub data: Option<String>,
 }
 
 /// A zip path is a plain relative path: no drive, no leading slash, no "..".
@@ -54,6 +58,10 @@ pub(crate) fn write_esde_zip(entries: &[EsdeEntry], dest: &Path, allowed: &Path)
                 let packed = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".mkv", ".ogg", ".mp3", ".wav", ".ttf", ".otf"].iter().any(|x| lower.ends_with(x));
                 zip.start_file(name, if packed { store } else { deflate }).map_err(err)?;
                 std::io::copy(&mut reader, &mut zip).map_err(err)?;
+            } else if let Some(data) = &e.data {
+                let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(err)?;
+                zip.start_file(name, store).map_err(err)?;
+                zip.write_all(&bytes).map_err(err)?;
             } else {
                 continue;
             }
@@ -96,10 +104,11 @@ mod tests {
         fs::write(root.join("themes/t/art/a.png"), b"PNGDATA").unwrap();
         let dest = root.join("out.zip");
         let entries = vec![
-            EsdeEntry { dest: "t-es-de/theme.xml".into(), text: Some("<theme/>".into()), src: None },
-            EsdeEntry { dest: "t-es-de/art/a.png".into(), text: None, src: Some(root.join("themes/t/art/a.png").to_string_lossy().into_owned()) },
+            EsdeEntry { dest: "t-es-de/theme.xml".into(), text: Some("<theme/>".into()), src: None, data: None },
+            EsdeEntry { dest: "t-es-de/art/a.png".into(), text: None, src: Some(root.join("themes/t/art/a.png").to_string_lossy().into_owned()), data: None },
+            EsdeEntry { dest: "t-es-de/art/b.png".into(), text: None, src: None, data: Some("UE5HMg==".into()) },
         ];
-        assert_eq!(write_esde_zip(&entries, &dest, &root).unwrap(), 2);
+        assert_eq!(write_esde_zip(&entries, &dest, &root).unwrap(), 3);
         let mut z = zip::ZipArchive::new(fs::File::open(&dest).unwrap()).unwrap();
         let mut s = String::new();
         z.by_name("t-es-de/theme.xml").unwrap().read_to_string(&mut s).unwrap();
@@ -107,6 +116,9 @@ mod tests {
         let mut b = Vec::new();
         z.by_name("t-es-de/art/a.png").unwrap().read_to_end(&mut b).unwrap();
         assert_eq!(b, b"PNGDATA");
+        let mut c = Vec::new();
+        z.by_name("t-es-de/art/b.png").unwrap().read_to_end(&mut c).unwrap();
+        assert_eq!(c, b"PNG2");
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -115,9 +127,9 @@ mod tests {
         let root = tmp_dir("bad");
         let dest = root.join("out.zip");
         let outside = std::env::temp_dir().join("elsewhere.png").to_string_lossy().into_owned();
-        assert!(write_esde_zip(&[EsdeEntry { dest: "../x".into(), text: Some("x".into()), src: None }], &dest, &root).is_err());
-        assert!(write_esde_zip(&[EsdeEntry { dest: "C:/x".into(), text: Some("x".into()), src: None }], &dest, &root).is_err());
-        assert!(write_esde_zip(&[EsdeEntry { dest: "t/x.png".into(), text: None, src: Some(outside) }], &dest, &root).is_err());
+        assert!(write_esde_zip(&[EsdeEntry { dest: "../x".into(), text: Some("x".into()), src: None, data: None }], &dest, &root).is_err());
+        assert!(write_esde_zip(&[EsdeEntry { dest: "C:/x".into(), text: Some("x".into()), src: None, data: None }], &dest, &root).is_err());
+        assert!(write_esde_zip(&[EsdeEntry { dest: "t/x.png".into(), text: None, src: Some(outside), data: None }], &dest, &root).is_err());
         assert!(!dest.exists());
         let _ = fs::remove_dir_all(&root);
     }
