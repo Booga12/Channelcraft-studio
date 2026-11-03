@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ThemeProject } from './project';
-import { resolveTheme } from './resolver';
+import { hasActivateStoryboard, resolveTheme } from './resolver';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
 import { applyChanges } from './edits';
@@ -128,5 +128,36 @@ describe('checks on what texts show (#26)', () => {
     applyChanges(p, pink.fix!.changes);
     expect(p.entry!.src).toContain('<color>FFFFFF</color><zIndex>20</zIndex></text>\n    <text name="accent"');
     expect(checkTheme(p, resolveTheme(p, e), e, chars).some((i) => i.element === 'pink')).toBe(false);
+  });
+});
+
+describe('video list game data (#59)', () => {
+  const VIDEO = `<theme>
+  <formatVersion>7</formatVersion>
+  <view name="detailed,video">
+    <image name="box" extra="true"><pos>0.5 0.5</pos><size>0.2 0.2</size><path>firstfile({game:boxart}, {game:thumbnail})</path></image>
+    <image name="hover" extra="true"><pos>0.2 0.5</pos><size>0.2 0.2</size><path>{game:image}</path><storyboard><animation property="scale" from="1" to="1.02" duration="3200" mode="easeInOut" autoReverse="true" repeat="forever" /></storyboard></image>
+    <image name="fades" extra="true"><pos>0.8 0.5</pos><size>0.2 0.2</size><path>{game:fanart}</path><storyboard event="activate"><animation property="opacity" from="0" to="1" duration="600" /></storyboard></image>
+    <image name="plain" extra="true"><pos>0.8 0.2</pos><size>0.2 0.2</size><path>./art/bg.png</path></image>
+  </view>
+  <customView name="myvideo" inherits="video">
+    <text name="fav" extra="true"><pos>0.1 0.1</pos><size>0.2 0.05</size><text>Favorite</text><visible>{game:favorite}</visible></text>
+  </customView>
+</theme>`;
+
+  it('flags extras in the video list that show game data without an activate storyboard', async () => {
+    const { p, e } = await load(VIDEO);
+    const issues = checkTheme(p, resolveTheme(p, e), e).filter((i) => i.kind === 'not-updated');
+    expect(issues.map((i) => `${i.element}:${i.views.join(',')}`).sort()).toEqual(['box:video,myvideo', 'fav:myvideo', 'hover:video,myvideo']);
+  });
+
+  it('fixes them so they update for each game, keeping a loop looping', async () => {
+    const { p, e } = await load(VIDEO);
+    applyChanges(p, checkTheme(p, resolveTheme(p, e), e).filter((i) => i.kind === 'not-updated').flatMap((i) => i.fix!.changes));
+    const r = resolveTheme(p, e);
+    expect(checkTheme(p, r, e).filter((i) => i.kind === 'not-updated')).toEqual([]);
+    expect(p.entry!.src).toContain('<storyboard event="activate"><animation property="scale"');
+    expect(p.entry!.src).toContain('<animation property="opacity" from="1" to="1" duration="1" />');
+    for (const n of ['box', 'hover']) expect(hasActivateStoryboard(r.views.get('video')!.elements.get(n)!)).toBe(true);
   });
 });

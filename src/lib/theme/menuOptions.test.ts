@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ThemeProject } from './project';
-import { resolveTheme } from './resolver';
+import { hasActivateStoryboard, resolveTheme } from './resolver';
+import { onlyRefresh } from './animations';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
 import { addElementChange, applyChanges, type Change } from './edits';
@@ -89,8 +90,13 @@ describe('RetroBat menu options', () => {
     const bg = r.views.get('detailed')!.elements.get('ccs_background')!;
     expect(bg.props.get('path')!.value).toBe('./../art/cinema-p-neon/background.png');
     expect(bg.props.get('path')!.file.rel).toBe('_inc/ccs/options/games-cinema.xml');
-    for (const view of ['system', 'detailed'])
-      for (const el of r.views.get(view)!.elements.values()) expect(el.complex.filter((c) => c.name === 'storyboard'), `${view} ${el.name}`).toEqual([]);
+    for (const el of r.views.get('system')!.elements.values()) expect(el.complex.filter((c) => c.name === 'storyboard'), `system ${el.name}`).toEqual([]);
+    // Game lists keep only the storyboard that changes nothing, so the video list still updates game data (#59).
+    for (const view of ['detailed', 'video'])
+      for (const el of r.views.get(view)!.elements.values()) {
+        if (el.complex.some((c) => c.name === 'storyboard')) expect(onlyRefresh(el), `${view} ${el.name}`).toBe(true);
+        if (el.name === 'ccs_boxart' || el.name === 'ccs_fanart') expect(hasActivateStoryboard(el), `${view} ${el.name}`).toBe(true);
+      }
     // Motion on keeps them.
     const on = resolveTheme(p, env());
     expect(on.views.get('detailed')!.elements.get('ccs_boxart')!.complex.some((c) => c.name === 'storyboard')).toBe(true);

@@ -3,7 +3,8 @@
 // attached to it there, so callers use ed.<name>(...).
 
 import type { Editor } from '../editor.svelte';
-import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, presetOf, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from '../theme/animations';
+import { ANIMATIONS, boardsXml, EXIT_EVENTS, EXITS, onlyRefresh, presetOf, refreshXml, retune, screenOf, STILL_TYPES, storyboardXml, tuningOf } from '../theme/animations';
+import { usesGameData } from '../theme/library';
 import { type Change, insertTarget, setTextChange } from '../theme/edits';
 import { type Frame, frameOf, frameXml } from '../theme/frame';
 import { type Glow, glowProps, hex8, textFxProps, type TextFx, type PictureLook, snapPos, type SnapX, type SnapY, type TextLook } from '../theme/simpleProps';
@@ -29,7 +30,11 @@ export function setAnimation(this: Editor, name: string, presetId: string | null
   const preset = ANIMATIONS.find((a) => a.id === presetId);
   const removeAll = (list: typeof existing): Change[] => list.map((c) => ({ file: c.file, patch: patchRemoveNode(c.file.doc, c.node) }));
   if (!preset) {
-    if (existing.length) this.commit('removing animation', removeAll(existing));
+    if (!existing.length) return;
+    // An extra showing game data keeps an activate storyboard, or RetroBat's video list stops updating it.
+    const keep = screenOf(this.view) === 'list' && !!el.extra && el.extra !== 'false' && [...el.props.values()].some((p) => usesGameData(p.value));
+    if (keep && onlyRefresh(el)) return;
+    this.commit('removing animation', keep ? this.replaceBoards(existing, target, refreshXml(), removeAll) : removeAll(existing));
     return;
   }
   if (preset.kind !== 'entrance' && STILL_TYPES.has(el.type)) {

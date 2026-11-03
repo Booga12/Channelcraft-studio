@@ -2,18 +2,20 @@
 // the screen), each with a one-click fix where one is safe. Read only; fixes are Changes the
 // editor commits as one undo step.
 import { basename, dirname, join, relative } from '../path';
-import { patchRemoveNode } from '../xml/cst';
-import { setTextChange, type Change } from './edits';
+import { attr, patchInsertChild, patchRemoveNode, patchSetAttr } from '../xml/cst';
+import { insertTarget, setTextChange, type Change } from './edits';
 import type { Environment } from './context';
 import type { ThemeProject } from './project';
-import { resolveAsset, resolveAssetWithFallbacks, type PropDef, type ResolvedElement, type Resolution } from './resolver';
+import { hasActivateStoryboard, isVideoListView, resolveAsset, resolveAssetWithFallbacks, type PropDef, type ResolvedElement, type Resolution } from './resolver';
+import { onlyRefresh, refreshXml } from './animations';
+import { usesGameData } from './library';
 import { parsePair } from './schema';
 import { zOf } from '../render';
 import { contrast, over } from './presets';
 import { fontName } from './fonts';
 import { RETROBAT_FALLBACK_FONTS, type HasChar } from './fontChars';
 
-export type HealthKind = 'missing-file' | 'missing-font' | 'off-screen' | 'cut-off' | 'hard-to-read' | 'missing-character' | 'covered';
+export type HealthKind = 'missing-file' | 'missing-font' | 'off-screen' | 'cut-off' | 'hard-to-read' | 'missing-character' | 'covered' | 'not-updated';
 
 export interface HealthIssue {
   kind: HealthKind;
@@ -37,6 +39,7 @@ export const HEALTH_LABEL: Record<HealthKind, string> = {
   'hard-to-read': 'Hard to read',
   'missing-character': 'Letter the font lacks',
   covered: 'Covered by game art',
+  'not-updated': 'Same for every game',
 };
 
 /** Properties that name a picture, video or sound file. */
@@ -125,12 +128,33 @@ export function checkTheme(project: ThemeProject, res: Resolution, env: Environm
         });
       }
 
+      // RetroBat's video list only updates game data on extras with an activate storyboard
+      // (VideoGameListView never refreshes the others), so they keep showing nothing.
+      if (el.extra && el.extra !== 'false' && isVideoListView(res, view) && !hasActivateStoryboard(el) && [...el.props.values()].some((d) => usesGameData(d.value))) {
+        const target = insertTarget(el, view);
+        if (target) {
+          add(`refresh|${target.file.rel}|${el.name}`, view, () => {
+            // A storyboard without an event (a loop) becomes the activate one; otherwise one that changes nothing is added.
+            const plain = el.complex.find((c) => c.name === 'storyboard' && !attr(c.node, 'event'));
+            const changes: Change[] = plain ? [{ file: plain.file, patch: patchSetAttr(plain.file.doc, plain.node, 'event', 'activate') }] : [{ file: target.file, patch: patchInsertChild(target.file.doc, target.node, refreshXml()) }];
+            return {
+              kind: 'not-updated',
+              key: `refresh|${target.file.rel}|${el.name}`,
+              text: "RetroBat's video list never updates this for each game, so its game picture or info doesn't show there.",
+              views: [view],
+              element: el.name,
+              fix: { label: 'Update it for each game', changes },
+            };
+          });
+        }
+      }
+
       // Off the screen, for parts the theme adds. Theme makers hide RetroBat's built-in parts by
       // moving them off it, and parts that animate in may start off it.
       if (!el.extra || el.extra === 'false') continue;
       const posDef = el.props.get('pos');
       const pos = parsePair(posDef?.value);
-      if (!posDef || !pos || el.complex.some((c) => c.name === 'storyboard')) continue;
+      if (!posDef || !pos || (el.complex.some((c) => c.name === 'storyboard') && !onlyRefresh(el))) continue;
       const size = parsePair(el.props.get('size')?.value) ?? [0, 0];
       const origin = parsePair(el.props.get('origin')?.value) ?? [0, 0];
       const [w, h] = [Math.max(0, size[0]), Math.max(0, size[1])];

@@ -145,6 +145,15 @@ export function romStem(romPath: string): string {
   return i > 0 ? b.slice(0, i) : b;
 }
 
+/** Whether a screen is the video list, or a custom screen based on it. */
+export function isVideoListView(res: Resolution, name: string): boolean {
+  for (let n: string | null = name, i = 0; n && i < 10; i++) {
+    if (n === 'video') return true;
+    n = res.views.get(n)?.inherits ?? null;
+  }
+  return false;
+}
+
 const ACTIVATE_EVENTS = new Set(['activate', 'activateNext', 'activatePrev']);
 
 /**
