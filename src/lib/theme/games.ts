@@ -8,6 +8,8 @@ export interface GameInfo {
   /** The game's <path> in the gamelist (its id there). */
   path: string;
   name: string;
+  /** The gamelist's <sortname>, which RetroBat sorts by instead of the name when set. */
+  sortname?: string;
   description: string;
   rating: number;
   releasedate: string;
@@ -24,7 +26,7 @@ export interface GameInfo {
   media: Record<string, string>;
 }
 
-const TEXT_TAGS = ['name', 'desc', 'rating', 'releasedate', 'developer', 'publisher', 'genre', 'players', 'playcount', 'lastplayed', 'gametime', 'favorite', 'hidden'];
+const TEXT_TAGS = ['name', 'sortname', 'desc', 'rating', 'releasedate', 'developer', 'publisher', 'genre', 'players', 'playcount', 'lastplayed', 'gametime', 'favorite', 'hidden'];
 
 /** `./x`, `../x`, `~/x` (the gamelist's folder in RetroBat) and absolute paths. */
 function mediaPath(systemDir: string, v: string): string {
@@ -32,11 +34,75 @@ function mediaPath(systemDir: string, v: string): string {
   return join(systemDir, v.replace(/^~[\\/]/, './'));
 }
 
-export function parseGamelist(text: string, systemDir: string): GameInfo[] {
+/** A game's path as a lookup key: `.\sub\x.nsp`, `./sub/x.nsp` and `sub/x.nsp` are the same file. */
+function romKey(p: string, systemDir: string): string {
+  let k = p.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
+  const dir = systemDir.replace(/\\/g, '/').replace(/\/+$/, '') + '/';
+  if (k.toLowerCase().startsWith(dir.toLowerCase())) k = k.slice(dir.length);
+  return k.replace(/^~\//, '').replace(/^(\.\/)+/, '');
+}
+
+interface Entry {
+  path: string;
+  fields: Record<string, string>;
+  media: Record<string, string>;
+}
+
+function toGame({ path, fields, media }: Entry): GameInfo {
+  return {
+    path,
+    name: fields.name,
+    sortname: fields.sortname ?? '',
+    description: fields.desc ?? '',
+    rating: Number(fields.rating ?? 0) || 0,
+    releasedate: fields.releasedate ?? '',
+    developer: fields.developer ?? '',
+    publisher: fields.publisher ?? '',
+    genre: fields.genre ?? '',
+    players: fields.players ?? '',
+    playcount: fields.playcount ?? '',
+    lastplayed: fields.lastplayed ?? '',
+    gametime: fields.gametime ?? '',
+    favorite: fields.favorite === 'true',
+    media,
+  };
+}
+
+/**
+ * RetroBat's default order: by sort name (or name), ignoring case; ties keep their order. Like its
+ * compareIgnoreCase, both are upper-cased and compared code point by code point, so `_` comes after
+ * `Z` and accented letters after the plain ones (no locale rules).
+ */
+function byName(a: GameInfo, b: GameInfo): number {
+  return compareIgnoreCase(a.sortname || a.name, b.sortname || b.name);
+}
+
+export function compareIgnoreCase(a: string, b: string): number {
+  const x = [...a.toUpperCase()];
+  const y = [...b.toUpperCase()];
+  for (let i = 0; i < Math.min(x.length, y.length); i++) {
+    const d = x[i].codePointAt(0)! - y[i].codePointAt(0)!;
+    if (d) return d;
+  }
+  return x.length - y.length;
+}
+
+/**
+ * A system's games as RetroBat lists them. RetroBat builds the list from the ROM files on disk
+ * (`romFiles`, from api.listRomFiles) and only takes names and details from gamelist.xml, so
+ * entries for missing files or written twice don't add games, and files without an entry show
+ * under their file name. Without `romFiles` the gamelist alone is used, one game per path.
+ *
+ * `onlyListed` is for arcade and Neo Geo systems: RetroBat hides their BIOS and device files
+ * (neogeo.zip, qsound.zip) using MAME's lists, which the preview doesn't have, so there only ROM
+ * files with a gamelist entry are shown.
+ */
+export function parseGamelist(text: string, systemDir: string, romFiles?: string[], onlyListed = false): GameInfo[] {
   const doc = parse(text);
-  if (!doc.root) return [];
-  const out: GameInfo[] = [];
-  for (const g of elements(doc.root).filter((e) => e.name === 'game')) {
+  // A later entry for the same file is read into the same game, as in RetroBat's loadFromXML:
+  // the tags it has replace the earlier ones, and the ones it lacks keep the earlier values.
+  const entries = new Map<string, Entry>();
+  for (const g of doc.root ? elements(doc.root).filter((e) => e.name === 'game') : []) {
     const fields: Record<string, string> = {};
     const media: Record<string, string> = {};
     let path = '';
@@ -47,27 +113,30 @@ export function parseGamelist(text: string, systemDir: string): GameInfo[] {
       if (TEXT_TAGS.includes(c.name)) fields[c.name] = v;
       else if (c.name !== 'path' && /^(\.\.?[\\/]|~[\\/]|[A-Za-z]:[\\/]|\\\\)/.test(v) && /\.(png|jpe?g|gif|webp|svg|mp4|mkv|webm|avi)$/i.test(v)) media[c.name] = mediaPath(systemDir, v);
     }
-    // RetroBat doesn't show hidden games, so neither does the preview.
-    if (!fields.name || fields.hidden === 'true') continue;
-    out.push({
-      path,
-      name: fields.name,
-      description: fields.desc ?? '',
-      rating: Number(fields.rating ?? 0) || 0,
-      releasedate: fields.releasedate ?? '',
-      developer: fields.developer ?? '',
-      publisher: fields.publisher ?? '',
-      genre: fields.genre ?? '',
-      players: fields.players ?? '',
-      playcount: fields.playcount ?? '',
-      lastplayed: fields.lastplayed ?? '',
-      gametime: fields.gametime ?? '',
-      favorite: fields.favorite === 'true',
-      media,
-    });
+    if (!path) continue;
+    const k = romKey(path, systemDir);
+    const old = entries.get(k);
+    entries.set(k, old ? { path: old.path, fields: { ...old.fields, ...fields }, media: { ...old.media, ...media } } : { path, fields, media });
   }
-  // Games with artwork first: they make the best preview.
-  return out.sort((a, b) => Object.keys(b.media).length - Object.keys(a.media).length);
+  const list: Entry[] = romFiles
+    ? romFiles
+        .filter((rel) => !onlyListed || entries.has(romKey(rel, systemDir)))
+        .map((rel) => {
+          const k = romKey(rel, systemDir);
+          const e = entries.get(k);
+          const path = e?.path ?? './' + k;
+          // No name in the gamelist: RetroBat shows the file name without its extension.
+          const name = e?.fields.name || romFileName(k).replace(/\.[^.]*$/, '');
+          return { path, fields: { ...e?.fields, name }, media: e?.media ?? {} };
+        })
+    : [...entries.values()].filter((e) => e.fields.name);
+  // RetroBat doesn't show hidden games, so neither does the preview.
+  return list.filter((e) => e.fields.hidden !== 'true').map(toGame).sort(byName);
+}
+
+/** The first game with artwork, which makes the best preview to open on (0 if none has any). */
+export function firstWithArt(games: GameInfo[]): number {
+  return Math.max(0, games.findIndex((g) => Object.keys(g.media).length));
 }
 
 /** Value of `{game:xxx}` for a real game (media keys give absolute paths). */

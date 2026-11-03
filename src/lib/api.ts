@@ -165,6 +165,8 @@ export const api = {
   /** Systems with a gamelist.xml in their ROM folder (from es_systems paths when given). */
   listGamelists: (systems?: { name: string; path?: string }[]) => invoke<string[]>('list_gamelists', { systems }),
   readGamelist: (system: string, path?: string) => invoke<TextFile | null>('read_gamelist', { system, path }),
+  /** A system's game files (`./sub/Game.nsp`), found the way RetroBat finds them. */
+  listRomFiles: (system: string, path: string | undefined, extensions: string[]) => invoke<string[]>('list_rom_files', { system, path, extensions }),
   listFonts: () => invoke<{ name: string; path: string; source: string }[]>('list_fonts'),
   addFontToTheme: (themeDir: string, src: string) => invoke<string>('add_font_to_theme', { themeDir, src }),
   downloadFont: (themeDir: string, url: string, fileName: string) => invoke<string>('download_font', { themeDir, url, fileName }),

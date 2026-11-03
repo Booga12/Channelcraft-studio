@@ -124,6 +124,7 @@ pub fn run() {
             commands::clear_recovery,
             commands::list_gamelists,
             commands::read_gamelist,
+            commands::list_rom_files,
             commands::list_fonts,
             commands::add_font_to_theme,
             commands::download_font,

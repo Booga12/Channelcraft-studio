@@ -2,6 +2,7 @@
   // Six systems at once, to spot logos or colours that look wrong on some of them.
   import { ed } from '$lib/editor.svelte';
   import { bindingValue, screenSize, type Environment } from '$lib/theme/context';
+  import { firstWithArt } from '$lib/theme/games';
   import type { ExprEnv } from '$lib/theme/expr';
   import { assetExists, resolveAsset, resolveTheme } from '$lib/theme/resolver';
   import type { SystemInfo } from '$lib/theme/systems';
@@ -36,7 +37,7 @@
     if (!p) return [];
     return systems.map((sys) => {
       const games = ed.games[sys.name] ?? [];
-      const env: Environment = { ...ed.env, settings: { ...$state.snapshot(ed.settings), system: sys }, game: games[0], games: games.length ? games : undefined, gameNames: games.length ? games.map((g) => g.name) : undefined };
+      const env: Environment = { ...ed.env, settings: { ...$state.snapshot(ed.settings), system: sys }, game: games[firstWithArt(games)], games: games.length ? games : undefined, gameNames: games.length ? games.map((g) => g.name) : undefined };
       const res = resolveTheme(p, env);
       const view = res.views.get(ed.view);
       const sysView = res.views.get('system');

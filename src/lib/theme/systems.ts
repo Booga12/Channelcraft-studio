@@ -9,6 +9,22 @@ export interface SystemInfo {
   hardwareType: string;
   /** The ROM folder as es_systems.cfg writes it (e.g. `~\..\roms\snes`), if known. */
   path?: string;
+  /** Game file extensions from es_systems.cfg, lowercase with the dot (`.sfc`). */
+  extensions?: string[];
+  /** Platform ids from es_systems.cfg's <platform>, lowercase (`arcade`, `neogeo`). */
+  platforms?: string[];
+}
+
+/** Arcade systems, for es_systems.cfg entries without a <platform>. */
+const ARCADE_SYSTEMS = ['arcade', 'mame', 'fbneo', 'neogeo', 'naomi', 'naomi2', 'atomiswave', 'cps1', 'cps2', 'cps3', 'hikaru', 'model2', 'model3', 'namco22', 'namco2x6', 'namco3xx', 'zinc', 'triforce', 'chihiro', 'gaelco', 'cave3rd', 'daphne', 'lindbergh', 'teknoparrot'];
+
+/**
+ * Systems RetroBat treats as arcade or Neo Geo (platform `arcade` or `neogeo`), whose BIOS and
+ * device files it hides using MAME's lists (FileData::isArcadeAsset).
+ */
+export function isArcadeSystem(s: Pick<SystemInfo, 'name' | 'platforms'>): boolean {
+  if (s.platforms?.length) return s.platforms.includes('arcade') || s.platforms.includes('neogeo');
+  return ARCADE_SYSTEMS.includes(s.name.toLowerCase());
 }
 
 /** Used when es_systems.cfg can't be read. */
@@ -54,6 +70,8 @@ export function parseEsSystems(text: string): SystemInfo[] {
       releaseYear: get('release').slice(0, 4),
       hardwareType: get('hardware') || 'console',
       path: get('path') || undefined,
+      extensions: get('extension').split(/[\s,]+/).filter(Boolean).map((e) => e.toLowerCase()),
+      platforms: get('platform').split(/[\s,]+/).filter(Boolean).map((e) => e.toLowerCase()),
     });
   }
   return out;
