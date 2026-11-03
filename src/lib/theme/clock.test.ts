@@ -34,6 +34,24 @@ describe("RetroBat's own clock in the preview (#58)", () => {
     expect(val(c, 'color')).toBe('AABBCCFF');
   });
 
+  it("keeps RetroBat's defaults for what a text clock leaves out, without the button hints' font", async () => {
+    const help = '<helpsystem name="help"><textColor>112233FF</textColor><fontPath>./a.ttf</fontPath></helpsystem>';
+    const colored = retrobatClock(await resolve(theme('<text name="clock"><color>FF0000FF</color></text>', help)));
+    expect(colored?.themed).toBe(true);
+    expect(val(colored, 'color')).toBe('FF0000FF');
+    expect(val(colored, 'pos')).toBe('0.94 0.944');
+    expect(val(colored, 'size')).toBe('0.05 0');
+    expect(val(colored, 'alignment')).toBe('right');
+    expect(val(colored, 'fontSize')).toBe('0.035');
+    expect(colored?.el.props.has('fontPath')).toBe(false);
+    const font = retrobatClock(await resolve(theme('<text name="clock"><fontPath>./x.ttf</fontPath></text>', help)));
+    expect(val(font, 'fontPath')).toBe('./x.ttf');
+    expect(val(font, 'color')).toBe('777777FF');
+    expect(val(font, 'pos')).toBe('0.94 0.944');
+    expect(val(font, 'fontSize')).toBe('0.035');
+    expect(font?.el.history.get('color')?.[0].value).toBe('777777FF');
+  });
+
   it('is hidden by a hidden text clock', async () => {
     expect(retrobatClock(await resolve(theme('<text name="clock"><visible>false</visible></text>')))).toBeNull();
   });
@@ -49,7 +67,7 @@ describe("RetroBat's own clock in the preview (#58)", () => {
     expect(c?.el.props.has('fontPath')).toBe(false);
   });
 
-  it("takes the console screen's button hints' colour and font, at RetroBat's medium size", async () => {
+  it("takes the console screen's button hints' color and font, at RetroBat's medium size", async () => {
     const c = retrobatClock(await resolve(theme('', '<helpsystem name="help"><textColor>112233FF</textColor><fontPath>./a.ttf</fontPath></helpsystem>')));
     expect(c?.themed).toBe(false);
     expect(val(c, 'color')).toBe('112233FF');
