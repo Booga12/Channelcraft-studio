@@ -309,6 +309,74 @@ describe('Export for ES-DE', () => {
     }
   });
 
+  // Found by running the export in ES-DE 3.5 (2026-11-02).
+  it('matches what RetroBat shows, as checked in ES-DE', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ccs-esde-run-'));
+    const dir = join(root, 'themes', 'Run');
+    mkdirSync(join(dir, 'logos', 'us'), { recursive: true });
+    for (const f of ['logos/snes-w.svg', 'logos/nds-w.svg', 'logos/us/snes.svg', 'click.wav']) writeFileSync(join(dir, f), 'x');
+    writeFileSync(
+      join(dir, 'theme.xml'),
+      `<theme><formatVersion>7</formatVersion>
+      <view name="screen"><clock name="clock"><pos>0.97 0.035</pos><origin>1 0</origin><size>0.3 0.05</size><alignment>right</alignment></clock></view>
+      <view name="system">
+        <carousel name="systemcarousel"><type>horizontal</type><scrollSound>./click.wav</scrollSound></carousel>
+        <image name="logo"><path>./logos/\${system.theme}-w.svg</path></image>
+        <image name="logo" region="us"><path>./logos/us/\${system.theme}.svg</path></image>
+        <text name="year" extra="true"><text>{system:releaseYear}</text><pos>0 0</pos></text>
+      </view>
+      <view name="basic, detailed">
+        <textlist name="gamelist"><pos>0.6 0.1</pos><size>0.3 0.8</size></textlist>
+        <helpsystem name="help"><pos>0.02 0.955</pos></helpsystem>
+        <text name="md_description"><pos>0.05 0.5</pos><size>0.4 0.2</size><opacity>0.5</opacity></text>
+        <text name="fav" extra="true"><text>★ Favorite</text><visible>{game:favorite}</visible><pos>0.27 0.45</pos><size>0.18 0.03</size><alignment>right</alignment></text>
+        <text name="kid" extra="true"><text>Kid game</text><visible>{game:kidgame}</visible><pos>0 0</pos></text>
+        <image name="box" extra="true"><path>firstfile({game:boxart}, {game:thumbnail}, {game:image})</path><pos>0.3 0.7</pos><maxSize>0.1 0.2</maxSize></image>
+        <image name="deco" extra="true"><path>./click.wav</path><pos>0 0</pos><size>1 1</size></image>
+      </view>
+      <view name="detailed">
+        <control name="md_image"><pos>0.74 0.39</pos><maxSize>0.39 0.4</maxSize></control>
+        <video name="md_video"><pos>0.74 0.39</pos><maxSize>0.39 0.4</maxSize><origin>0.5 0.5</origin></video>
+      </view>
+      </theme>`,
+    );
+    try {
+      const systems = [{ name: 'arcade', theme: 'arcade', fullName: 'Arcade', manufacturer: 'Arcade', releaseYear: '', hardwareType: 'arcade' }];
+      const out = await toEsde(await ThemeProject.load(dir, nodeFs), envFor(root), listDir, 'Run', { systems });
+      const theme = out.files.find((f) => f.dest.endsWith('/theme.xml'))!.text!;
+      const variant = (v: string) => theme.match(new RegExp(`<variant name="${v}">([\\s\\S]*?)</variant>`))![1];
+      expect(checkEsde(theme)).toEqual([]);
+      // Logos: the region's file where it has one, the normal one for the rest.
+      expect(dests(out)).toEqual(expect.arrayContaining(['logos/snes-w.svg', 'logos/nds-w.svg']));
+      expect(out.files.find((f) => f.dest.endsWith('logos/snes-w.svg'))!.src).toMatch(/us[\\/]snes\.svg$/);
+      // The clock from the every-screen view, with its alignment, on the console list and game lists.
+      expect(theme.match(/<clock name="clock">/g)!.length).toBe(3);
+      expect(theme).toContain('<horizontalAlignment>right</horizontalAlignment>');
+      // Draw order: RetroBat's defaults, written out (ES-DE's differ).
+      expect(variant('detailed')).toMatch(/<textlist name="gamelist">[\s\S]*?<zIndex>20<\/zIndex>/);
+      // Details never empty: defaults first, the console's own file after.
+      expect(theme.indexOf('<variables>')).toBeLessThan(theme.indexOf('<include>'));
+      expect(out.files.find((f) => f.dest.endsWith('_esde/systems/arcade.xml'))!.text).toContain('<ccsSystemYear> </ccsSystemYear>');
+      // Shown for favorites only: ES-DE's favorite badge in the same box; other per-game parts left out.
+      expect(variant('detailed')).toMatch(/<badges name="fav">[\s\S]*?<size>0.18 0.03<\/size>[\s\S]*?<horizontalAlignment>right<\/horizontalAlignment>[\s\S]*?<slots>favorite<\/slots>/);
+      expect(theme).not.toContain('name="kid"');
+      // firstfile(): ES-DE's picture types in the same order.
+      expect(variant('detailed')).toContain('<imageType>cover, miximage, screenshot</imageType>');
+      // The simple list shows no game details; text keeps its see-through.
+      expect(variant('simple')).not.toContain('md_description');
+      expect(variant('detailed')).toMatch(/<text name="md_description">[\s\S]*?<opacity>0.5<\/opacity>/);
+      // One screenshot: the video's still picture; no black bars beside videos.
+      expect(variant('detailed')).not.toContain('name="md_image"');
+      expect(variant('detailed')).toContain('<pillarboxes>false</pillarboxes>');
+      // Game lists: the help bar keeps its main buttons so it fits.
+      expect(variant('detailed')).toContain('<entries>start a b x y</entries>');
+      // The console list's scroll sound.
+      expect(theme).toMatch(/<sound name="systembrowse">\s*<path>\.\/click\.wav<\/path>/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   const DEMO = 'G:/projects/channelcraft/guides-demo/RetroBat/emulationstation/.emulationstation';
   it.skipIf(!existsSync(`${DEMO}/themes/es-theme-carbon`))('converts a full RetroBat theme into valid ES-DE', async () => {
     const p = await ThemeProject.load(`${DEMO}/themes/es-theme-carbon`, nodeFs);
