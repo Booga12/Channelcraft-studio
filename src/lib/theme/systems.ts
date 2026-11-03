@@ -9,6 +9,8 @@ export interface SystemInfo {
   hardwareType: string;
   /** The ROM folder as es_systems.cfg writes it (e.g. `~\..\roms\snes`), if known. */
   path?: string;
+  /** Game file extensions from es_systems.cfg, lowercase with the dot (`.sfc`). */
+  extensions?: string[];
 }
 
 /** Used when es_systems.cfg can't be read. */
@@ -54,6 +56,7 @@ export function parseEsSystems(text: string): SystemInfo[] {
       releaseYear: get('release').slice(0, 4),
       hardwareType: get('hardware') || 'console',
       path: get('path') || undefined,
+      extensions: get('extension').split(/[\s,]+/).filter(Boolean).map((e) => e.toLowerCase()),
     });
   }
   return out;
