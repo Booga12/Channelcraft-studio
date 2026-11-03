@@ -2,7 +2,7 @@
 // the screen), each with a one-click fix where one is safe. Read only; fixes are Changes the
 // editor commits as one undo step.
 import { basename, dirname, join, relative } from '../path';
-import { patchRemoveNode } from '../xml/cst';
+import { attr, patchRemoveAttr, patchRemoveNode, type Patch } from '../xml/cst';
 import { setTextChange, type Change } from './edits';
 import type { Environment } from './context';
 import type { ThemeProject } from './project';
@@ -13,7 +13,7 @@ import { contrast, over } from './presets';
 import { fontName } from './fonts';
 import { RETROBAT_FALLBACK_FONTS, type HasChar } from './fontChars';
 
-export type HealthKind = 'missing-file' | 'missing-font' | 'off-screen' | 'cut-off' | 'hard-to-read' | 'missing-character' | 'covered';
+export type HealthKind = 'missing-file' | 'missing-font' | 'off-screen' | 'cut-off' | 'hard-to-read' | 'missing-character' | 'covered' | 'second-clock';
 
 export interface HealthIssue {
   kind: HealthKind;
@@ -37,6 +37,7 @@ export const HEALTH_LABEL: Record<HealthKind, string> = {
   'hard-to-read': 'Hard to read',
   'missing-character': 'Letter the font lacks',
   covered: 'Covered by game art',
+  'second-clock': 'Second clock',
 };
 
 /** Properties that name a picture, video or sound file. */
@@ -92,6 +93,7 @@ export function checkTheme(project: ThemeProject, res: Resolution, env: Environm
     return !!resolveAsset(d, res, project, env);
   };
 
+  clockCheck(res, add);
   for (const [view, v] of res.views) {
     for (const el of v.elements.values()) {
       // Parts of a grid tile or carousel item (gridtile.favorite) fall back to RetroBat's own.
@@ -162,6 +164,36 @@ export function checkTheme(project: ThemeProject, res: Resolution, env: Environm
 
 type CharsOf = (abs: string) => HasChar | null | undefined;
 type Add = (key: unknown, view: string, make: () => HealthIssue) => void;
+
+/**
+ * A <clock name="clock"> on the Screen overlay is a second clock: RetroBat styles its own clock
+ * only from a <text name="clock"> there, so its own still shows at the bottom right, cut off in
+ * the button hints' font (#58). The fix turns it into that text.
+ */
+function clockCheck(res: Resolution, add: Add) {
+  const el = res.views.get('screen')?.elements.get('clock');
+  if (el?.type !== 'clock' || !shown(el)) return;
+  const defs = el.defs.filter((d) => d.node.name === 'clock');
+  // Only definitions of this clock alone: a shared one (name="clock, other") stays as it is.
+  const own = defs.length > 0 && defs.every((d) => attr(d.node, 'name')?.trim() === 'clock');
+  const changes: Change[] = [];
+  if (own) {
+    for (const d of defs) {
+      const n = d.node;
+      const patches: (Patch | null)[] = [{ start: n.start + 1, end: n.start + 1 + n.name.length, text: 'text' }, patchRemoveAttr(d.file.doc, n, 'extra')];
+      if (!n.selfClosing && d.file.doc.src.startsWith(`</${n.name}`, n.closeStart)) patches.push({ start: n.closeStart + 2, end: n.closeStart + 2 + n.name.length, text: 'text' });
+      for (const p of patches) if (p) changes.push({ file: d.file, patch: p });
+    }
+  }
+  add(el, 'screen', () => ({
+    kind: 'second-clock',
+    key: 'second-clock|screen',
+    text: 'The Screen overlay adds a second clock, so RetroBat still shows its own clock at the bottom right, cut off. RetroBat only lets a theme place and style its own clock as a text named “clock”.',
+    views: ['screen'],
+    element: 'clock',
+    fix: own ? { label: 'Use RetroBat’s own clock', changes } : undefined,
+  }));
+}
 
 interface Rect {
   x0: number;
@@ -252,6 +284,8 @@ function colourBehind(top: ResolvedElement, x: number, y: number, els: ResolvedE
 function textChecks(project: ThemeProject, res: Resolution, env: Environment, view: string, els: ResolvedElement[], add: Add, charsOf?: CharsOf) {
   for (const el of els) {
     if ((el.type !== 'text' && el.type !== 'datetime') || !shown(el) || el.name.includes('.')) continue;
+    // RetroBat's own clock: drawn over every screen, not this empty one, and RetroBat writes its text.
+    if (view === 'screen' && el.name === 'clock') continue;
 
     // Letters the theme's own font doesn't have.
     const textDef = el.props.get('text');

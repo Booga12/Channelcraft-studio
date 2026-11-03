@@ -389,8 +389,16 @@ export function itemsFor(view: string): LibraryItem[] {
     return i.screens === (game ? 'game' : 'system') && view !== 'menu' && view !== 'splash';
   });
   // In the video view the native md_video replaces the generic video element.
-  return view === 'video' ? items.filter((i) => i.id !== 'gamevideo') : items;
+  return (view === 'video' ? items.filter((i) => i.id !== 'gamevideo') : items).map((i) => (i.id === 'clock' && view === 'screen' ? SCREEN_CLOCK : i));
 }
+
+/**
+ * The clock on the Screen overlay: RetroBat's own clock, which it only styles from a
+ * <text name="clock"> there (no extra, no text: RetroBat writes the time). A <clock> there would
+ * be a second clock, with RetroBat's own still at the bottom right (#58). It needs a size: without
+ * one RetroBat keeps its own narrow box, and the time wraps.
+ */
+const SCREEN_CLOCK: LibraryItem = { ...LIBRARY.find((i) => i.id === 'clock')!, type: 'text', native: true, body: '<pos>0.96 0.04</pos>\n<origin>1 0</origin>\n<size>0.3 0.05</size>\n<alignment>right</alignment>\n<fontSize>0.035</fontSize>\n<color>FFFFFFFF</color>' };
 
 /** True when a value reads RetroBat data (shown as a labelled placeholder in the preview). */
 /** Uses the current game's data, which RetroBat doesn't have on the console screen. */

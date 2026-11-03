@@ -130,3 +130,44 @@ describe('checks on what texts show (#26)', () => {
     expect(checkTheme(p, resolveTheme(p, e), e, chars).some((i) => i.element === 'pink')).toBe(false);
   });
 });
+
+describe('a second clock on the Screen overlay (#58)', () => {
+  const OLD = `<theme>
+  <formatVersion>7</formatVersion>
+  <view name="screen">
+    <clock name="clock" extra="true">
+      <pos>0.97 0.035</pos>
+      <origin>1 0</origin>
+      <size>0.3 0.05</size>
+    </clock>
+  </view>
+</theme>`;
+
+  it('turns a <clock name="clock"> into the text RetroBat styles its own clock from', async () => {
+    const { p, e } = await load(OLD);
+    const issue = checkTheme(p, resolveTheme(p, e), e).find((i) => i.kind === 'second-clock')!;
+    expect(issue.element).toBe('clock');
+    expect(issue.views).toEqual(['screen']);
+    expect(issue.fix?.label).toBe('Use RetroBat’s own clock');
+    applyChanges(p, issue.fix!.changes);
+    expect(p.entry!.src).toContain('<text name="clock">\n      <pos>0.97 0.035</pos>');
+    expect(p.entry!.src).toContain('</text>\n  </view>');
+    expect(p.entry!.src).not.toContain('<clock');
+    const clock = resolveTheme(p, e).views.get('screen')!.elements.get('clock')!;
+    expect(clock.type).toBe('text');
+    expect(clock.extra).toBeFalsy();
+    expect(checkTheme(p, resolveTheme(p, e), e)).toEqual([]);
+  });
+
+  it('leaves a text clock, a hidden clock and a shared definition alone', async () => {
+    const found = async (xml: string) => {
+      const { p, e } = await load(xml);
+      return checkTheme(p, resolveTheme(p, e), e).filter((i) => i.kind === 'second-clock');
+    };
+    expect(await found(OLD.replace('<clock name="clock" extra="true">', '<text name="clock">').replace('</clock>', '</text>'))).toEqual([]);
+    expect(await found(OLD.replace('<size>0.3 0.05</size>', '<visible>false</visible>'))).toEqual([]);
+    const shared = await found(OLD.replace('name="clock" extra="true"', 'name="clock, ccs_clock2"'));
+    expect(shared).toHaveLength(1);
+    expect(shared[0].fix).toBeUndefined();
+  });
+});

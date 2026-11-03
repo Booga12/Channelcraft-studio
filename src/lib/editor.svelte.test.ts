@@ -424,13 +424,39 @@ describe('sound and music (starter theme, in memory)', () => {
     await ed.applyDesign(DESIGNS[0]);
     const res = (ed.themeRes ?? ed.res)!;
     const clock = res.views.get('screen')?.elements.get('clock');
-    expect(clock?.type).toBe('clock');
+    // RetroBat styles its own clock only from a text named "clock" (#58).
+    expect(clock?.type).toBe('text');
+    expect(clock?.props.has('text')).toBe(false);
     expect(clock?.extra).toBeFalsy();
     expect(clock?.props.get('pos')?.value).toBe('0.97 0.035');
     for (const view of ['system', 'detailed']) expect(res.views.get(view)?.elements.has('ccs_clock'), view).toBe(false);
     // Applying another design moves the same clock, it doesn't add one.
     await ed.applyDesign(DESIGNS[3]);
-    expect(ed.project!.entry!.src.match(/<clock name="clock">/g)).toHaveLength(1);
+    expect(ed.project!.entry!.src.match(/<text name="clock">/g)).toHaveLength(1);
+    expect(ed.project!.entry!.src).not.toContain('<clock');
+  });
+
+  it('turns an older design’s second clock into RetroBat’s own when the design is applied again (#58)', async () => {
+    const { DESIGNS } = await import('./theme/designs');
+    await ed.applyDesign(DESIGNS[0]);
+    const entry = ed.project!.entry!;
+    ed.project!.setSource(entry, entry.src.replace(/<text name="clock">([\s\S]*?)<\/text>/, '<clock name="clock">$1</clock>'));
+    ed.rev++;
+    expect(entry.src).toContain('<clock name="clock">');
+    await ed.applyDesign(DESIGNS[0]);
+    expect(entry.src).not.toContain('<clock');
+    expect(entry.src.match(/<text name="clock">/g)).toHaveLength(1);
+  });
+
+  it('adds RetroBat’s own clock on the Screen overlay, as a text named clock (#58)', () => {
+    ed.view = 'screen';
+    ed.addElement('clock');
+    const clock = ed.currentView?.elements.get('clock');
+    expect(ed.selected).toBe('clock');
+    expect(clock?.type).toBe('text');
+    expect(clock?.extra).toBeFalsy();
+    expect(clock?.props.get('size')?.value).toBe('0.3 0.05');
+    expect(ed.project!.entry!.src).not.toContain('<clock');
   });
 
   it('finds your own full-screen pictures covering the moving background, and hides them in one step', async () => {

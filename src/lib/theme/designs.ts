@@ -1003,10 +1003,11 @@ export function elementsMarkup(els: DesignEl[], extraNames: Set<string>, view: s
 /**
  * RetroBat's own clock, placed where the design wants it. It is one clock for every screen (the
  * "screen" view), and RetroBat's "Show clock" setting turns it on and off; its 12 or 24 hours come
- * from the ClockMode12 setting.
+ * from the ClockMode12 setting. RetroBat only styles its clock from a <text name="clock"> there:
+ * a <clock> would be a second clock, with RetroBat's own still at the bottom right (#58).
  */
 export function designClock(d: Design, c: DesignContext): DesignEl {
-  return { type: 'clock', name: 'clock', props: { pos: '0.97 0.035', origin: '1 0', size: '0.3 0.05', alignment: 'right', color: K(d, c, 'designDimText'), ...(c.font ? { fontPath: c.font } : {}), fontSize: '0.032' } };
+  return { type: 'text', name: 'clock', props: { pos: '0.97 0.035', origin: '1 0', size: '0.3 0.05', alignment: 'right', color: K(d, c, 'designDimText'), ...(c.font ? { fontPath: c.font } : {}), fontSize: '0.032' } };
 }
 
 export function isDesignExtra(name: string): boolean {
