@@ -13,7 +13,8 @@
   /** What a Screen overlay can draw over the other screens (see overlayParts). */
   /** Screen overlay parts (and RetroBat's clock) sit above every theme part, whatever its zIndex. */
   const OVERLAY_Z = 1_000_000;
-  const OVERLAY_TYPES = new Set(['image', 'video', 'text', 'ninepatch', 'datetime', 'screenshader']);
+  const OVERLAY_TYPES = new Set(['image', 'video', 'text', 'ninepatch', 'datetime', 'screenshader', 'clock']);
+  import { isThemedClock, retrobatClock } from '$lib/theme/clock';
   import { usesGameData } from '$lib/theme/library';
   import type { SystemInfo } from '$lib/theme/systems';
   import { elementLabel } from '$lib/friendly';
@@ -146,23 +147,24 @@
 
   /**
    * RetroBat's own clock, drawn over every screen when its "Show clock" setting is on: where the
-   * theme's Screen overlay puts it, or RetroBat's default spot at the bottom right.
+   * theme's Screen overlay puts it (a <text name="clock">), or RetroBat's default spot at the
+   * bottom right in the button hints' font (#58).
    */
   const esClock = $derived.by(() => {
     if (ed.root?.es?.drawClock === false || ed.view === 'screen' || ed.view === 'menu' || ed.screenFile !== 'theme.xml') return null;
-    const el = ed.res?.views.get('screen')?.elements.get('clock');
-    return el && isVisible(el) ? el : 'default';
+    return retrobatClock(ed.res);
   });
   /**
    * The Screen overlay's own pictures, text and effects, which RetroBat draws over every screen
-   * (#29). Its clock is esClock above.
+   * (#29). The text that styles RetroBat's clock is esClock above; a <clock> there is a second
+   * clock, shown like RetroBat's own only when "Show clock" is on.
    */
   const overlayParts = $derived.by(() => {
     if (ed.view === 'screen' || ed.view === 'menu' || ed.screenFile !== 'theme.xml') return [];
     const v = ed.res?.views.get('screen');
     if (!v) return [];
     return [...v.elements.values()]
-      .filter((e) => e.name !== 'clock' && OVERLAY_TYPES.has(e.type) && isVisible(e))
+      .filter((e) => !isThemedClock(e) && OVERLAY_TYPES.has(e.type) && (e.type !== 'clock' || ed.root?.es?.drawClock !== false) && isVisible(e))
       .sort((a, b) => zOf(a) - zOf(b) || a.order - b.order);
   });
   /**
@@ -774,11 +776,9 @@
                   <PreviewElement z={OVERLAY_Z + Math.round(zOf(el) * 10)} {el} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
                 </div>
               {/each}
-              {#if esClock === 'default'}
-                <span class="esclock" style:font-size="{dims.height * 0.03}px" title="RetroBat's own clock (its “Show clock” setting). This theme doesn't place it, so RetroBat puts it here.">{ed.root?.es?.clock12 ? '08:15 PM' : '20:15'}</span>
-              {:else if esClock}
-                <div class="esclock-el" title="RetroBat's own clock: move or restyle it on the Screen overlay screen.">
-                  <PreviewElement z={OVERLAY_Z + Math.round(zOf(esClock) * 10)} el={esClock} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
+              {#if esClock}
+                <div class="esclock-el" title={esClock.themed ? "RetroBat's own clock: move or restyle it on the Screen overlay screen." : "RetroBat's own clock (its “Show clock” setting). This theme doesn't place it, so RetroBat puts it here."}>
+                  <PreviewElement z={OVERLAY_Z + Math.round(zOf(esClock.el) * 10)} el={esClock.el} W={dims.width} H={dims.height} {exprEnv} selected={false} ghost={false} {carousel} res={ed.res} env={ed.env} view="screen" locked animate={ed.playAnimations} {play} {slide} />
                 </div>
               {/if}
               {#if menu}
@@ -891,14 +891,6 @@
 {/if}
 
 <style>
-  .esclock {
-    position: absolute;
-    right: 2%;
-    bottom: 2.5%;
-    z-index: 2000;
-    color: rgba(255, 255, 255, 0.7);
-    pointer-events: none;
-  }
   .esclock-el {
     display: contents;
     pointer-events: none;

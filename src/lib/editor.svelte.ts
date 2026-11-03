@@ -15,7 +15,7 @@ import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/syste
 import { attr, elements, patchInsertChild, patchRemoveNode } from './xml/cst';
 
 import { elementLabel, humanize, propLabel, typeLabel, viewLabel } from './friendly';
-import { type LibraryItem } from './theme/library';
+import { itemsFor, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
 import { tileStyleOfPath } from './theme/tiles';
 import { appliedDesign, appliedSystemLayout, readability, designChanges, designVarsChange, LAYOUTS } from './theme/presets';
@@ -933,6 +933,9 @@ export class Editor {
     const p = this.project;
     const res = this.res;
     if (!p || !res) return;
+    // On the Screen overlay a clock is RetroBat's own one, a <text name="clock"> (#58).
+    const screenClock = type === 'clock' && this.view === 'screen' && !this.gameEditing ? itemsFor('screen').find((i) => i.id === 'clock') : undefined;
+    if (screenClock) return this.addLibraryItem(screenClock);
     // Named in the words Simple mode uses (a ninepatch is a "Panel"), and never `label`: that's the
     // loading screens' text, and every added text used to be called "Loading text" (#21).
     const name = uniqueName(res, this.view, ({ ninepatch: 'panel', image: 'picture' } as Record<string, string>)[type] ?? type);

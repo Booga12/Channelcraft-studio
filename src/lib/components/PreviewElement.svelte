@@ -209,7 +209,8 @@
       return g.releasedate ? formatDate(g.releasedate, val('format')) : 'unknown';
     }
     // RetroBat ignores a theme's clock format: its ClockMode12 setting decides.
-    if (el.type === 'clock') return formatDate('20261019T201500', ed.root?.es?.clock12 ? '%I:%M %p' : '%H:%M');
+    // On the Screen overlay a <text name="clock"> is RetroBat's own clock: it writes the time there (#58).
+    if (el.type === 'clock' || (view === 'screen' && el.name === 'clock' && el.type === 'text')) return formatDate('20261019T201500', ed.root?.es?.clock12 ? '%I:%M %p' : '%H:%M');
     return el.name;
   }
 

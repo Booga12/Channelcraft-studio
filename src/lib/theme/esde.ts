@@ -5,6 +5,7 @@
 import type { Environment } from './context';
 import { evaluate, type ExprEnv } from './expr';
 import { zOf } from '../render';
+import { isThemedClock } from './clock';
 import type { SystemInfo } from './systems';
 import type { ThemeProject } from './project';
 import { resolveAssetWithFallbacks, resolvePath, resolveTheme, type PropDef, type Resolution, type ResolvedElement, type ResolvedView } from './resolver';
@@ -801,7 +802,10 @@ class Converter {
     const out: Out[] = [];
     const taken = new Set<string>();
     // RetroBat's "screen" view draws on every screen (the clock): ES-DE has it per view.
-    const screen = [...(this.res.views.get('screen')?.elements.values() ?? [])].filter((e) => e.type === 'clock' && !view.elements.has(e.name));
+    // RetroBat's own clock is styled by a <text name="clock"> there (#58): in ES-DE it is a clock.
+    const screen = [...(this.res.views.get('screen')?.elements.values() ?? [])]
+      .filter((e) => (e.type === 'clock' || isThemedClock(e)) && !view.elements.has(e.name))
+      .map((e) => (isThemedClock(e) ? { ...e, type: 'clock' } : e));
     for (const el of [...screen, ...[...view.elements.values()].sort((a, b) => a.order - b.order)]) {
       if (el.type === 'gridtile') continue; // part of the grid
       if (view.name === 'basic' && el.name.startsWith('md_')) continue; // RetroBat's simple list shows no game details
