@@ -3,11 +3,12 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ThemeProject } from './project';
-import { resolveTheme } from './resolver';
+import { hasActivateStoryboard, resolveTheme } from './resolver';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
 import { applyChanges } from './edits';
 import { checkTheme } from './health';
+import { onlyRefresh } from './animations';
 import type { Environment } from './context';
 
 const env = (home: string): Environment => ({
@@ -169,5 +170,123 @@ describe('a second clock on the Screen overlay (#58)', () => {
     const shared = await found(OLD.replace('name="clock" extra="true"', 'name="clock, ccs_clock2"'));
     expect(shared).toHaveLength(1);
     expect(shared[0].fix).toBeUndefined();
+  });
+});
+
+describe('video list game data (#59)', () => {
+  const VIDEO = `<theme>
+  <formatVersion>7</formatVersion>
+  <view name="detailed,video">
+    <image name="box" extra="true"><pos>0.5 0.5</pos><size>0.2 0.2</size><path>firstfile({game:boxart}, {game:thumbnail})</path></image>
+    <image name="hover" extra="true"><pos>0.2 0.5</pos><size>0.2 0.2</size><path>{game:image}</path><storyboard><animation property="scale" from="1" to="1.02" duration="3200" mode="easeInOut" autoReverse="true" repeat="forever" /></storyboard></image>
+    <image name="fades" extra="true"><pos>0.8 0.5</pos><size>0.2 0.2</size><path>{game:fanart}</path><storyboard event="activate"><animation property="opacity" from="0" to="1" duration="600" /></storyboard></image>
+    <image name="plain" extra="true"><pos>0.8 0.2</pos><size>0.2 0.2</size><path>./art/bg.png</path></image>
+  </view>
+  <customView name="myvideo" inherits="video">
+    <text name="fav" extra="true"><pos>0.1 0.1</pos><size>0.2 0.05</size><text>Favorite</text><visible>{game:favorite}</visible></text>
+  </customView>
+</theme>`;
+
+  it('flags extras in the video list that show game data without an activate storyboard', async () => {
+    const { p, e } = await load(VIDEO);
+    const issues = checkTheme(p, resolveTheme(p, e), e).filter((i) => i.kind === 'not-updated');
+    expect(issues.map((i) => `${i.element}:${i.views.join(',')}`).sort()).toEqual(['box:video,myvideo', 'fav:myvideo', 'hover:video,myvideo']);
+  });
+
+  it('fixes them so they update for each game, keeping a loop looping', async () => {
+    const { p, e } = await load(VIDEO);
+    applyChanges(p, checkTheme(p, resolveTheme(p, e), e).filter((i) => i.kind === 'not-updated').flatMap((i) => i.fix!.changes));
+    const r = resolveTheme(p, e);
+    expect(checkTheme(p, r, e).filter((i) => i.kind === 'not-updated')).toEqual([]);
+    expect(p.entry!.src).toContain('<storyboard event="activate"><animation property="scale"');
+    expect(p.entry!.src).toContain('<animation property="opacity" from="1" to="1" duration="1" />');
+    for (const n of ['box', 'hover']) expect(hasActivateStoryboard(r.views.get('video')!.elements.get(n)!)).toBe(true);
+  });
+
+  // Theme options made before #59: Motion off emptied the activate storyboards of game-list extras.
+  const MOTION = `<theme>
+  <formatVersion>7</formatVersion>
+  <view name="detailed,video">
+    <image name="ccs_boxart" extra="true"><pos>0.5 0.5</pos><size>0.2 0.2</size><path>{game:boxart}</path><storyboard event="activate"><animation property="scale" from="0.9" to="1" duration="400" /></storyboard></image>
+    <image name="ccs_fanart" extra="true"><pos>0 0</pos><size>1 1</size><path>{game:fanart}</path><storyboard><animation property="scale" from="1" to="1.02" duration="3200" autoReverse="true" repeat="forever" /></storyboard></image>
+    <image name="ccs_glow" extra="true"><pos>0.1 0.1</pos><size>0.1 0.1</size><path>./art/bg.png</path><storyboard event="activate"><animation property="opacity" from="0" to="1" duration="400" /></storyboard></image>
+  </view>
+  <subset name="motion" displayName="Motion">
+    <include name="on" displayName="On">./motion-on.xml</include>
+    <include name="off" displayName="Off">./motion-off.xml</include>
+  </subset>
+</theme>`;
+  const OLD_OFF = `<theme>
+<view name="detailed">
+  <image name="ccs_boxart">
+    <storyboard event="activate" />
+  </image>
+  <image name="ccs_fanart">
+    <storyboard />
+  </image>
+  <image name="ccs_glow">
+    <storyboard event="activate" />
+  </image>
+</view>
+<view name="video">
+  <image name="ccs_boxart">
+    <storyboard event="activate" />
+  </image>
+  <image name="ccs_fanart">
+    <storyboard />
+  </image>
+  <image name="ccs_glow">
+    <storyboard event="activate" />
+  </image>
+</view>
+</theme>`;
+
+  async function loadMotion() {
+    const home = mkdtempSync(join(tmpdir(), 'ccs-health-'));
+    const dir = join(home, 'themes', 'test');
+    mkdirSync(join(dir, 'art'), { recursive: true });
+    writeFileSync(join(dir, 'theme.xml'), MOTION);
+    writeFileSync(join(dir, 'motion-on.xml'), '<theme></theme>');
+    writeFileSync(join(dir, 'motion-off.xml'), OLD_OFF);
+    writeFileSync(join(dir, 'art', 'bg.png'), 'x');
+    const p = await ThemeProject.load(dir, nodeFs);
+    return { p, e: env(home) };
+  }
+  const withMotion = (e: Environment, motion: string): Environment => ({ ...e, settings: { ...e.settings, subsets: { motion } } });
+
+  it('flags game data an older Motion off file stops updating, with Motion on now', async () => {
+    const { p, e } = await loadMotion();
+    const issues = checkTheme(p, resolveTheme(p, e), e).filter((i) => i.kind === 'not-updated');
+    expect(issues.map((i) => i.element).sort()).toEqual(['ccs_boxart', 'ccs_fanart']);
+    const box = issues.find((i) => i.element === 'ccs_boxart')!;
+    expect(box.text).toMatch(/^With Motion set to Off/);
+    expect(box.fix!.changes.map((c) => c.file.rel)).toEqual(['motion-off.xml']);
+    // The loop becomes activate, and Motion off empties that one instead of the event-less one, on both screens.
+    expect(issues.find((i) => i.element === 'ccs_fanart')!.fix!.changes.map((c) => c.file.rel).sort()).toEqual(['motion-off.xml', 'motion-off.xml', 'theme.xml']);
+  });
+
+  it('flags it with Motion off chosen too', async () => {
+    const { p, e } = await loadMotion();
+    const off = withMotion(e, 'off');
+    const issues = checkTheme(p, resolveTheme(p, off), off).filter((i) => i.kind === 'not-updated');
+    expect(issues.map((i) => i.element).sort()).toEqual(['ccs_boxart', 'ccs_fanart']);
+  });
+
+  it('fixes the Motion off file so game data updates and animations still stop', async () => {
+    const { p, e } = await loadMotion();
+    applyChanges(p, checkTheme(p, resolveTheme(p, e), e).filter((i) => i.kind === 'not-updated').flatMap((i) => i.fix!.changes));
+    for (const motion of ['on', 'off']) {
+      const env2 = withMotion(e, motion);
+      const r = resolveTheme(p, env2);
+      expect(checkTheme(p, r, env2).filter((i) => i.kind === 'not-updated'), motion).toEqual([]);
+      for (const n of ['ccs_boxart', 'ccs_fanart']) expect(hasActivateStoryboard(r.views.get('video')!.elements.get(n)!), `${motion} ${n}`).toBe(true);
+    }
+    const off = resolveTheme(p, withMotion(e, 'off'));
+    for (const n of ['ccs_boxart', 'ccs_fanart']) expect(onlyRefresh(off.views.get('video')!.elements.get(n)!), n).toBe(true);
+    // The loop, now an activate storyboard, still stops with Motion off on the other screen too.
+    expect(off.views.get('detailed')!.elements.get('ccs_fanart')!.complex.filter((c) => c.name === 'storyboard').every((c) => /from="1" to="1" duration="1"/.test(p.fileAt(c.file.rel)!.src.slice(c.node.start, c.node.end)))).toBe(true);
+    expect(onlyRefresh(off.views.get('detailed')!.elements.get('ccs_fanart')!)).toBe(true);
+    // Parts without game data are left as they were.
+    expect(p.fileAt('motion-off.xml')!.src).toContain('<image name="ccs_glow">\n    <storyboard event="activate" />');
   });
 });

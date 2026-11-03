@@ -5,7 +5,8 @@
 // system name, maker, year and game count.
 
 import type { AnimPreset } from './animations';
-import { ANIMATIONS, screenOf, storyboardXml } from './animations';
+import { ANIMATIONS, refreshXml, screenOf, storyboardXml } from './animations';
+import { usesGameData } from './library';
 import { systemLayout, type SystemLayout } from './systemLayouts';
 import { frameXml, type Frame } from './frame';
 import { shadowXml } from './shadow';
@@ -993,6 +994,9 @@ export function elementsMarkup(els: DesignEl[], extraNames: Set<string>, view: s
     if (preset) {
       const pos = String(e.props.pos ?? '0 0').split(' ').map(Number) as [number, number];
       for (const l of storyboardXml(preset, pos, e.animAmount ?? 1, e.animSpeed ?? 1, screenOf(view)).split('\n')) lines.push(`    ${l}`);
+    } else if (extra && screenOf(view) === 'list' && Object.values(e.props).some((v) => (Array.isArray(v) ? v : [v]).some(usesGameData))) {
+      // RetroBat's video list only updates game data on extras with an activate storyboard.
+      for (const l of refreshXml().split('\n')) lines.push(`    ${l}`);
     }
     lines.push(`  </${e.type}>`);
   }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { ThemeProject } from './project';
-import { resolveTheme } from './resolver';
+import { hasActivateStoryboard, resolveTheme } from './resolver';
+import { usesGameData } from './library';
 import { nodeFs } from './nodefs';
 import { FALLBACK_SYSTEMS } from './systems';
 import { applyChanges } from './edits';
@@ -48,6 +49,8 @@ describe('designs on the starter theme (in memory)', () => {
         expect(els.get('background')!.props.get('visible')!.value).toBe('false');
         // RetroBat shows md_image on the video screen too when the theme has one: the starter's is hidden there.
         if (v === 'video') expect(els.get('md_image')?.props.get('visible')?.value ?? 'false').toBe('false');
+        // RetroBat's video list only updates game data on extras with an activate storyboard (#59).
+        for (const e of els.values()) if (e.extra && e.extra !== 'false' && [...e.props.values()].some((pd) => usesGameData(pd.value))) expect(hasActivateStoryboard(e), `${v}/${e.name} updates per game`).toBe(true);
         // Everything sits on the screen.
         for (const e of els.values()) {
           const pos = e.props.get('pos')?.value.split(' ').map(Number);

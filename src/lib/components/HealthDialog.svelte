@@ -10,6 +10,7 @@
   import CaseSensitiveIcon from '@lucide/svelte/icons/case-sensitive';
   import LayersIcon from '@lucide/svelte/icons/layers';
   import ClockIcon from '@lucide/svelte/icons/clock';
+  import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
   import { Button } from '$lib/components/ui/button';
   import { ed } from '$lib/editor.svelte';
   import { elementLabel, viewLabel } from '$lib/friendly';
@@ -25,6 +26,7 @@
     'missing-character': CaseSensitiveIcon,
     covered: LayersIcon,
     'second-clock': ClockIcon,
+    'not-updated': RefreshCwIcon,
   };
 
   const issues = $derived(ed.healthIssues);
