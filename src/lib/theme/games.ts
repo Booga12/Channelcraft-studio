@@ -68,9 +68,23 @@ function toGame({ path, fields, media }: Entry): GameInfo {
   };
 }
 
-/** RetroBat's default order: by sort name (or name), ignoring case; ties keep their order. */
+/**
+ * RetroBat's default order: by sort name (or name), ignoring case; ties keep their order. Like its
+ * compareIgnoreCase, both are upper-cased and compared code point by code point, so `_` comes after
+ * `Z` and accented letters after the plain ones (no locale rules).
+ */
 function byName(a: GameInfo, b: GameInfo): number {
-  return (a.sortname || a.name).localeCompare(b.sortname || b.name, undefined, { sensitivity: 'base' });
+  return compareIgnoreCase(a.sortname || a.name, b.sortname || b.name);
+}
+
+export function compareIgnoreCase(a: string, b: string): number {
+  const x = [...a.toUpperCase()];
+  const y = [...b.toUpperCase()];
+  for (let i = 0; i < Math.min(x.length, y.length); i++) {
+    const d = x[i].codePointAt(0)! - y[i].codePointAt(0)!;
+    if (d) return d;
+  }
+  return x.length - y.length;
 }
 
 /**
@@ -78,10 +92,15 @@ function byName(a: GameInfo, b: GameInfo): number {
  * (`romFiles`, from api.listRomFiles) and only takes names and details from gamelist.xml, so
  * entries for missing files or written twice don't add games, and files without an entry show
  * under their file name. Without `romFiles` the gamelist alone is used, one game per path.
+ *
+ * `onlyListed` is for arcade and Neo Geo systems: RetroBat hides their BIOS and device files
+ * (neogeo.zip, qsound.zip) using MAME's lists, which the preview doesn't have, so there only ROM
+ * files with a gamelist entry are shown.
  */
-export function parseGamelist(text: string, systemDir: string, romFiles?: string[]): GameInfo[] {
+export function parseGamelist(text: string, systemDir: string, romFiles?: string[], onlyListed = false): GameInfo[] {
   const doc = parse(text);
-  // A later entry for the same file replaces the earlier one, as in RetroBat.
+  // A later entry for the same file is read into the same game, as in RetroBat's loadFromXML:
+  // the tags it has replace the earlier ones, and the ones it lacks keep the earlier values.
   const entries = new Map<string, Entry>();
   for (const g of doc.root ? elements(doc.root).filter((e) => e.name === 'game') : []) {
     const fields: Record<string, string> = {};
@@ -95,17 +114,21 @@ export function parseGamelist(text: string, systemDir: string, romFiles?: string
       else if (c.name !== 'path' && /^(\.\.?[\\/]|~[\\/]|[A-Za-z]:[\\/]|\\\\)/.test(v) && /\.(png|jpe?g|gif|webp|svg|mp4|mkv|webm|avi)$/i.test(v)) media[c.name] = mediaPath(systemDir, v);
     }
     if (!path) continue;
-    entries.set(romKey(path, systemDir), { path, fields, media });
+    const k = romKey(path, systemDir);
+    const old = entries.get(k);
+    entries.set(k, old ? { path: old.path, fields: { ...old.fields, ...fields }, media: { ...old.media, ...media } } : { path, fields, media });
   }
   const list: Entry[] = romFiles
-    ? romFiles.map((rel) => {
-        const k = romKey(rel, systemDir);
-        const e = entries.get(k);
-        const path = e?.path ?? './' + k;
-        // No name in the gamelist: RetroBat shows the file name without its extension.
-        const name = e?.fields.name || romFileName(k).replace(/\.[^.]*$/, '');
-        return { path, fields: { ...e?.fields, name }, media: e?.media ?? {} };
-      })
+    ? romFiles
+        .filter((rel) => !onlyListed || entries.has(romKey(rel, systemDir)))
+        .map((rel) => {
+          const k = romKey(rel, systemDir);
+          const e = entries.get(k);
+          const path = e?.path ?? './' + k;
+          // No name in the gamelist: RetroBat shows the file name without its extension.
+          const name = e?.fields.name || romFileName(k).replace(/\.[^.]*$/, '');
+          return { path, fields: { ...e?.fields, name }, media: e?.media ?? {} };
+        })
     : [...entries.values()].filter((e) => e.fields.name);
   // RetroBat doesn't show hidden games, so neither does the preview.
   return list.filter((e) => e.fields.hidden !== 'true').map(toGame).sort(byName);

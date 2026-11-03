@@ -11,7 +11,7 @@ import { isGameListView, isOwnGamePath, resolveTheme, romStem, type ResolvedElem
 import { STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
 import { DEPTH_VAR, depthLevel, MOTION_FEELS, MOTION_VAR, SCREEN_FX_VAR, screenFxOf, type Depth, type ScreenFx } from './theme/depth';
-import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
+import { FALLBACK_SYSTEMS, isArcadeSystem, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveNode } from './xml/cst';
 
 import { elementLabel, humanize, propLabel, typeLabel, viewLabel } from './friendly';
@@ -334,7 +334,8 @@ export class Editor {
           // Falls back to the gamelist alone.
         }
       }
-      const list = parseGamelist(f.text, dirname(f.path), roms);
+      // Arcade BIOS and device files (neogeo.zip) have no entry; RetroBat hides them (#60).
+      const list = parseGamelist(f.text, dirname(f.path), roms, sys ? isArcadeSystem(sys) : false);
       this.games = { ...this.games, [system]: list };
       if (system === this.settings.system.name && this.gameIndex === 0) this.gameIndex = firstWithArt(list);
     } catch {

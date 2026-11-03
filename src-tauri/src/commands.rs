@@ -578,8 +578,12 @@ fn rom_ext(name: &str) -> String {
     name.rfind('.').map(|i| name[i..].to_lowercase()).unwrap_or_default()
 }
 
-/// Games found under `dir`, as (path relative to the ROM folder, full path).
-fn walk_roms(dir: &Path, rel: &str, system: &str, exts: &[String], out: &mut Vec<(String, PathBuf)>) {
+/// Games found under `dir`, as (path relative to the ROM folder, full path). Junctions and
+/// directory symlinks are searched like folders, as RetroBat does; `depth` stops link loops.
+fn walk_roms(dir: &Path, rel: &str, system: &str, exts: &[String], depth: u32, out: &mut Vec<(String, PathBuf)>) {
+    if depth > 64 {
+        return;
+    }
     let Ok(rd) = fs::read_dir(dir) else { return };
     let mut entries: Vec<_> = rd.flatten().collect();
     entries.sort_by_key(|e| e.file_name());
@@ -595,7 +599,10 @@ fn walk_roms(dir: &Path, rel: &str, system: &str, exts: &[String], out: &mut Vec
             out.push((r, e.path()));
             continue;
         }
-        if !m.is_dir() {
+        // A DirEntry's metadata doesn't follow links, so a junction or directory symlink isn't a
+        // folder there; RetroBat sees FILE_ATTRIBUTE_DIRECTORY on them and searches inside.
+        let is_dir = if m.file_type().is_symlink() { fs::metadata(e.path()).is_ok_and(|t| t.is_dir()) } else { m.is_dir() };
+        if !is_dir {
             continue;
         }
         let low = name.to_lowercase();
@@ -605,7 +612,7 @@ fn walk_roms(dir: &Path, rel: &str, system: &str, exts: &[String], out: &mut Vec
             || (system == "wiiu" && (low == "content" || low == "meta"))
             || (system == "vpinball" && low == "roms");
         if !skipped {
-            walk_roms(&e.path(), &r, system, exts, out);
+            walk_roms(&e.path(), &r, system, exts, depth + 1, out);
         }
     }
 }
@@ -615,7 +622,7 @@ fn content_files(p: &Path) -> Vec<PathBuf> {
     let dir = p.parent().unwrap_or(Path::new(""));
     let ext = rom_ext(&p.to_string_lossy());
     if ext == ".ccd" {
-        return vec![p.with_extension("img"), p.with_extension("sub")];
+        return ["cue", "img", "bin", "sub"].iter().map(|x| p.with_extension(x)).collect();
     }
     let Ok(bytes) = fs::read(p) else { return vec![] };
     let text = String::from_utf8_lossy(&bytes);
@@ -652,7 +659,7 @@ fn content_files(p: &Path) -> Vec<PathBuf> {
 fn rom_files(dir: &Path, system: &str, extensions: &[String]) -> Vec<String> {
     let exts: Vec<String> = extensions.iter().map(|e| e.trim().to_lowercase()).filter(|e| !e.is_empty()).collect();
     let mut found = vec![];
-    walk_roms(dir, ".", system, &exts, &mut found);
+    walk_roms(dir, ".", system, &exts, 0, &mut found);
     let lists = [".m3u", ".cue", ".ccd", ".gdi"];
     if exts.len() > 1 && exts.iter().any(|e| lists.contains(&e.as_str())) {
         let key = |p: &Path| normalize(p).to_string_lossy().to_lowercase();
@@ -1150,13 +1157,33 @@ mod tests {
         fs::write(d.join("h track01.bin"), "x").unwrap();
         fs::write(d.join("h02.raw"), "x").unwrap();
         fs::write(d.join("k.ccd"), "x").unwrap();
-        fs::write(d.join("k.img"), "x").unwrap();
+        // A .ccd stands for its .cue, .img, .bin and .sub (FileData::getContentFiles).
+        for f in ["k.img", "k.cue", "k.bin", "k.sub"] {
+            fs::write(d.join(f), "x").unwrap();
+        }
         fs::write(d.join("loose.bin"), "x").unwrap();
         let got = rom_files(&d, "psx", &exts(&[".cue", ".bin", ".m3u", ".chd", ".gdi", ".raw", ".ccd", ".img"]));
         assert_eq!(got, ["./g.m3u", "./h.gdi", "./k.ccd", "./loose.bin"]);
         // With only one extension RetroBat keeps everything.
-        assert_eq!(rom_files(&d, "psx", &exts(&[".bin"])), ["./g/g1.bin", "./g/g2.bin", "./h track01.bin", "./loose.bin"]);
+        assert_eq!(rom_files(&d, "psx", &exts(&[".bin"])), ["./g/g1.bin", "./g/g2.bin", "./h track01.bin", "./k.bin", "./loose.bin"]);
         fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// RetroBat searches junctions (mklink /J) like folders.
+    #[cfg(windows)]
+    #[test]
+    fn rom_files_inside_a_junction_are_found() {
+        let base = std::env::temp_dir().join(format!("ccs-junction-{}", crate::storage::unique_id()));
+        let (roms, elsewhere) = (base.join("psx"), base.join("elsewhere"));
+        fs::create_dir_all(&roms).unwrap();
+        fs::create_dir_all(&elsewhere).unwrap();
+        fs::write(elsewhere.join("Game.chd"), "x").unwrap();
+        fs::write(roms.join("Top.chd"), "x").unwrap();
+        let link = roms.join("Collection");
+        assert!(std::process::Command::new("cmd").args(["/C", "mklink", "/J"]).arg(&link).arg(&elsewhere).output().unwrap().status.success());
+        assert_eq!(rom_files(&roms, "psx", &exts(&[".chd"])), ["./Collection/Game.chd", "./Top.chd"]);
+        fs::remove_dir(&link).unwrap();
+        fs::remove_dir_all(&base).unwrap();
     }
 
     #[test]
