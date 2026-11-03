@@ -4,6 +4,7 @@
 
 import type { Environment } from './context';
 import { evaluate, type ExprEnv } from './expr';
+import { zOf } from '../render';
 import type { SystemInfo } from './systems';
 import type { ThemeProject } from './project';
 import { resolveAssetWithFallbacks, resolvePath, resolveTheme, type PropDef, type Resolution, type ResolvedElement, type ResolvedView } from './resolver';
@@ -48,6 +49,9 @@ const ESDE_NAMES: Record<string, string> = {
 };
 export const esdeSystem = (name: string) => ESDE_NAMES[name.toLowerCase()] ?? name;
 
+/** A detail with nothing in it: ES-DE treats an empty value as an error, and drops plain spaces. */
+const NBSP = '\u00a0';
+
 /** Console details ES-DE has as variables, and the ones the export adds per console (see SYSTEM_INFO). */
 const SYSTEM_VARS: Record<string, string> = {
   fullname: '${system.fullName}',
@@ -81,8 +85,8 @@ export const GAME_LISTS: { view: string; variant: string; label: string }[] = [
 
 /** What every ES-DE element type accepts (from THEMES.md). */
 export const ESDE_PROPS: Record<string, string[]> = {
-  text: ['pos', 'size', 'origin', 'rotation', 'rotationOrigin', 'stationary', 'text', 'systemdata', 'metadata', 'defaultValue', 'systemNameSuffix', 'letterCaseSystemNameSuffix', 'metadataElement', 'gameselector', 'gameselectorEntry', 'container', 'containerType', 'containerVerticalSnap', 'containerScrollSpeed', 'containerStartDelay', 'containerResetDelay', 'containerScrollGap', 'fontPath', 'fontSize', 'horizontalAlignment', 'verticalAlignment', 'color', 'backgroundColor', 'backgroundMargins', 'backgroundCornerRadius', 'letterCase', 'lineSpacing', 'visible', 'zIndex'],
-  datetime: ['pos', 'size', 'origin', 'rotation', 'rotationOrigin', 'stationary', 'metadata', 'defaultValue', 'gameselector', 'gameselectorEntry', 'fontPath', 'fontSize', 'horizontalAlignment', 'verticalAlignment', 'color', 'backgroundColor', 'backgroundMargins', 'backgroundCornerRadius', 'letterCase', 'lineSpacing', 'format', 'displayRelative', 'visible', 'zIndex'],
+  text: ['pos', 'size', 'origin', 'rotation', 'rotationOrigin', 'stationary', 'text', 'systemdata', 'metadata', 'defaultValue', 'systemNameSuffix', 'letterCaseSystemNameSuffix', 'metadataElement', 'gameselector', 'gameselectorEntry', 'container', 'containerType', 'containerVerticalSnap', 'containerScrollSpeed', 'containerStartDelay', 'containerResetDelay', 'containerScrollGap', 'fontPath', 'fontSize', 'horizontalAlignment', 'verticalAlignment', 'color', 'backgroundColor', 'backgroundMargins', 'backgroundCornerRadius', 'letterCase', 'lineSpacing', 'opacity', 'visible', 'zIndex'],
+  datetime: ['pos', 'size', 'origin', 'rotation', 'rotationOrigin', 'stationary', 'metadata', 'defaultValue', 'gameselector', 'gameselectorEntry', 'fontPath', 'fontSize', 'horizontalAlignment', 'verticalAlignment', 'color', 'backgroundColor', 'backgroundMargins', 'backgroundCornerRadius', 'letterCase', 'lineSpacing', 'format', 'displayRelative', 'opacity', 'visible', 'zIndex'],
   image: ['pos', 'size', 'maxSize', 'cropSize', 'cropPos', 'origin', 'rotation', 'rotationOrigin', 'stationary', 'renderDuringTransitions', 'path', 'gameOverridePath', 'default', 'imageType', 'metadataElement', 'gameselector', 'gameselectorEntry', 'tile', 'tileSize', 'tileHorizontalAlignment', 'tileVerticalAlignment', 'interpolation', 'mipmap', 'cornerRadius', 'color', 'colorEnd', 'gradientType', 'scrollFadeIn', 'brightness', 'opacity', 'saturation', 'flipHorizontal', 'flipVertical', 'scaleFactor', 'visible', 'zIndex'],
   video: ['pos', 'size', 'maxSize', 'cropSize', 'cropPos', 'origin', 'rotation', 'rotationOrigin', 'stationary', 'path', 'default', 'defaultImage', 'imageType', 'metadataElement', 'gameselector', 'gameselectorEntry', 'iterationCount', 'onIterationsDone', 'audio', 'interpolation', 'imageCornerRadius', 'videoCornerRadius', 'color', 'colorEnd', 'gradientType', 'pillarboxes', 'pillarboxThreshold', 'scanlines', 'delay', 'fadeInType', 'fadeInTime', 'scrollFadeIn', 'brightness', 'opacity', 'saturation', 'visible', 'zIndex'],
   rating: ['pos', 'size', 'origin', 'rotation', 'rotationOrigin', 'stationary', 'gameselector', 'gameselectorEntry', 'interpolation', 'color', 'filledPath', 'unfilledPath', 'overlay', 'hideIfZero', 'opacity', 'saturation', 'visible', 'zIndex'],
@@ -92,6 +96,7 @@ export const ESDE_PROPS: Record<string, string[]> = {
   helpsystem: ['pos', 'origin', 'scope', 'entries', 'entryLayout', 'textColor', 'textColorDimmed', 'iconColor', 'iconColorDimmed', 'fontPath', 'fontSize', 'entrySpacing', 'iconTextSpacing', 'entryRelativeScale', 'letterCase', 'opacity', 'backgroundColor', 'backgroundColorEnd', 'backgroundGradientType', 'backgroundHorizontalPadding', 'backgroundVerticalPadding', 'backgroundCornerRadius'],
   clock: ['pos', 'size', 'origin', 'scope', 'format', 'fontPath', 'fontSize', 'horizontalAlignment', 'verticalAlignment', 'color', 'backgroundColor', 'backgroundMargins', 'backgroundCornerRadius', 'letterCase', 'lineSpacing', 'opacity'],
   sound: ['path'],
+  badges: ['pos', 'size', 'origin', 'rotation', 'rotationOrigin', 'horizontalAlignment', 'direction', 'lines', 'itemsPerLine', 'itemMargin', 'slots', 'badgeIconColor', 'opacity', 'visible', 'zIndex'],
 };
 
 /** Game art: RetroBat's field names (md_ elements, {game:…} paths, imageSource) to ES-DE's imageType. */
@@ -314,18 +319,26 @@ class Converter {
   /**
    * Every console's file of a per-console picture (`logos/${system.theme}.svg`), found from the
    * folder rather than the console being previewed, so a console without one doesn't lose them all.
-   * RetroBat tries each fallback path in turn (an .svg, then a .png); ES-DE takes one path, so all
-   * consoles go under one name pattern, with SVGs turned into PNGs when the types are mixed.
-   * Returns the path ES-DE reads, with ${system.theme} in it.
+   * RetroBat tries each fallback path in turn (an .svg, then a .png), and a region's block
+   * (`region="us"`) only wins for consoles it has a file for; the others keep the earlier block's.
+   * ES-DE takes one path, so every console's file goes under one name pattern, with SVGs turned
+   * into PNGs when the types are mixed. Returns the path ES-DE reads, with ${system.theme} in it.
    */
   async perConsoleSet(el: ResolvedElement, prop: string, sys: string, known: string[] = []): Promise<string | undefined> {
     const h = el.history.get(prop) ?? [];
-    const last = h[h.length - 1];
-    if (!last) return undefined;
-    const defs = h.filter((d) => d.node.parent === last.node.parent && this.perConsole(d));
+    if (!h.length) return undefined;
+    // The blocks that set it, the last one first; in each, its fallback paths in order.
+    const blocks: PropDef[][] = [];
+    for (const d of h) {
+      const b = blocks.find((x) => x[0].node.parent === d.node.parent);
+      if (b) b.push(d);
+      else blocks.push([d]);
+    }
+    const defs = blocks.reverse().flat().filter((d) => this.perConsole(d));
     type Pattern = { destOf: (c: string) => string; ref: string; ext: string; count: number };
     const patterns: Pattern[] = [];
-    const found = new Map<string, { name: string; src: string; ext: string }>();
+    // Each console's files, in the order RetroBat would try them.
+    const found = new Map<string, { name: string; cands: { src: string; ext: string }[] }>();
     // Where each fallback path could point (the first that has files wins), or a path already found.
     const groups: string[][] = known.length ? [known.map(slash)] : [];
     if (!known.length) {
@@ -354,7 +367,7 @@ class Converter {
           const re = new RegExp(`^${esc(before)}(.+)${esc(after)}${esc(ext)}$`, 'i');
           for (const f of await this.ls(dir)) {
             const c = f.match(re)?.[1];
-            if (c) hits.push([c, `${dir}/${f}`]);
+            if (c && !c.includes('/')) hits.push([c, `${dir}/${f}`]);
           }
           const destDir = this.dest(`${dir}/x`).replace(/\/?x$/, '');
           const at2 = (c: string) => [destDir, `${before}${c}${after}${ext}`].filter(Boolean).join('/');
@@ -374,20 +387,22 @@ class Converter {
         if (!pattern || !hits.length) continue;
         patterns.push(pattern);
         for (const [c, src] of hits) {
-          if (found.has(c.toLowerCase())) continue; // an earlier fallback path wins, as in RetroBat
-          found.set(c.toLowerCase(), { name: c, src, ext });
+          const k = c.toLowerCase();
+          if (!found.has(k)) found.set(k, { name: c, cands: [] });
+          found.get(k)!.cands.push({ src, ext });
           pattern.count++;
         }
         break;
       }
     }
     if (!found.size) return undefined;
-    // One name pattern for ES-DE: the one most consoles use, or a PNG one when SVGs can become PNGs.
-    const byCount = (a: Pattern, b: Pattern) => b.count - a.count;
-    const best = [...patterns].sort(byCount)[0];
-    const png = patterns.filter((p) => p.ext === '.png' && p.count).sort(byCount)[0];
-    const svgs = [...found.values()].filter((f) => f.ext === '.svg').length;
-    const target = this.svgToPng && png && svgs && png.count + svgs > best.count ? png : best;
+    // One file type for ES-DE: the one that gives the most consoles their picture (SVGs count for
+    // PNG when they can be turned into PNGs); its most used name pattern.
+    const exts = [...new Set(patterns.map((p) => p.ext))];
+    const score = (ext: string) =>
+      [...found.values()].filter((f) => f.cands.some((c) => c.ext === ext) || (ext === '.png' && this.svgToPng && f.cands.some((c) => c.ext === '.svg'))).length;
+    const ext = exts.reduce((a, b) => (score(b) > score(a) ? b : a));
+    const target = patterns.filter((p) => p.ext === ext).sort((a, b) => b.count - a.count)[0];
     let lost = 0;
     // Consoles under ES-DE's own names; a console already named that way wins over a renamed one.
     const all = [...found.values()].sort((a, b) => Number(esdeSystem(a.name) !== a.name) - Number(esdeSystem(b.name) !== b.name));
@@ -396,12 +411,21 @@ class Converter {
       const dest = target.destOf(esdeSystem(f.name));
       if (taken.has(dest.toLowerCase())) continue;
       taken.add(dest.toLowerCase());
-      if (f.ext === target.ext) this.files.set(dest, f.src);
-      else if (f.ext === '.svg' && target.ext === '.png' && this.svgToPng) this.toConvert.set(dest, f.src);
+      // The console's first file of that type, else its first SVG to turn into a PNG.
+      const same = f.cands.find((c) => c.ext === target.ext);
+      const svg = f.cands.find((c) => c.ext === '.svg');
+      if (same) this.files.set(dest, same.src);
+      else if (svg && target.ext === '.png' && this.svgToPng) this.toConvert.set(dest, svg.src);
       else lost++;
     }
     if (lost) this.note(`${lost} console picture${lost === 1 ? ' is' : 's are'} a different file type from the rest, so ES-DE shows the console’s name there instead.`);
     return `./${target.ref}`;
+  }
+
+  /** See-through parts: ES-DE turns one at 0 off, as RetroBat hides it. */
+  opacity(el: ResolvedElement, o: Out) {
+    const op = this.num(el, 'opacity');
+    if (op && Number(op) <= 1) o.set('opacity', op);
   }
 
   /** pos, size, origin, rotation and zIndex, which every element shares. */
@@ -411,7 +435,8 @@ class Converter {
     o.set('origin', this.pair(el, 'origin'));
     o.set('rotation', this.num(el, 'rotation'));
     o.set('rotationOrigin', this.pair(el, 'rotationOrigin'));
-    o.set('zIndex', this.num(el, 'zIndex'));
+    // Always RetroBat's value: ES-DE's defaults differ (pictures 30, texts 40, lists 50).
+    o.set('zIndex', String(zOf(el)));
   }
 
   font(el: ResolvedElement, o: Out) {
@@ -475,6 +500,22 @@ class Converter {
     return text;
   }
 
+  /**
+   * RetroBat's `firstfile({game:fanart}, {game:image})` (the first picture the game has) as ES-DE's
+   * list of picture types, which works the same way. Null when it isn't only game pictures.
+   */
+  firstArt(raw: string): string | null {
+    const m = raw.match(/^\s*firstfile\((.*)\)\s*$/i);
+    if (!m) return null;
+    const types: string[] = [];
+    for (const item of m[1].split(',').map((x) => x.trim())) {
+      const f = item.match(/^\{game:(\w+)\}$/i)?.[1].toLowerCase();
+      if (!f) continue; // a fixed picture as the last resort: ES-DE shows nothing instead
+      for (const t of (ART[f] ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!types.includes(t)) types.push(t);
+    }
+    return types.length ? types.join(', ') : null;
+  }
+
   /** The game field an element shows: from its md_ name or a single {game:…} binding. */
   gameField(el: ResolvedElement, prop: string): string | undefined {
     const m = el.name.match(/^md_(.+)$/);
@@ -489,12 +530,42 @@ class Converter {
     const type = this.typeOf(el);
     const vis = this.val(el, 'visible');
     if (vis === 'false' || vis === '0') return null;
-    if (vis && vis !== 'true' && vis !== '1') this.note('Parts that RetroBat shows or hides depending on the game or console are always shown.');
     const name = el.name.replace(/[^A-Za-z0-9_-]+/g, '_');
+    if (vis && vis !== 'true' && vis !== '1') {
+      const raw = el.props.get('visible')?.raw ?? '';
+      if (/^\s*\{game:favorite\}\s*$/i.test(raw)) {
+        // Shown for favorites only: ES-DE's favorite badge, where the part was.
+        const o = new Out('badges', name);
+        o.set('pos', this.pair(el, 'pos'));
+        o.set('origin', this.pair(el, 'origin'));
+        // The part's own box, the badge aligned in it as the text was.
+        const size = this.pair(el, 'size')?.split(' ').map(Number);
+        const fs = Number(this.num(el, 'fontSize') ?? 0.03);
+        const hgt = size && size[1] > 0 ? size[1] : fs * 1.4;
+        o.set('size', `${r4(size && size[0] > 0 ? size[0] : (hgt * 9) / 16)} ${r4(hgt)}`);
+        const h = this.val(el, 'alignment') ?? this.val(el, 'horizontalAlignment');
+        if (h === 'center' || h === 'right') o.set('horizontalAlignment', h);
+        o.set('slots', 'favorite');
+        o.set('lines', '1');
+        o.set('itemsPerLine', '1');
+        o.set('badgeIconColor', this.color(el, 'color'));
+        o.set('zIndex', String(zOf(el)));
+        this.note('Parts shown only for favorites become ES-DE’s favorite badge.');
+        return o;
+      }
+      if (/\{game:/i.test(raw)) {
+        this.note('Parts RetroBat shows only for some games (kid games, games with a manual and so on) are left out: ES-DE can’t show them for just those games.');
+        return null;
+      }
+      this.note('Parts that RetroBat shows or hides depending on the console use the default console’s choice.');
+    }
     if (STATUS_ICON.test(el.name)) {
       this.note('Game status icons (favorite, kid game, manual and so on) are left out: ES-DE shows these with its own badges.');
       return null;
     }
+    // A screenshot the theme only adjusts, on a screen with a video: the video shows the
+    // screenshot as its still picture, as the editor draws it, so one copy is enough.
+    if (el.type === 'control' && el.name === 'md_image' && view.elements.get('md_video')?.type === 'video') return null;
     // md_ parts the theme never placed: RetroBat's defaults for them aren't known here.
     if (el.name.startsWith('md_') && !el.props.has('pos') && !el.props.has('size') && !el.props.has('maxSize')) return null;
 
@@ -504,7 +575,9 @@ class Converter {
         const o = new Out('image', name);
         this.place(el, o, ['size', 'maxSize']);
         const field = this.gameField(el, 'path');
-        if (field && ART[field]) o.set('imageType', ART[field]);
+        const first = this.firstArt(el.props.get('path')?.raw ?? '');
+        if (first) o.set('imageType', first);
+        else if (field && ART[field]) o.set('imageType', ART[field]);
         else if (field) return (this.skip(`game picture "${field}"`), null);
         else {
           const p = await this.asset(el, 'path');
@@ -530,6 +603,7 @@ class Converter {
         const o = new Out('video', name);
         this.place(el, o, ['size', 'maxSize']);
         o.set('delay', this.num(el, 'delay'));
+        o.set('pillarboxes', 'false'); // ES-DE draws black bars beside videos by default; RetroBat doesn't
         if (truthy(this.val(el, 'showSnapshotNoVideo')) || truthy(this.val(el, 'showSnapshotDelay'))) o.set('imageType', 'miximage, screenshot');
         o.set('defaultImage', await this.asset(el, 'defaultSnapshot'));
         return o;
@@ -560,6 +634,7 @@ class Converter {
         this.align(el, o);
         o.set('color', this.color(el, 'color'));
         o.set('backgroundColor', this.color(el, 'backgroundColor'));
+        this.opacity(el, o);
         return o;
       }
       case 'datetime': {
@@ -572,6 +647,7 @@ class Converter {
         this.align(el, o);
         o.set('color', this.color(el, 'color'));
         o.set('backgroundColor', this.color(el, 'backgroundColor'));
+        this.opacity(el, o);
         const f = this.val(el, 'format');
         if (f) o.set('format', f);
         const rel = this.val(el, 'displayRelative');
@@ -615,13 +691,16 @@ class Converter {
         for (const c of ['textColor', 'iconColor']) o.set(c, this.color(el, c));
         o.set('fontPath', await this.asset(el, 'fontPath'));
         o.set('fontSize', this.num(el, 'fontSize'));
+        if (!isSystem) o.set('entries', 'start a b x y');
         return o;
       }
       case 'clock': {
         const o = new Out('clock', name);
         this.place(el, o);
         o.props = o.props.filter(([n]) => n !== 'rotation' && n !== 'rotationOrigin' && n !== 'zIndex');
+        this.note('The clock only shows in ES-DE when “Display clock” is on in its UI settings.');
         await this.font(el, o);
+        this.align(el, o);
         o.set('color', this.color(el, 'color'));
         const f = this.val(el, 'format');
         if (f) o.set('format', f);
@@ -711,6 +790,8 @@ class Converter {
     }
     if (sel) {
       o.set('selectorColor', this.color(sel, 'backgroundColor') ?? this.color(sel, 'backgroundCenterColor'));
+      // RetroBat's selected tile is a frame around the cover; ES-DE draws its selector over it unless told.
+      if (o.has('selectorColor')) o.set('selectorLayer', 'bottom');
       o.set('imageSelectedColor', this.color(sel, 'imageColor'));
     }
     return o;
@@ -719,8 +800,11 @@ class Converter {
   async view(view: ResolvedView, isSystem: boolean): Promise<Out[]> {
     const out: Out[] = [];
     const taken = new Set<string>();
-    for (const el of [...view.elements.values()].sort((a, b) => a.order - b.order)) {
+    // RetroBat's "screen" view draws on every screen (the clock): ES-DE has it per view.
+    const screen = [...(this.res.views.get('screen')?.elements.values() ?? [])].filter((e) => e.type === 'clock' && !view.elements.has(e.name));
+    for (const el of [...screen, ...[...view.elements.values()].sort((a, b) => a.order - b.order)]) {
       if (el.type === 'gridtile') continue; // part of the grid
+      if (view.name === 'basic' && el.name.startsWith('md_')) continue; // RetroBat's simple list shows no game details
       const o = await this.element(el, view, isSystem);
       if (!o) continue;
       const key = `${o.type}:${o.name}`;
@@ -743,6 +827,23 @@ class Converter {
         out.set(el.name, o);
       }
     }
+    // RetroBat's scroll sound (on the console list and the game lists) is ES-DE's systembrowse/scroll.
+    const scroll = async (views: string[], as: string) => {
+      if (out.has(as)) return;
+      for (const v of views) {
+        for (const el of this.res.views.get(v)?.elements.values() ?? []) {
+          if (!['carousel', 'textlist', 'imagegrid', 'gamecarousel'].includes(el.type) || !el.props.has('scrollSound')) continue;
+          const p = await this.asset(el, 'scrollSound');
+          if (!p || p.includes('${')) continue;
+          const o = new Out('sound', as);
+          o.set('path', p);
+          out.set(as, o);
+          return;
+        }
+      }
+    };
+    await scroll(['system'], 'systembrowse');
+    await scroll(GAME_LISTS.map((g) => g.view), 'scroll');
     return [...out.values()];
   }
 }
@@ -755,6 +856,8 @@ function gameCount(raw: string): string | null {
   if (/^(?:(['"])\1\+)?\{(?:binding|system)[:.]total\}(?:\+(['"])games\2|games)$/i.test(t)) return 'gamecountGames';
   return null;
 }
+
+const r4 = (n: number) => String(Math.round(n * 10000) / 10000);
 
 function esc(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -789,10 +892,15 @@ export async function toEsde(project: ThemeProject, env: Environment, listDir: L
       const key = esdeSystem(s.theme || s.name).toLowerCase();
       if (!key || seen.has(key) || !/^[\w.-]+$/.test(key)) continue;
       seen.add(key);
-      const v = (n: string, x: string) => (x ? `    <${n}>${xml(x)}</${n}>\n` : '');
+      const v = (n: string, x: string) => `    <${n}>${x ? xml(x) : NBSP}</${n}>\n`;
       c.made.set(`${SYSTEM_INFO}/${key}.xml`, { text: `<?xml version="1.0"?>\n<theme>\n  <variables>\n${v('ccsSystemMaker', s.manufacturer)}${v('ccsSystemYear', s.releaseYear)}${v('ccsSystemType', s.hardwareType)}  </variables>\n</theme>\n` });
     }
-    body.unshift(`  <include>./${SYSTEM_INFO}/\${system.theme}.xml</include>`);
+    // Defaults first, then the console's own file (later values win in ES-DE). A detail ES-DE
+    // finds empty stops that console's theme loading, so the default is a no-break space.
+    body.unshift(
+      `  <variables>\n${['ccsSystemMaker', 'ccsSystemYear', 'ccsSystemType'].map((n) => `    <${n}>${NBSP}</${n}>`).join('\n')}\n  </variables>`,
+      `  <include>./${SYSTEM_INFO}/\${system.theme}.xml</include>`,
+    );
   }
   const theme = `<?xml version="1.0"?>\n<!-- Made with ChannelCraft Studio from the RetroBat theme “${xml(project.name)}”. -->\n<theme>\n${body.join('\n')}\n</theme>\n`;
   const caps = `<?xml version="1.0"?>\n<themeCapabilities>\n  <themeName>${xml(themeName)}</themeName>\n${variants.map((v) => `  <variant name="${v.name}">\n    <label>${xml(v.label)}</label>\n    <selectable>true</selectable>\n  </variant>`).join('\n')}\n</themeCapabilities>\n`;
