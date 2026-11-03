@@ -179,6 +179,26 @@ export function devFs() {
       const p = join(root, 'roms', system, 'gamelist.xml');
       return existsSync(p) ? readText(p) : null;
     },
+    // Like list_rom_files in src-tauri/src/commands.rs (#60), without its disc-list (.m3u, .cue) handling.
+    list_rom_files: ({ system, extensions }) => {
+      const dir = join(root, 'roms', system);
+      if (!existsSync(dir)) throw "The system's ROM folder isn't there";
+      const exts = extensions.map((e) => e.trim().toLowerCase()).filter(Boolean);
+      const skipped = ['artwork', 'media', 'medias', 'images', 'manuals', 'videos', 'assets', 'html_arrm', 'bezels', 'fonts', 'logs', 'screenshots'];
+      const out = [];
+      const find = (d, rel, depth) => {
+        if (depth > 64) return;
+        for (const name of readdirSync(d).sort()) {
+          if (name.startsWith('.')) continue;
+          const p = join(d, name);
+          const r = `${rel}/${name}`;
+          if (exts.includes(extname(name).toLowerCase())) out.push(r);
+          else if (statSync(p).isDirectory() && !name.toLowerCase().startsWith('downloaded_') && !skipped.includes(name.toLowerCase())) find(p, r, depth + 1);
+        }
+      };
+      find(dir, '.', 0);
+      return out;
+    },
     list_fonts: () =>
       walk(themesDir())
         .filter((p) => /\.(ttf|otf)$/i.test(p))
