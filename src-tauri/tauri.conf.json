@@ -12,11 +12,27 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "ChannelCraft Studio",
         "width": 1440,
         "height": 900,
         "minWidth": 1100,
-        "minHeight": 700
+        "minHeight": 700,
+        "visible": false
+      },
+      {
+        "label": "splash",
+        "title": "ChannelCraft Studio",
+        "url": "splash.html",
+        "width": 520,
+        "height": 320,
+        "center": true,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
       }
     ],
     "security": {

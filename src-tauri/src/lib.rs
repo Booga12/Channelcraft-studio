@@ -7,6 +7,7 @@ mod intro;
 mod problems;
 mod gallery;
 mod esde;
+mod splash;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -83,12 +84,23 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        // Opens at the size and place it was closed at.
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Opens at the size and place it was closed at; never shows it early (the splash, #61,
+        // shows first and the app window appears when it's ready), and leaves the splash alone.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::VISIBLE)
+                .with_denylist(&["splash"])
+                .build(),
+        )
         // Updates from the GitHub releases (signed, see scripts/release.mjs), and restarting after one.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(commands::Roots::default())
+        .manage(splash::Splash::default())
+        .setup(|app| {
+            splash::start_fallback(app.handle());
+            Ok(())
+        })
         .manage(storage::Projects::default())
         .invoke_handler(tauri::generate_handler![
             commands::detect_retrobat,
@@ -160,6 +172,9 @@ pub fn run() {
             gallery::publish_theme,
             gallery::share_theme,
             esde::export_esde,
+            splash::app_ready,
+            splash::splash_state,
+            splash::splash_done,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
