@@ -25,7 +25,7 @@
 // every style shows them.
 
 import { attr, elements, patchInsertChild, patchRemoveNode, patchReplaceSpan, type XElement } from '../xml/cst';
-import { ANIMATIONS, presetEvents, screenOf } from './animations';
+import { ANIMATIONS, presetEvents, refreshXml, screenOf } from './animations';
 import { DESIGNS, designElements, designVars, elementsMarkup, isDesignExtra, type Design, type DesignContext, type Palette6 } from './designs';
 import type { Change } from './edits';
 import { PALETTES, designBlock, designVarsChange } from './presets';
@@ -237,7 +237,12 @@ function storyboardsOff(project: ThemeProject, res: Resolution, generated: Map<s
     out.push(`<view name="${view}">`);
     for (const [name, e] of found) {
       out.push(`  <${e.type} name="${name}">`);
-      for (const ev of e.events) out.push(ev ? `    <storyboard event="${esc(ev)}" />` : '    <storyboard />');
+      for (const ev of e.events) {
+        // Game lists keep an activate storyboard that changes nothing: without one RetroBat's
+        // video list stops updating the extra's game data.
+        if (view !== 'system' && ev === 'activate') out.push(...refreshXml().split('\n').map((l) => `    ${l}`));
+        else out.push(ev ? `    <storyboard event="${esc(ev)}" />` : '    <storyboard />');
+      }
       out.push(`  </${e.type}>`);
     }
     out.push('</view>');

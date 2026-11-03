@@ -11,6 +11,9 @@
 //   `deactivate` / `deactivateNext` / `deactivatePrev`.
 // - The console screen (SystemView::activateExtras): each console's extras are shown again with
 //   onShow(), which restarts the storyboard without an event. Event storyboards never play there.
+// - The video list (VideoGameListView) only updates {game:...} values on extras that have an
+//   activate / activateNext / activatePrev storyboard, so loops on game lists use `activate` and
+//   extras that show game data without an animation get REFRESH_BOARD.
 // - Each animation has its own `begin` and `repeat`, so one storyboard can hold an entrance
 //   followed by an endless loop (one storyboard per event is all an element can have).
 
@@ -49,7 +52,11 @@ const ms = (n: number, speed: number) => String(Math.max(50, Math.round(n / spee
 type A = Record<string, string>;
 /** An entrance: replayed on every game (lists) or every console (console screen). */
 const appear = (screen: Screen, animations: A[]): Board[] => [{ event: screen === 'console' ? '' : 'activate', animations }];
-const loop = (animations: A[]): Board[] => [{ event: '', animations }];
+/**
+ * A loop. On game lists it is an activate storyboard too: RetroBat's video list only updates
+ * {game:...} values on extras that have one, and the endless animations keep going anyway.
+ */
+const loop = (screen: Screen, animations: A[]): Board[] => [{ event: screen === 'console' ? '' : 'activate', animations }];
 const fade = (d: number, sp: number, mode = 'easeOut'): A => ({ property: 'opacity', from: '0', to: '1', duration: ms(d, sp), mode });
 
 export const ANIMATIONS: AnimPreset[] = [
@@ -214,7 +221,7 @@ export const ANIMATIONS: AnimPreset[] = [
     help: 'Bobs gently up and down, all the time.',
     kind: 'loop',
     amount: true,
-    build: ([, y], a, sp) => loop([{ property: 'y', from: r(y), to: r(y - 0.008 * a), duration: ms(3000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
+    build: ([, y], a, sp, s) => loop(s, [{ property: 'y', from: r(y), to: r(y - 0.008 * a), duration: ms(3000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
   },
   {
     id: 'hover',
@@ -222,8 +229,8 @@ export const ANIMATIONS: AnimPreset[] = [
     help: 'Floats up and comes a little closer, then back, like it is hovering. Adds depth.',
     kind: 'loop',
     amount: true,
-    build: ([, y], a, sp) =>
-      loop([
+    build: ([, y], a, sp, s) =>
+      loop(s, [
         { property: 'y', from: r(y), to: r(y - 0.007 * a), duration: ms(3200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
         { property: 'scale', from: '1', to: r(1 + 0.018 * a), duration: ms(3200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
       ]),
@@ -234,8 +241,8 @@ export const ANIMATIONS: AnimPreset[] = [
     help: 'Rocks very slightly and bobs, like it is floating on water.',
     kind: 'loop',
     amount: true,
-    build: ([, y], a, sp) =>
-      loop([
+    build: ([, y], a, sp, s) =>
+      loop(s, [
         { property: 'rotation', from: r(-1.5 * a), to: r(1.5 * a), duration: ms(4200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
         { property: 'y', from: r(y), to: r(y - 0.005 * a), duration: ms(2700, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
       ]),
@@ -246,8 +253,8 @@ export const ANIMATIONS: AnimPreset[] = [
     help: 'Drifts slowly sideways and back, so a layer seems to move at its own distance.',
     kind: 'loop',
     amount: true,
-    build: ([x, y], a, sp) =>
-      loop([
+    build: ([x, y], a, sp, s) =>
+      loop(s, [
         { property: 'x', from: r(x), to: r(x + 0.008 * a), duration: ms(9000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
         { property: 'y', from: r(y), to: r(y - 0.004 * a), duration: ms(6000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' },
       ]),
@@ -259,7 +266,7 @@ export const ANIMATIONS: AnimPreset[] = [
     kind: 'loop',
     amount: true,
     // Starts a little above full size, which also tells it apart from Pulse when read back.
-    build: (_p, a, sp) => loop([{ property: 'scale', from: '1.03', to: r(1.03 + 0.06 * a), duration: ms(16000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
+    build: (_p, a, sp, s) => loop(s, [{ property: 'scale', from: '1.03', to: r(1.03 + 0.06 * a), duration: ms(16000, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
   },
   {
     id: 'pulse',
@@ -267,7 +274,7 @@ export const ANIMATIONS: AnimPreset[] = [
     help: 'Grows and shrinks slightly, like a heartbeat.',
     kind: 'loop',
     amount: true,
-    build: (_p, a, sp) => loop([{ property: 'scale', from: '1', to: r(1 + 0.05 * a), duration: ms(1200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
+    build: (_p, a, sp, s) => loop(s, [{ property: 'scale', from: '1', to: r(1 + 0.05 * a), duration: ms(1200, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
   },
   {
     id: 'breathe',
@@ -275,7 +282,7 @@ export const ANIMATIONS: AnimPreset[] = [
     help: 'Fades a little in and out, like a soft glow.',
     kind: 'loop',
     amount: true,
-    build: (_p, a, sp) => loop([{ property: 'opacity', from: r(Math.max(0, 1 - 0.45 * a)), to: '1', duration: ms(1800, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
+    build: (_p, a, sp, s) => loop(s, [{ property: 'opacity', from: r(Math.max(0, 1 - 0.45 * a)), to: '1', duration: ms(1800, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
   },
   {
     id: 'swing',
@@ -283,7 +290,7 @@ export const ANIMATIONS: AnimPreset[] = [
     help: 'Tilts gently from side to side.',
     kind: 'loop',
     amount: true,
-    build: (_p, a, sp) => loop([{ property: 'rotation', from: r(-3 * a), to: r(3 * a), duration: ms(2400, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
+    build: (_p, a, sp, s) => loop(s, [{ property: 'rotation', from: r(-3 * a), to: r(3 * a), duration: ms(2400, sp), mode: 'easeInOut', autoReverse: 'true', repeat: 'forever' }]),
   },
   {
     id: 'spin',
@@ -291,7 +298,7 @@ export const ANIMATIONS: AnimPreset[] = [
     help: 'Turns round and round slowly. Good for discs and logos.',
     kind: 'loop',
     amount: false,
-    build: (_p, _a, sp) => loop([{ property: 'rotation', from: '0', to: '360', duration: ms(6000, sp), mode: 'linear', repeat: 'forever' }]),
+    build: (_p, _a, sp, s) => loop(s, [{ property: 'rotation', from: '0', to: '360', duration: ms(6000, sp), mode: 'linear', repeat: 'forever' }]),
   },
 ];
 
@@ -367,9 +374,36 @@ export function storyboardXml(preset: AnimPreset, pos: [number, number], amount 
   return boardsXml(preset.build(pos, amount, speed, screen));
 }
 
-/** The events a preset writes on a screen. */
+/**
+ * The events a preset writes on a screen. Loops on game lists also give the event-less one,
+ * which is how older versions wrote them.
+ */
 export function presetEvents(preset: AnimPreset, screen: Screen): string[] {
-  return preset.build([0, 0], 1, 1, screen).map((b) => b.event);
+  const events = preset.build([0, 0], 1, 1, screen).map((b) => b.event);
+  return preset.kind === 'loop' && screen === 'list' ? [...events, ''] : events;
+}
+
+/**
+ * An activate storyboard that changes nothing, for extras that show game data on game lists:
+ * RetroBat's video list only updates their {game:...} values when they have one. It holds an
+ * animation because RetroBat drops empty storyboards.
+ */
+export const REFRESH_BOARD: Board = { event: 'activate', animations: [{ property: 'opacity', from: '1', to: '1', duration: '1' }] };
+
+/** Markup for REFRESH_BOARD. */
+export const refreshXml = () => boardXml(REFRESH_BOARD);
+
+/** Whether a storyboard is REFRESH_BOARD (it is not an animation the user sees). */
+function isRefresh(s: SB): boolean {
+  if (s.event !== 'activate' || s.anims.length !== 1) return false;
+  const a = s.anims[0];
+  return attr(a, 'property') === 'opacity' && num(attr(a, 'from')) === 1 && num(attr(a, 'to')) === 1 && !loops(attr(a, 'repeat'));
+}
+
+/** Whether the element's only storyboard is REFRESH_BOARD. */
+export function onlyRefresh(el: ResolvedElement): boolean {
+  const all = storyboardsOf(el);
+  return all.length === 1 && isRefresh(all[0]);
 }
 
 // ---- reading storyboards back -----------------------------------------------------------------
@@ -406,7 +440,7 @@ function storyboardsOf(el: ResolvedElement): SB[] {
 }
 
 /** The element's storyboards for its main motion (not the exit ones). */
-const mainBoards = (el: ResolvedElement) => storyboardsOf(el).filter((s) => !EXIT_EVENTS.has(s.event));
+const mainBoards = (el: ResolvedElement) => storyboardsOf(el).filter((s) => !EXIT_EVENTS.has(s.event) && !isRefresh(s));
 
 function sameShape(have: SB[], want: Board[]): boolean {
   if (have.length !== want.length) return false;

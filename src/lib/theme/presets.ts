@@ -11,7 +11,7 @@ import type { ThemeProject } from './project';
 import type { Resolution, ResolvedElement } from './resolver';
 import { SYSTEM_LAYOUTS, systemLayout, type SystemLayout } from './systemLayouts';
 import { GAME_LAYOUTS, gameLayout, type GameLayout } from './gameLayouts';
-import { screenOf, tuningOf } from './animations';
+import { presetOf, screenOf, tuningOf } from './animations';
 import { TILE_STYLES, tileStyleOfPath, tileStyleProps } from './tiles';
 
 type Props = Record<string, string>;
@@ -510,7 +510,8 @@ function carryOver(project: ThemeProject, res: Resolution, view: string, els: De
       const t = r ? tuningOf(r, screenOf(view)) : null;
       if (t) Object.assign(el, { anim: t.preset.id, animAmount: t.amount, animSpeed: t.speed });
       // No animation on it now (taken off, or never had one): it stays still.
-      else if (!elements(node).some((c) => c.name === 'storyboard')) el.anim = undefined;
+      // (The storyboard that only keeps game data updating doesn't count.)
+      else if (!elements(node).some((c) => c.name === 'storyboard') || (r && presetOf(r, screenOf(view)) === null)) el.anim = undefined;
       continue;
     }
     // Yours: not one of the design's parts, not RetroBat's own, and only defined in this block.

@@ -2,18 +2,20 @@
 // the screen), each with a one-click fix where one is safe. Read only; fixes are Changes the
 // editor commits as one undo step.
 import { basename, dirname, join, relative } from '../path';
-import { patchRemoveNode } from '../xml/cst';
-import { setTextChange, type Change } from './edits';
+import { attr, elements, hasElementChildren, patchInsertChild, patchRemoveAttr, patchRemoveNode, patchReplaceSpan, patchSetAttr, type Patch } from '../xml/cst';
+import { insertTarget, setTextChange, type Change } from './edits';
 import type { Environment } from './context';
 import type { ThemeProject } from './project';
-import { resolveAsset, resolveAssetWithFallbacks, type PropDef, type ResolvedElement, type Resolution } from './resolver';
+import { hasActivateStoryboard, isVideoListView, resolveAsset, resolveAssetWithFallbacks, resolveTheme, type PropDef, type ResolvedElement, type Resolution, type Source } from './resolver';
+import { onlyRefresh, refreshXml } from './animations';
+import { usesGameData } from './library';
 import { parsePair } from './schema';
 import { zOf } from '../render';
 import { contrast, over } from './presets';
 import { fontName } from './fonts';
 import { RETROBAT_FALLBACK_FONTS, type HasChar } from './fontChars';
 
-export type HealthKind = 'missing-file' | 'missing-font' | 'off-screen' | 'cut-off' | 'hard-to-read' | 'missing-character' | 'covered';
+export type HealthKind = 'missing-file' | 'missing-font' | 'off-screen' | 'cut-off' | 'hard-to-read' | 'missing-character' | 'covered' | 'second-clock' | 'not-updated';
 
 export interface HealthIssue {
   kind: HealthKind;
@@ -37,6 +39,8 @@ export const HEALTH_LABEL: Record<HealthKind, string> = {
   'hard-to-read': 'Hard to read',
   'missing-character': 'Letter the font lacks',
   covered: 'Covered by game art',
+  'second-clock': 'Second clock',
+  'not-updated': 'Same for every game',
 };
 
 /** Properties that name a picture, video or sound file. */
@@ -92,6 +96,12 @@ export function checkTheme(project: ThemeProject, res: Resolution, env: Environm
     return !!resolveAsset(d, res, project, env);
   };
 
+  clockCheck(res, add);
+  // The theme as RetroBat shows it with Motion set to Off, when it has ChannelCraft's motion option
+  // and it is on now: an older motion-off.xml empties the activate storyboards there (#59).
+  const motion = res.subsets.find((s) => s.name === 'motion');
+  const offRes = motion?.selected !== 'off' && motion?.options.some((o) => o.name === 'off') ? resolveTheme(project, { ...env, settings: { ...env.settings, subsets: { ...env.settings.subsets, motion: 'off' } } }) : undefined;
+
   for (const [view, v] of res.views) {
     for (const el of v.elements.values()) {
       // Parts of a grid tile or carousel item (gridtile.favorite) fall back to RetroBat's own.
@@ -125,12 +135,14 @@ export function checkTheme(project: ThemeProject, res: Resolution, env: Environm
         });
       }
 
+      notUpdated(res, view, el, add, offRes);
+
       // Off the screen, for parts the theme adds. Theme makers hide RetroBat's built-in parts by
       // moving them off it, and parts that animate in may start off it.
       if (!el.extra || el.extra === 'false') continue;
       const posDef = el.props.get('pos');
       const pos = parsePair(posDef?.value);
-      if (!posDef || !pos || el.complex.some((c) => c.name === 'storyboard')) continue;
+      if (!posDef || !pos || (el.complex.some((c) => c.name === 'storyboard') && !onlyRefresh(el))) continue;
       const size = parsePair(el.props.get('size')?.value) ?? [0, 0];
       const origin = parsePair(el.props.get('origin')?.value) ?? [0, 0];
       const [w, h] = [Math.max(0, size[0]), Math.max(0, size[1])];
@@ -157,11 +169,110 @@ export function checkTheme(project: ThemeProject, res: Resolution, env: Environm
     }
     textChecks(project, res, env, view, [...v.elements.values()], add, charsOf);
   }
+  if (offRes)
+    for (const [view, v] of offRes.views)
+      for (const el of v.elements.values()) if (shown(el) && !el.name.includes('.')) notUpdated(offRes, view, el, add, undefined, true);
   return [...issues.values()];
+}
+
+const ACTIVATE_EVENTS = new Set(['activate', 'activateNext', 'activatePrev']);
+
+/** The last storyboard of an element's definitions that matches `event`, and the definition's file. */
+function lastBoard(el: ResolvedElement, event: (e: string) => boolean): Source | undefined {
+  let last: Source | undefined;
+  for (const d of el.defs) for (const c of elements(d.node)) if (c.name === 'storyboard' && event(attr(c, 'event') ?? '')) last = { node: c, file: d.file };
+  return last;
+}
+
+/** A change that turns an empty storyboard (one that removes an animation) into REFRESH_BOARD. */
+const toRefresh = (b: Source): Change => ({ file: b.file, patch: patchReplaceSpan(b.file.doc, b.node, b.node, refreshXml()) });
+
+/**
+ * RetroBat's video list only updates game data on extras with an activate storyboard
+ * (VideoGameListView never refreshes the others), so they keep showing nothing. `offRes` is the
+ * theme as Motion off leaves it; `motionOff` says `res` is that resolution, where only what an
+ * empty activate storyboard removes is flagged (the rest shows with Motion on too).
+ */
+function notUpdated(res: Resolution, view: string, el: ResolvedElement, add: Add, offRes?: Resolution, motionOff = false) {
+  if (!el.extra || el.extra === 'false' || !isVideoListView(res, view) || hasActivateStoryboard(el) || ![...el.props.values()].some((d) => usesGameData(d.value))) return;
+  const text = "RetroBat's video list never updates this for each game, so its game picture or info doesn't show there.";
+  // An empty activate storyboard removed it (Motion off made by an older version): it becomes one that changes nothing.
+  const empty = lastBoard(el, (e) => ACTIVATE_EVENTS.has(e));
+  if (empty && !hasElementChildren(empty.node)) {
+    add(empty.node, view, () => ({
+      kind: 'not-updated',
+      key: `refresh|${empty.file.rel}|${el.name}`,
+      text: motionOff ? `With Motion set to Off, ${text[0].toLowerCase()}${text.slice(1)}` : text,
+      views: [view],
+      element: el.name,
+      fix: { label: 'Update it for each game', changes: [toRefresh(empty)] },
+    }));
+    return;
+  }
+  if (motionOff) return;
+  const target = insertTarget(el, view);
+  if (!target) return;
+  add(`refresh|${target.file.rel}|${el.name}`, view, () => {
+    // A storyboard without an event (a loop) becomes the activate one; otherwise one that changes nothing is added.
+    const plain = el.complex.find((c) => c.name === 'storyboard' && !attr(c.node, 'event'));
+    const changes: Change[] = plain ? [{ file: plain.file, patch: patchSetAttr(plain.file.doc, plain.node, 'event', 'activate') }] : [{ file: target.file, patch: patchInsertChild(target.file.doc, target.node, refreshXml()) }];
+    // Motion off empties the loop's event-less storyboard; it must now empty the activate one instead
+    // (and keep the game data updating), or the loop would keep playing. On every screen the loop is on.
+    if (plain && offRes) {
+      const seen = new Set<unknown>();
+      for (const v of offRes.views.values()) {
+        const o = v.elements.get(el.name);
+        if (!o?.defs.some((d) => d.node.children.includes(plain.node))) continue;
+        const b = lastBoard(o, (e) => !e);
+        if (b && !hasElementChildren(b.node) && !seen.has(b.node)) {
+          seen.add(b.node);
+          changes.push(toRefresh(b));
+        }
+      }
+    }
+    return {
+      kind: 'not-updated',
+      key: `refresh|${target.file.rel}|${el.name}`,
+      text: motionOff ? `With Motion set to Off, ${text[0].toLowerCase()}${text.slice(1)}` : text,
+      views: [view],
+      element: el.name,
+      fix: { label: 'Update it for each game', changes },
+    };
+  });
 }
 
 type CharsOf = (abs: string) => HasChar | null | undefined;
 type Add = (key: unknown, view: string, make: () => HealthIssue) => void;
+
+/**
+ * A <clock name="clock"> on the Screen overlay is a second clock: RetroBat styles its own clock
+ * only from a <text name="clock"> there, so its own still shows at the bottom right, cut off in
+ * the button hints' font (#58). The fix turns it into that text.
+ */
+function clockCheck(res: Resolution, add: Add) {
+  const el = res.views.get('screen')?.elements.get('clock');
+  if (el?.type !== 'clock' || !shown(el)) return;
+  const defs = el.defs.filter((d) => d.node.name === 'clock');
+  // Only definitions of this clock alone: a shared one (name="clock, other") stays as it is.
+  const own = defs.length > 0 && defs.every((d) => attr(d.node, 'name')?.trim() === 'clock');
+  const changes: Change[] = [];
+  if (own) {
+    for (const d of defs) {
+      const n = d.node;
+      const patches: (Patch | null)[] = [{ start: n.start + 1, end: n.start + 1 + n.name.length, text: 'text' }, patchRemoveAttr(d.file.doc, n, 'extra')];
+      if (!n.selfClosing && d.file.doc.src.startsWith(`</${n.name}`, n.closeStart)) patches.push({ start: n.closeStart + 2, end: n.closeStart + 2 + n.name.length, text: 'text' });
+      for (const p of patches) if (p) changes.push({ file: d.file, patch: p });
+    }
+  }
+  add(el, 'screen', () => ({
+    kind: 'second-clock',
+    key: 'second-clock|screen',
+    text: 'The Screen overlay adds a second clock, so RetroBat still shows its own clock at the bottom right, cut off. RetroBat only lets a theme place and style its own clock as a text named “clock”.',
+    views: ['screen'],
+    element: 'clock',
+    fix: own ? { label: 'Use RetroBat’s own clock', changes } : undefined,
+  }));
+}
 
 interface Rect {
   x0: number;
@@ -252,6 +363,8 @@ function colourBehind(top: ResolvedElement, x: number, y: number, els: ResolvedE
 function textChecks(project: ThemeProject, res: Resolution, env: Environment, view: string, els: ResolvedElement[], add: Add, charsOf?: CharsOf) {
   for (const el of els) {
     if ((el.type !== 'text' && el.type !== 'datetime') || !shown(el) || el.name.includes('.')) continue;
+    // RetroBat's own clock: drawn over every screen, not this empty one, and RetroBat writes its text.
+    if (view === 'screen' && el.name === 'clock') continue;
 
     // Letters the theme's own font doesn't have.
     const textDef = el.props.get('text');

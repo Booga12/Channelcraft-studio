@@ -143,6 +143,22 @@ describe('Export for ES-DE', () => {
   const staticImage = (out: { files: { dest: string; text?: string }[] }) => out.files.find((f) => f.dest.endsWith('/theme.xml'))!.text!.match(/<staticImage>([^<]*)</)?.[1];
   const dests = (out: { files: { dest: string; src?: string; data?: string }[] }) => out.files.filter((f) => f.src || f.data).map((f) => f.dest.split('/').slice(1).join('/')).sort();
 
+  it('still exports an older theme’s screen <clock> as one ES-DE clock, and leaves out a hidden text clock (#58)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ccs-esde-clock-'));
+    const dir = join(root, 'themes', 'Clock');
+    mkdirSync(dir, { recursive: true });
+    const write = (screen: string) => writeFileSync(join(dir, 'theme.xml'), `<theme><formatVersion>7</formatVersion><view name="screen">${screen}</view><view name="system"><carousel name="systemcarousel"><type>horizontal</type></carousel></view></theme>`);
+    const themeOf = async () => (await toEsde(await ThemeProject.load(dir, nodeFs), envFor(root), listDir)).files.find((f) => f.dest.endsWith('/theme.xml'))!.text!;
+    try {
+      write('<clock name="clock"><pos>0.9 0.05</pos></clock>');
+      expect((await themeOf()).match(/<clock name="clock">/g)?.length).toBeGreaterThan(0);
+      write('<text name="clock"><pos>0.9 0.05</pos><visible>false</visible></text>');
+      expect(await themeOf()).not.toMatch(/<(clock|text) name="clock">/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps every console logo when the previewed console has none', async () => {
     const { root, dir } = logoTheme(['nes.svg', 'nds.svg', 'n64.svg']); // no snes, the previewed one
     try {
@@ -318,7 +334,7 @@ describe('Export for ES-DE', () => {
     writeFileSync(
       join(dir, 'theme.xml'),
       `<theme><formatVersion>7</formatVersion>
-      <view name="screen"><clock name="clock"><pos>0.97 0.035</pos><origin>1 0</origin><size>0.3 0.05</size><alignment>right</alignment></clock></view>
+      <view name="screen"><text name="clock"><pos>0.97 0.035</pos><origin>1 0</origin><size>0.3 0.05</size><alignment>right</alignment></text></view>
       <view name="system">
         <carousel name="systemcarousel"><type>horizontal</type><scrollSound>./click.wav</scrollSound></carousel>
         <image name="logo"><path>./logos/\${system.theme}-w.svg</path></image>
@@ -349,8 +365,9 @@ describe('Export for ES-DE', () => {
       // Logos: the region's file where it has one, the normal one for the rest.
       expect(dests(out)).toEqual(expect.arrayContaining(['logos/snes-w.svg', 'logos/nds-w.svg']));
       expect(out.files.find((f) => f.dest.endsWith('logos/snes-w.svg'))!.src).toMatch(/us[\\/]snes\.svg$/);
-      // The clock from the every-screen view, with its alignment, on the console list and game lists.
+      // RetroBat's own clock (a text on the every-screen view), with its alignment, as ES-DE's clock on the console list and game lists (#58).
       expect(theme.match(/<clock name="clock">/g)!.length).toBe(3);
+      expect(theme).not.toMatch(/<text name="clock">/);
       expect(theme).toContain('<horizontalAlignment>right</horizontalAlignment>');
       // Draw order: RetroBat's defaults, written out (ES-DE's differ).
       expect(variant('detailed')).toMatch(/<textlist name="gamelist">[\s\S]*?<zIndex>20<\/zIndex>/);

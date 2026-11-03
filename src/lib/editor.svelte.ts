@@ -2,7 +2,7 @@ import { load, type Store } from '@tauri-apps/plugin-store';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { api, tauriFs, type LibraryAsset, type RootInfo, type ThemeInfo } from './api';
 import { join, dirname } from './path';
-import { parseGamelist, type GameInfo } from './theme/games';
+import { firstWithArt, parseGamelist, type GameInfo } from './theme/games';
 import { type Environment, type PreviewSettings } from './theme/context';
 import { addElementChange, addPropChange, applyChanges, insertTarget, inverse, OverlapError, setTextChange, uniqueName, varRef, type Applied, type Change } from './theme/edits';
 import { placeNew } from './theme/placement';
@@ -11,11 +11,11 @@ import { isGameListView, isOwnGamePath, resolveTheme, romStem, type ResolvedElem
 import { STARTER_PROPS, VIEW_ORDER } from './theme/schema';
 import { zOf } from './render';
 import { DEPTH_VAR, depthLevel, MOTION_FEELS, MOTION_VAR, SCREEN_FX_VAR, screenFxOf, type Depth, type ScreenFx } from './theme/depth';
-import { FALLBACK_SYSTEMS, parseEsSystems, type SystemInfo } from './theme/systems';
+import { FALLBACK_SYSTEMS, isArcadeSystem, parseEsSystems, type SystemInfo } from './theme/systems';
 import { attr, elements, patchInsertChild, patchRemoveNode } from './xml/cst';
 
 import { elementLabel, humanize, propLabel, typeLabel, viewLabel } from './friendly';
-import { type LibraryItem } from './theme/library';
+import { itemsFor, type LibraryItem } from './theme/library';
 import { prefs } from './prefs.svelte';
 import { tileStyleOfPath } from './theme/tiles';
 import { appliedDesign, appliedSystemLayout, readability, designChanges, designVarsChange, LAYOUTS } from './theme/presets';
@@ -322,10 +322,22 @@ export class Editor {
     if (!this.root || this.games[system] || !this.gameSystems.includes(system)) return;
     try {
       // RetroBat finds each system's games in the folder its es_systems.cfg entry names.
-      const f = await api.readGamelist(system, this.systems.find((s) => s.name === system)?.path);
+      const sys = this.systems.find((s) => s.name === system);
+      const f = await api.readGamelist(system, sys?.path);
       if (!f) return;
-      const list = parseGamelist(f.text, dirname(f.path));
+      // RetroBat lists the ROM files on disk and takes their details from the gamelist (#60).
+      let roms: string[] | undefined;
+      if (sys?.extensions?.length) {
+        try {
+          roms = await api.listRomFiles(system, sys.path, sys.extensions);
+        } catch {
+          // Falls back to the gamelist alone.
+        }
+      }
+      // Arcade BIOS and device files (neogeo.zip) have no entry; RetroBat hides them (#60).
+      const list = parseGamelist(f.text, dirname(f.path), roms, sys ? isArcadeSystem(sys) : false);
       this.games = { ...this.games, [system]: list };
+      if (system === this.settings.system.name && this.gameIndex === 0) this.gameIndex = firstWithArt(list);
     } catch {
       // No games for this system: the sample game is shown instead.
     }
@@ -341,7 +353,7 @@ export class Editor {
 
   setSystem(s: SystemInfo) {
     this.settings.system = s;
-    this.gameIndex = 0;
+    this.gameIndex = firstWithArt(this.games[s.name] ?? []);
     this.loadGamesFor(s.name);
   }
 
@@ -933,6 +945,9 @@ export class Editor {
     const p = this.project;
     const res = this.res;
     if (!p || !res) return;
+    // On the Screen overlay a clock is RetroBat's own one, a <text name="clock"> (#58).
+    const screenClock = type === 'clock' && this.view === 'screen' && !this.gameEditing ? itemsFor('screen').find((i) => i.id === 'clock') : undefined;
+    if (screenClock) return this.addLibraryItem(screenClock);
     // Named in the words Simple mode uses (a ninepatch is a "Panel"), and never `label`: that's the
     // loading screens' text, and every added text used to be called "Loading text" (#21).
     const name = uniqueName(res, this.view, ({ ninepatch: 'panel', image: 'picture' } as Record<string, string>)[type] ?? type);

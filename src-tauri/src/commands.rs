@@ -557,6 +557,137 @@ pub fn read_gamelist(app: AppHandle, roots: State<Roots>, system: String, path: 
     Ok(read_text_file(&p).ok())
 }
 
+/// Folders RetroBat doesn't look in for games (SystemData::populateFolder).
+const SKIPPED_ROM_FOLDERS: [&str; 12] = ["artwork", "media", "medias", "images", "manuals", "videos", "assets", "html_arrm", "bezels", "fonts", "logs", "screenshots"];
+
+fn is_hidden_file(m: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        m.file_attributes() & 0x2 != 0
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = m;
+        false
+    }
+}
+
+/// `.nsp` for `Game.NSP`: the lowercase extension after the last dot, with the dot.
+fn rom_ext(name: &str) -> String {
+    name.rfind('.').map(|i| name[i..].to_lowercase()).unwrap_or_default()
+}
+
+/// Games found under `dir`, as (path relative to the ROM folder, full path). Junctions and
+/// directory symlinks are searched like folders, as RetroBat does; `depth` stops link loops.
+fn walk_roms(dir: &Path, rel: &str, system: &str, exts: &[String], depth: u32, out: &mut Vec<(String, PathBuf)>) {
+    if depth > 64 {
+        return;
+    }
+    let Ok(rd) = fs::read_dir(dir) else { return };
+    let mut entries: Vec<_> = rd.flatten().collect();
+    entries.sort_by_key(|e| e.file_name());
+    for e in entries {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Ok(m) = e.metadata() else { continue };
+        if is_hidden_file(&m) {
+            continue;
+        }
+        let r = format!("{rel}/{name}");
+        // A folder with a game extension is one game too, and isn't searched.
+        if exts.contains(&rom_ext(&name)) {
+            out.push((r, e.path()));
+            continue;
+        }
+        // A DirEntry's metadata doesn't follow links, so a junction or directory symlink isn't a
+        // folder there; RetroBat sees FILE_ATTRIBUTE_DIRECTORY on them and searches inside.
+        let is_dir = if m.file_type().is_symlink() { fs::metadata(e.path()).is_ok_and(|t| t.is_dir()) } else { m.is_dir() };
+        if !is_dir {
+            continue;
+        }
+        let low = name.to_lowercase();
+        let skipped = low.starts_with('.')
+            || low.starts_with("downloaded_")
+            || SKIPPED_ROM_FOLDERS.contains(&low.as_str())
+            || (system == "wiiu" && (low == "content" || low == "meta"))
+            || (system == "vpinball" && low == "roms");
+        if !skipped {
+            walk_roms(&e.path(), &r, system, exts, depth + 1, out);
+        }
+    }
+}
+
+/// Files a disc list (.m3u, .cue, .gdi, .ccd) points to (FileData::getContentFiles).
+fn content_files(p: &Path) -> Vec<PathBuf> {
+    let dir = p.parent().unwrap_or(Path::new(""));
+    let ext = rom_ext(&p.to_string_lossy());
+    if ext == ".ccd" {
+        return ["cue", "img", "bin", "sub"].iter().map(|x| p.with_extension(x)).collect();
+    }
+    let Ok(bytes) = fs::read(p) else { return vec![] };
+    let text = String::from_utf8_lossy(&bytes);
+    let mut out = vec![];
+    for (i, line) in text.lines().enumerate() {
+        let line = line.trim();
+        let file = match ext.as_str() {
+            ".m3u" => (!line.is_empty() && !line.starts_with('#')).then(|| line.to_string()),
+            // FILE "Game (Track 1).bin" BINARY
+            ".cue" => line.strip_prefix("FILE ").map(|rest| {
+                let rest = rest.trim();
+                match rest.strip_prefix('"') {
+                    Some(q) => q.split('"').next().unwrap_or("").to_string(),
+                    None => rest.rsplit_once(' ').map_or(rest, |(f, _)| f).to_string(),
+                }
+            }),
+            // Track lines: number, start, type, sector size, file (maybe quoted), offset.
+            ".gdi" if i > 0 => match line.split_once('"') {
+                Some((_, q)) => q.split('"').next().map(str::to_string),
+                None => line.split_whitespace().nth(4).map(str::to_string),
+            },
+            _ => None,
+        };
+        if let Some(f) = file.filter(|f| !f.is_empty()) {
+            out.push(normalize(&dir.join(f.replace('/', "\\"))));
+        }
+    }
+    out
+}
+
+/// A system's games as RetroBat lists them from its ROM folder: files (and folders) with one of
+/// the es_systems.cfg extensions, at any depth, without hidden files, RetroBat's skipped folders
+/// or the discs an .m3u/.cue/.gdi/.ccd already stands for. Paths look like `./sub/Game.nsp`.
+fn rom_files(dir: &Path, system: &str, extensions: &[String]) -> Vec<String> {
+    let exts: Vec<String> = extensions.iter().map(|e| e.trim().to_lowercase()).filter(|e| !e.is_empty()).collect();
+    let mut found = vec![];
+    walk_roms(dir, ".", system, &exts, 0, &mut found);
+    let lists = [".m3u", ".cue", ".ccd", ".gdi"];
+    if exts.len() > 1 && exts.iter().any(|e| lists.contains(&e.as_str())) {
+        let key = |p: &Path| normalize(p).to_string_lossy().to_lowercase();
+        let mut gone = std::collections::HashSet::new();
+        for (_, p) in &found {
+            if p.is_file() && lists.contains(&rom_ext(&p.to_string_lossy()).as_str()) {
+                gone.extend(content_files(p).iter().map(|c| key(c)));
+            }
+        }
+        found.retain(|(_, p)| !gone.contains(&key(p)));
+    }
+    found.into_iter().map(|(r, _)| r).collect()
+}
+
+/// A system's game files, found the way RetroBat finds them (see rom_files).
+#[tauri::command(async)]
+pub fn list_rom_files(roots: State<Roots>, system: String, path: Option<String>, extensions: Vec<String>) -> CmdResult<Vec<String>> {
+    if system.contains(['\\', '/', ':']) || system.starts_with('.') {
+        return Err("Bad system name".into());
+    }
+    let root = roots.root()?;
+    let dir = rom_dir(&root, &system, path.as_deref());
+    if !dir.is_dir() {
+        return Err("The system's ROM folder isn't there".into());
+    }
+    Ok(rom_files(&dir, &system, &extensions))
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FontEntry {
@@ -987,6 +1118,83 @@ mod tests {
     #[test]
     fn timestamp_shape() {
         assert_eq!(timestamp().len(), 15);
+    }
+
+    fn exts(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Issue #60: only files with the system's extensions, outside RetroBat's skipped folders.
+    #[test]
+    fn rom_files_are_found_like_retrobat() {
+        let d = std::env::temp_dir().join(format!("ccs-roms-{}", crate::storage::unique_id()));
+        for sub in ["images", ".hidden", "sub", "Media", "game.xci"] {
+            fs::create_dir_all(d.join(sub)).unwrap();
+        }
+        for f in ["a.xci", "b.txt", "images/c.xci", ".hidden/d.xci", "sub/e.NSP", "Media/f.nsp", "game.xci/inner.nsp", "gamelist.xml"] {
+            fs::write(d.join(f), "x").unwrap();
+        }
+        #[cfg(windows)]
+        {
+            fs::write(d.join("h.xci"), "x").unwrap();
+            assert!(std::process::Command::new("attrib").arg("+h").arg(d.join("h.xci")).status().unwrap().success());
+        }
+        let got = rom_files(&d, "switch", &exts(&[".xci", ".nsp"]));
+        assert_eq!(got, ["./a.xci", "./game.xci", "./sub/e.NSP"]);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn disc_files_behind_a_playlist_are_left_out() {
+        let d = std::env::temp_dir().join(format!("ccs-discs-{}", crate::storage::unique_id()));
+        fs::create_dir_all(d.join("g")).unwrap();
+        fs::write(d.join("g.m3u"), "# discs\r\ng/g1.cue\r\n\r\ng/g2.cue\r\n").unwrap();
+        fs::write(d.join("g/g1.cue"), "FILE \"g1.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n").unwrap();
+        fs::write(d.join("g/g2.cue"), "FILE g2.bin BINARY\r\n").unwrap();
+        fs::write(d.join("g/g1.bin"), "x").unwrap();
+        fs::write(d.join("g/g2.bin"), "x").unwrap();
+        fs::write(d.join("h.gdi"), "2\r\n1 0 4 2352 \"h track01.bin\" 0\r\n2 600 0 2352 h02.raw 0\r\n").unwrap();
+        fs::write(d.join("h track01.bin"), "x").unwrap();
+        fs::write(d.join("h02.raw"), "x").unwrap();
+        fs::write(d.join("k.ccd"), "x").unwrap();
+        // A .ccd stands for its .cue, .img, .bin and .sub (FileData::getContentFiles).
+        for f in ["k.img", "k.cue", "k.bin", "k.sub"] {
+            fs::write(d.join(f), "x").unwrap();
+        }
+        fs::write(d.join("loose.bin"), "x").unwrap();
+        let got = rom_files(&d, "psx", &exts(&[".cue", ".bin", ".m3u", ".chd", ".gdi", ".raw", ".ccd", ".img"]));
+        assert_eq!(got, ["./g.m3u", "./h.gdi", "./k.ccd", "./loose.bin"]);
+        // With only one extension RetroBat keeps everything.
+        assert_eq!(rom_files(&d, "psx", &exts(&[".bin"])), ["./g/g1.bin", "./g/g2.bin", "./h track01.bin", "./k.bin", "./loose.bin"]);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// RetroBat searches junctions (mklink /J) like folders.
+    #[cfg(windows)]
+    #[test]
+    fn rom_files_inside_a_junction_are_found() {
+        let base = std::env::temp_dir().join(format!("ccs-junction-{}", crate::storage::unique_id()));
+        let (roms, elsewhere) = (base.join("psx"), base.join("elsewhere"));
+        fs::create_dir_all(&roms).unwrap();
+        fs::create_dir_all(&elsewhere).unwrap();
+        fs::write(elsewhere.join("Game.chd"), "x").unwrap();
+        fs::write(roms.join("Top.chd"), "x").unwrap();
+        let link = roms.join("Collection");
+        assert!(std::process::Command::new("cmd").args(["/C", "mklink", "/J"]).arg(&link).arg(&elsewhere).output().unwrap().status.success());
+        assert_eq!(rom_files(&roms, "psx", &exts(&[".chd"])), ["./Collection/Game.chd", "./Top.chd"]);
+        fs::remove_dir(&link).unwrap();
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn demo_snes_folder_lists_its_games() {
+        let d = Path::new(r"G:\projects\channelcraft\guides-demo\RetroBat\roms\snes");
+        if !d.is_dir() {
+            return;
+        }
+        let got = rom_files(d, "snes", &exts(&[".smc", ".fig", ".sfc", ".gd3", ".gd7", ".dx2", ".bsx", ".swc", ".rom", ".wad", ".zip", ".7z", ".decomp"]));
+        assert_eq!(got.len(), 7, "{got:?}");
+        assert!(got.iter().all(|g| g.starts_with("./") && g.ends_with(".sfc")));
     }
 }
 

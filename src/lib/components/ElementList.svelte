@@ -5,6 +5,7 @@
   import { elementLabel, knownLabel, TYPE_LABELS, typeLabel } from '$lib/friendly';
   import { isVisible, zOf } from '$lib/render';
   import { BUILT_IN_SPLASH, isSplashExtra } from '$lib/theme/splash';
+  import { onlyRefresh } from '$lib/theme/animations';
   import Icon, { TYPE_ICONS } from './Icon.svelte';
   import ContextMenu, { menuPoint, type MenuItem } from './ContextMenu.svelte';
   import { tick } from 'svelte';
@@ -291,7 +292,7 @@
           {#if hidden}<span class="tag" title="Hidden on this screen in the theme">hidden</span>{/if}
           {#if notDrawn(el)}<span class="tag warn" title="RetroBat doesn't draw this on a loading screen. Mark it extra=&quot;true&quot; (in Advanced mode) to have it drawn.">not drawn</span>{/if}
           {#if !ed.simple && el.conditional}<span class="tag" title="Some definitions only apply under conditions">if</span>{/if}
-          {#if el.complex.some((c) => c.name === 'storyboard')}<span class="tag anim" title="Animated">✦</span>{/if}
+          {#if el.complex.some((c) => c.name === 'storyboard') && !onlyRefresh(el)}<span class="tag anim" title="Animated">✦</span>{/if}
           {#if !ed.simple}<span class="z mono" title="Layer (zIndex)">{zOf(el)}</span>{/if}
         </button>
         <button

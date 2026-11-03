@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parse, elements } from '../xml/cst';
-import { ANIMATIONS, animationCss, ease, exitOf, EXITS, misplayed, playedBoard, presetEvents, retune, storyboardXml, tuningOf, type Screen } from './animations';
+import { ANIMATIONS, animationCss, ease, exitOf, EXITS, misplayed, onlyRefresh, playedBoard, presetEvents, presetOf, refreshXml, retune, storyboardXml, tuningOf, type Screen } from './animations';
 import type { ResolvedElement } from './resolver';
 
 /** A resolved element with the given storyboards, enough for these helpers. */
@@ -21,8 +21,35 @@ describe('motion presets per screen', () => {
     for (const p of ANIMATIONS) expect(events(storyboardXml(p, pos, 1, 1, 'console')), p.id).toEqual(['']);
   });
 
-  it('game list entrances use activate (replayed on every game); loops have no event', () => {
-    for (const p of ANIMATIONS.filter((a) => !a.follow)) expect(events(storyboardXml(p, pos, 1, 1, 'list')), p.id).toEqual([p.kind === 'loop' ? '' : 'activate']);
+  it('game list animations use activate (replayed on every game), loops too', () => {
+    // RetroBat's video list only updates game data on extras with an activate storyboard (#59).
+    for (const p of ANIMATIONS.filter((a) => !a.follow)) expect(events(storyboardXml(p, pos, 1, 1, 'list')), p.id).toEqual(['activate']);
+  });
+
+  it('game list loops keep looping on activate, are read back, and play when the list opens', () => {
+    const p = ANIMATIONS.find((a) => a.id === 'hover')!;
+    const xml = storyboardXml(p, pos, 1, 1, 'list');
+    expect(xml).toContain('<storyboard event="activate">');
+    expect([...xml.matchAll(/repeat="forever"/g)].length).toBe(2);
+    expect(events(storyboardXml(p, pos, 1, 1, 'console'))).toEqual(['']);
+    const el = element(xml);
+    expect(presetOf(el, 'list')).toBe('hover');
+    expect(misplayed(el, 'list')).toBe(false);
+    expect(playedBoard(el, { screen: 'list' })).not.toBeNull();
+    // Written the old way (no event), it is still a hover.
+    expect(presetOf(element(storyboardXml(p, pos, 1, 1, 'console')), 'list')).toBe('hover');
+    // Motion off clears both ways of writing it.
+    expect(presetEvents(p, 'list')).toEqual(['activate', '']);
+    expect(presetEvents(p, 'console')).toEqual(['']);
+  });
+
+  it('the refresh storyboard is not an animation', () => {
+    const el = element(refreshXml());
+    // RetroBat drops empty storyboards, so it holds an animation that changes nothing.
+    expect(refreshXml()).toBe('<storyboard event="activate">\n  <animation property="opacity" from="1" to="1" duration="1" />\n</storyboard>');
+    expect(presetOf(el, 'list')).toBeNull();
+    expect(onlyRefresh(el)).toBe(true);
+    expect(onlyRefresh(element(storyboardXml(ANIMATIONS[0], pos)))).toBe(false);
   });
 
   it('"Slide with the list" comes from the side you scroll from', () => {
