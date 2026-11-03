@@ -117,6 +117,8 @@ export interface IntroInfo {
 }
 
 export const api = {
+  /** The app window is ready: the start-up splash can hand over to it (#61). */
+  appReady: () => invoke<void>('app_ready'),
   detectRetrobat: () => invoke<string | null>('detect_retrobat'),
   setRetrobatRoot: (path: string) => invoke<RootInfo>('set_retrobat_root', { path }),
   rootStatus: () => invoke<RootInfo>('root_status'),
